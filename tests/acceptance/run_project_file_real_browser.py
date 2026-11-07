@@ -574,6 +574,41 @@ def main():
                     "Stale compilation caused an implicit project-file write")
             compile_race.close()
 
+            # Starting a built-in scenario concurrently with operator New must
+            # never resurrect a Runtime from the superseded launch. The unit
+            # contract above separately enforces the post-ELK await boundary.
+            for scenario_button in (
+                "Starta enterprise-labb", "Starta verifierad leveransdemo",
+                "Starta guidad labb",
+            ):
+                launch_race = context.new_page()
+                launch_race.add_init_script(MOCK)
+                launch_race.on("pageerror", lambda error: errors.append(str(error)))
+                launch_race.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+                launch_controls = launch_race.locator('[data-project-file-controls="ready"]')
+                expect(launch_controls).to_be_visible(timeout=45000)
+                launch_race.evaluate("""(name) => {
+                    const menu = [...document.querySelectorAll('.workspace-menu')]
+                        .find(e => e.querySelector('summary')?.textContent?.includes('Lab & Scenario'));
+                    const start = [...(menu?.querySelectorAll('button') ?? [])]
+                        .find(e => e.textContent?.trim() === name);
+                    const fresh = document.querySelector('[data-project-action="new"]');
+                    if (!start || !fresh || start.disabled || fresh.disabled)
+                        throw new Error("PROJECT_LAB_RACE_CONTROLS_UNAVAILABLE: " + name);
+                    start.click();
+                    fresh.click();
+                }""", scenario_button)
+                expect(launch_race.locator(".app-frame")).to_have_attribute(
+                    "data-runtime-scenario-id", "new_project", timeout=15000)
+                expect(launch_controls).to_have_attribute("data-project-dirty", "true")
+                launch_race.wait_for_timeout(700)
+                expect(launch_race.locator(".app-frame")).to_have_attribute(
+                    "data-runtime-scenario-id", "new_project")
+                require(launch_race.evaluate("window.__yadilabProjectStore.writes") == 0,
+                        "Superseded lab launch implicitly wrote a project file: "
+                        + scenario_button)
+                launch_race.close()
+
             # A valid runtime progress file may take time to read. If the user
             # creates New while File.text() is unresolved, that old progress
             # must NOT resurrect the prior runtime after the read completes.
@@ -692,13 +727,14 @@ def main():
                 "recoveredSavePersistsNewerBuilder": True,
                 "staleAsyncCompileCannotResurrectOldProject": True,
                 "staleRuntimeProgressCannotResurrectOldProject": True,
+                "threeAsyncLabStartsCannotReplaceNewProject": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict, stale identity, async compile, runtime restore and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
+                  " external conflict, stale identity, async compile, 3 lab starts, runtime restore and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()
