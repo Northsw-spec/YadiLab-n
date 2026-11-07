@@ -154,6 +154,51 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
       if (!testIds.has(testId)) blocked("UNKNOWN_EVIDENCE_TEST");
     }
   }
+  // The schema proves rule shape, not whether its canonical IDs still
+  // exist. Mirror Compiler rule reference validation at manual Save/Open,
+  // walking nested all/any/not rules iteratively so depth does not add
+  // another application-level recursion failure.
+  const checkRuleReferences = root => {
+    const pending = [root];
+    while (pending.length) {
+      const rule = pending.pop();
+      const requireResource = key => {
+        if (!resourceIds.has(rule[key])) blocked("UNKNOWN_RULE_RESOURCE");
+      };
+      switch (rule.op) {
+        case "all":
+        case "any":
+          for (const child of rule.rules) pending.push(child);
+          break;
+        case "not":
+          pending.push(rule.rule);
+          break;
+        case "equals":
+        case "service_enabled":
+          requireResource("target");
+          break;
+        case "reachable":
+          requireResource("from");
+          requireResource("to");
+          break;
+        case "member_of":
+          requireResource("subject");
+          requireResource("group");
+          break;
+        case "has_permission":
+          requireResource("subject");
+          requireResource("resource");
+          break;
+        case "test_result":
+          if (!testIds.has(rule.test)) blocked("UNKNOWN_RULE_TEST");
+          break;
+      }
+    }
+  };
+  for (const finding of source.findings) checkRuleReferences(finding.when);
+  for (const objective of source.objectives)
+    checkRuleReferences(objective.condition);
+  checkRuleReferences(source.completion);
   const noteTargets = new Set([
     ...zoneIds, ...resourceIds,
     ...source.connections.map(edge => edge.id),
