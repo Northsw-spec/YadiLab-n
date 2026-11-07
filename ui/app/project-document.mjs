@@ -164,6 +164,18 @@ export async function sameProjectFileEntry(previous, selected) {
   return same;
 }
 
+// A failed write may have left a file changed or in an uncertain state.
+// Save As must NOT erase that history by returning a fresh JS handle to
+// the same underlying file. Only explicit Open/New can reset quarantine.
+export async function assertSafeRecoveryTarget(quarantinedHandles, selected) {
+  if (!Array.isArray(quarantinedHandles) || quarantinedHandles.length > 32)
+    blocked("QUARANTINE_LIMIT_REOPEN");
+  for (const previous of quarantinedHandles) {
+    if (await sameProjectFileEntry(previous, selected))
+      blocked("FILE_REQUIRES_REOPEN");
+  }
+}
+
 export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");
