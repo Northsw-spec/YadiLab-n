@@ -247,6 +247,57 @@ def main():
                     "Open lost the user's saved Builder edits")
             require(page.locator('[data-project-status="unchanged"]').count() == 1,
                     "Opened project unexpectedly dirty")
+            # PROJECT-008: accepted editorial hints have only level/text, not
+            # synthetic IDs. Open the exact schema-valid source with two hint
+            # levels, then Ctrl+S and read the native persisted file again.
+            # This fails in the old validator, which rejected missing hint.id.
+            hints = [
+                {"level": 1, "text": "Inspect original source evidence."},
+                {"level": 2, "text": "Preserve link identity across edits."},
+                {"level": 2, "text": "Do not invent verified interfaces."},
+            ]
+            page.evaluate("""async ([saved, hints]) => {
+                const document = JSON.parse(saved);
+                document.content.source.hints = hints;
+                const payload = new TextEncoder().encode(JSON.stringify(document.content));
+                const digest = await crypto.subtle.digest('SHA-256', payload);
+                document.contentSha256 = [...new Uint8Array(digest)]
+                  .map(x => x.toString(16).padStart(2, '0')).join('');
+                window.__yadilabProjectStore.text = JSON.stringify(document);
+            }""", [saved_after_ctrl, hints])
+            writes_before_hints = page.evaluate("window.__yadilabProjectStore.writes")
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_hints,
+                    "Explicit Open of a project with hints caused an implicit disk write")
+            # Observe an actual Builder edit before Ctrl+S. A status message
+            # may render before Open's finally releases its private busy flag;
+            # editing via the UI also verifies that hints survive normal work.
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-008 hints retained after editing")
+            inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            page.keyboard.press("Control+s")
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_hints + 1,
+                    "Ctrl+S failed to save a valid project with hints")
+            saved_hints = json.loads(page.evaluate("window.__yadilabProjectStore.text"))
+            require(saved_hints["content"]["source"]["hints"] == hints,
+                    "Native Save lost or reordered schema-valid editorial hints")
+            require(saved_hints["content"]["source"]["connections"] ==
+                    original["content"]["source"]["connections"],
+                    "Saving hints unexpectedly changed the original network links")
+            page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
+                          saved_after_ctrl)
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(controls).to_have_attribute("data-project-dirty", "false")
             # A tampered stored file is not allowed to mutate the current workspace.
             page.evaluate("""() => {
               window.__yadilabProjectStore.text =

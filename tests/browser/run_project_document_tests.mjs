@@ -450,5 +450,38 @@ for (const [kind, mutate, expected] of [
     expected, "Open must reject SHA-256-correct orphan " + kind);
 }
 console.log("PASS PROJECT-007: unknown solution/layout targets and hint parent fail on Save/Open; valid nested layouts roundtrip");
+// PROJECT-008: source.hints items are schema-defined as {level, text}, not
+// globally identified resources. A valid training project must not be denied
+// Save/Open simply because its editorial hints have no `id` property.
+const sourceWithHints = structuredClone(source);
+sourceWithHints.hints = [
+  { level: 1, text: "Inspect the perimeter before applying a repair." },
+  { level: 2, text: "Check the verified network evidence." },
+  { level: 2, text: "Keep the original link and port identities." },
+];
+assert.equal(validateSource(sourceWithHints), true,
+  "Hint objects without IDs are valid scenario-source schema");
+const hintedWorkspace = { ...workspace, source: sourceWithHints };
+const hintedText = await createProjectDocument(hintedWorkspace, opts);
+const reopenedHints = await readProjectDocument(hintedText, opts);
+assert.deepEqual(reopenedHints.source, sourceWithHints,
+  "Saving and opening a project must preserve all hints without inventing IDs");
+assert.deepEqual(reopenedHints.source.hints, sourceWithHints.hints,
+  "Ordered hints, repeated levels and original text must survive an exact roundtrip");
+assert.deepEqual((await readProjectFile(file("hints.yadilab", hintedText), opts)).source.hints,
+  sourceWithHints.hints, "A native .yadilab file with hints must reopen");
+assert.equal(reopenedHints.source.resources.length, source.resources.length,
+  "Hint roundtrip must not change resources or network links");
+assert.deepEqual(reopenedHints.layoutOverrides, workspace.layoutOverrides,
+  "Hint roundtrip must retain explicit Builder layout");
+const malformedHints = structuredClone(source);
+malformedHints.hints = [{ level: 1, text: "Do not accept undeclared keys", id: "fake" }];
+assert.equal(validateSource(malformedHints), false,
+  "Hints with invented IDs must still fail the canonical source schema");
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: malformedHints }, opts),
+  /PROJECT_SOURCE_SCHEMA_INVALID/,
+  "Accepting valid hints must not weaken schema validation");
+console.log("PASS PROJECT-008: schema-valid hint arrays Save/Open without fake IDs; text/order/layout preserved and malformed hint rejected");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
