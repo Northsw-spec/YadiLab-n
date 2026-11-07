@@ -61,6 +61,12 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
     seen.add(entry.id);
   }
 }
+// A newly created or imported project is unsaved until an actual verified
+// native write or an explicit successful Open, even if no edits were made.
+export function projectHasUnsavedChanges(currentSnapshot, savedSnapshot, unpersisted) {
+  return Boolean(unpersisted) || currentSnapshot !== savedSnapshot;
+}
+
 export function projectSnapshot(workspace) {
   if (!workspace || workspace.mode !== "builder") return null;
   return JSON.stringify({ source: workspace.source, layoutOverrides: workspace.layoutOverrides ?? [] });
