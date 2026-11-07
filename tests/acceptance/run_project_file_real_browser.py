@@ -19,11 +19,15 @@ MOCK = r"""
 (() => {
   const store = { text: "", writes: 0, fail: false, reads: 0,
     permissionDenied: false, cancelSave: false, cancelOpen: false,
-    aliasSameEntryOnSaveAs: false };
+    aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0 };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
       if (store.permissionDenied) throw new DOMException("Permission denied", "NotAllowedError");
+      if (store.editDuringWritableOpen) {
+        store.text += " EXTERNAL_MODIFICATION_DURING_OPEN";
+        store.editDuringWritableOpen = false;
+      }
       let pending = "";
       return {
         async write(blob) {
@@ -31,7 +35,7 @@ MOCK = r"""
           pending = await blob.text();
         },
         async close() { store.text = pending; store.writes++; },
-        async abort() {},
+        async abort() { store.abortedWrites++; },
       };
     },
     async getFile() {
@@ -155,6 +159,29 @@ def main():
               window.__yadilabProjectStore.text = saved;
               window.__yadilabProjectStore.aliasSameEntryOnSaveAs = false;
             }""", saved_after_ctrl)
+            # Explicitly re-associate the previously detached handle with Save As.
+            page.locator('[data-project-action="save-as"]').click()
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "Saved and read back", timeout=15000)
+            # Simulate an external writer AFTER initial digest check but while
+            # opening the writable stream. No app write may occur.
+            page.evaluate("window.__yadilabProjectStore.editDuringWritableOpen = true")
+            writes_before_race = page.evaluate("window.__yadilabProjectStore.writes")
+            aborts_before_race = page.evaluate("window.__yadilabProjectStore.abortedWrites")
+            page.keyboard.press("Control+s")
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_race,
+                    "Race during writable open incorrectly completed a project write")
+            require(page.evaluate("window.__yadilabProjectStore.abortedWrites") ==
+                    aborts_before_race + 1,
+                    "Writable stream was not aborted when disk changed during createWritable")
+            require(page.evaluate("window.__yadilabProjectStore.text") ==
+                    saved_after_ctrl + " EXTERNAL_MODIFICATION_DURING_OPEN",
+                    "External writer's content was overwritten despite race detection")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
+                          saved_after_ctrl)
             writes = page.evaluate("window.__yadilabProjectStore.writes")
             page.once("dialog", lambda dialog: dialog.accept())
             page.locator('[data-project-action="new"]').click()
@@ -336,13 +363,14 @@ def main():
                 "runtimeBuilderUnsavedRetained": True,
                 "nativeOpenCancelledNoMutation": True,
                 "saveAsAliasExternalConflictDenied": True,
+                "externalEditDuringWritableOpenDenied": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict blocked, permission denial, cancel, fallback download,"
+                  " external conflict and write-open race blocked, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()

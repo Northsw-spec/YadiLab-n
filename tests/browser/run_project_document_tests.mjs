@@ -111,6 +111,30 @@ await assert.rejects(writeProjectFile(samePhysicalFile,text,
 assert.equal(stored,conflictContent,
   "Second JS handle must not overwrite externally modified physical file");
 stored=firstWrite;
+// RACE: an independent writer edits the file while createWritable() resolves.
+// The second digest must refuse to write and abort the provisional stream.
+let raceDisk = firstWrite;
+let raceAbortCount = 0;
+let raceWriteCount = 0;
+const duringWritableOpen = {
+  async getFile() { return file("network.yadilab", raceDisk); },
+  async createWritable() {
+    raceDisk += " EXTERNAL_MODIFICATION_DURING_OPEN";
+    return {
+      async write() { raceWriteCount++; },
+      async abort() { raceAbortCount++; },
+      async close() { throw new Error("Should never close a rejected write"); },
+    };
+  },
+};
+await assert.rejects(
+  writeProjectFile(duringWritableOpen, text, { expectedFileSha256: fromDisk.fileSha256 }),
+  /PROJECT_EXTERNAL_FILE_CHANGED/,
+  "Concurrent edit during createWritable must be rejected before writing bytes");
+assert.equal(raceWriteCount, 0, "No application bytes may be written on a stale stream");
+assert.equal(raceAbortCount, 1, "Provisional stream must be aborted after race detection");
+assert.equal(raceDisk, firstWrite + " EXTERNAL_MODIFICATION_DURING_OPEN",
+  "Independent writer's bytes must survive failed application Save");
 await assert.rejects(writeProjectFile({ ...handle, async getFile() {
   return file("network.yadilab",stored+"CORRUPT");
 }}, text),/PROJECT_READBACK_MISMATCH/);
