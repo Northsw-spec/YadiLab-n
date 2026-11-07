@@ -25,11 +25,15 @@ const ajv = new Ajv2020({
 // Preserve every canonical source constraint except the two runtime-only
 // minimum counts. All other source fields and references remain verified
 // by the project-document semantic integrity gate.
-const editableSourceSchema = structuredClone(sourceSchema);
+// Local schema variant is intentionally derived, not a replacement for the
+// globally strict executable source. Dynamic JSON shape avoids retyping all
+// nested JSON Schema union variants for the single draft-only adjustment.
+const editableSourceSchema: any = structuredClone(sourceSchema);
 editableSourceSchema.$id = "urn:app:schema:editable-project-source:0.1.0";
 editableSourceSchema.title = "Editable Project Source";
 editableSourceSchema.properties.resources.minItems = 0;
 editableSourceSchema.properties.objectives.minItems = 0;
+editableSourceSchema.$defs.rule.oneOf[0].properties.rules.minItems = 0;
 
 const validators = {
   source: ajv.compile(sourceSchema),
