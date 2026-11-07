@@ -3,6 +3,7 @@ import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
   assertProjectOpenDiskUnchanged, sameProjectFileEntry, assertSafeRecoveryTarget,
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
+  sameEditableProjectRevision,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -84,8 +85,7 @@ export function ProjectFileControls({
     const previous = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
     if (workspace.mode === "builder" && workspace.source !== previous?.source) {
-      const sameProjectEdit = previous?.mode === "builder" &&
-        workspace.dirty && workspace.sourceRevision > previous.sourceRevision;
+      const sameProjectEdit = sameEditableProjectRevision(previous, workspace);
       if (!sameProjectEdit) {
         resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null, null, true);
         setMessage("Different scenario loaded and not saved; choose Save As for its own project file.");

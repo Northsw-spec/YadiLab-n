@@ -9,7 +9,8 @@ import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
   assertProjectOpenDiskUnchanged,
-  projectFilename, projectSnapshot, projectHasUnsavedChanges, sameProjectFileEntry,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges, sameEditableProjectRevision,
+  sameProjectFileEntry,
   assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
@@ -731,5 +732,36 @@ await assert.rejects(assertProjectOpenDiskUnchanged(
   openDiskHandle, "invalid"), /PROJECT_EXPECTED_DIGEST_INVALID/,
   "Open readback must not bypass the required SHA-256 fingerprint");
 console.log("PASS PROJECT-012: native Open detects physical disk swap after verified snapshot; changed/unreadable handles rejected");
+// PROJECT-013: a different canonical scenario must never inherit the
+// previously selected native .yadilab just because its revision is higher.
+const savedScenario = {
+  mode: "builder", source: { scenarioId: "previous_scenario" },
+  sourceRevision: 12, dirty: false,
+};
+const genuineEdit = {
+  mode: "builder", source: { scenarioId: "previous_scenario" },
+  sourceRevision: 13, dirty: true,
+};
+assert.equal(sameEditableProjectRevision(savedScenario, genuineEdit), true,
+  "Normal edits must retain their native file association");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, source: { scenarioId: "different_scenario" },
+}), false, "A dirty new scenario with higher revision must detach the previous file");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, sourceRevision: 12,
+}), false, "Equal revision cannot prove an edit belongs to same project");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, dirty: false,
+}), false, "New source with no declared edit must not silently rebind a file");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, mode: "runtime",
+}), false, "Runtime activation is not a local Builder edit");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, sourceRevision: Number.POSITIVE_INFINITY,
+}), false, "Malformed revision must not preserve project handle");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, source: { scenarioId: "" },
+}), false, "Empty canonical scenario identity must never retain an existing handle");
+console.log("PASS PROJECT-013: native project association retained only for same-scenario Builder edits");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
