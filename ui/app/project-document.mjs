@@ -80,6 +80,27 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
         blocked("UNKNOWN_CONNECTION_PORT");
     }
   }
+  // Evidence and annotations must not silently refer to deleted or renamed
+  // canonical objects. The schema enforces ID syntax but not referential
+  // integrity; apply the same object sets as Compiler semantic validation.
+  const testIds = new Set(source.tests.map(test => test.id));
+  for (const finding of source.findings) {
+    for (const testId of finding.evidenceTests ?? []) {
+      if (!testIds.has(testId)) blocked("UNKNOWN_EVIDENCE_TEST");
+    }
+  }
+  const noteTargets = new Set([
+    ...zoneIds, ...resourceIds,
+    ...source.connections.map(edge => edge.id),
+    ...testIds,
+    ...source.findings.map(finding => finding.id),
+    ...source.objectives.map(objective => objective.id),
+    ...(source.troubleshootingObjectives ?? []).map(objective => objective.id),
+  ]);
+  for (const note of source.notes ?? []) {
+    if (note.target !== undefined && !noteTargets.has(note.target))
+      blocked("UNKNOWN_NOTE_TARGET");
+  }
   if (!Array.isArray(layoutOverrides) || layoutOverrides.length > 20_000)
     blocked("LAYOUT_INVALID");
   const movable = new Set([...zoneIds, ...resourceIds]);
