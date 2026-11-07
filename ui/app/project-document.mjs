@@ -445,7 +445,12 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
   // atomic exclusion against another OS process modifying the file afterwards.
   const assertOriginalDiskBytes = async () => {
     const before = await handle.getFile();
-    if (!before || typeof before.arrayBuffer !== "function") blocked("CONFLICT_READ_UNAVAILABLE");
+    if (!before || typeof before.arrayBuffer !== "function" ||
+        !Number.isSafeInteger(before.size) || before.size < 0)
+      blocked("CONFLICT_READ_UNAVAILABLE");
+    // Do not allocate an unbounded external file into browser memory. A
+    // concurrent writer may have enlarged it since the last verified Save.
+    if (before.size > PROJECT_MAX_BYTES) blocked("EXTERNAL_FILE_CHANGED");
     const buffer = await before.arrayBuffer();
     if (!(buffer instanceof ArrayBuffer) || buffer.byteLength > PROJECT_MAX_BYTES)
       blocked("EXTERNAL_FILE_CHANGED");
@@ -474,7 +479,12 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
     throw error;
   }
   const actual = await handle.getFile();
-  if (!actual || typeof actual.arrayBuffer !== "function") blocked("READBACK_UNAVAILABLE");
+  if (!actual || typeof actual.arrayBuffer !== "function" ||
+      !Number.isSafeInteger(actual.size) || actual.size < 0)
+    blocked("READBACK_UNAVAILABLE");
+  // Readback must obey the same size ceiling as Open and conflict detection.
+  // The post-write file may have been replaced by another OS process.
+  if (actual.size > PROJECT_MAX_BYTES) blocked("READBACK_INVALID");
   const bytes = await actual.arrayBuffer();
   if (!(bytes instanceof ArrayBuffer) || bytes.byteLength > PROJECT_MAX_BYTES)
     blocked("READBACK_INVALID");
