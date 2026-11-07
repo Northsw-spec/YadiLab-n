@@ -20,7 +20,8 @@ MOCK = r"""
   const store = { text: "", writes: 0, fail: false, reads: 0,
     permissionDenied: false, cancelSave: false, cancelOpen: false,
     aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0,
-    chooseAlternative: false, otherText: "", otherWrites: 0 };
+    chooseAlternative: false, otherText: "", otherWrites: 0,
+    pauseIdentity: false, pendingIdentity: false, releaseIdentity: null };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
@@ -45,7 +46,15 @@ MOCK = r"""
     },
   };
   const alias = { ...handle };
-  handle.isSameEntry = async other => other === handle || other === alias;
+  handle.isSameEntry = async other => {
+    if (store.pauseIdentity) {
+      store.pendingIdentity = true;
+      await new Promise(resolve => { store.releaseIdentity = resolve; });
+      store.pendingIdentity = false;
+      store.releaseIdentity = null;
+    }
+    return other === handle || other === alias;
+  };
   alias.isSameEntry = async other => other === handle || other === alias;
   const alternate = {
     name: "safe-recovery-copy.yadilab",
@@ -471,6 +480,70 @@ def main():
                     "Save As wrote to an existing project despite nonempty destination")
             expect(econtrols).to_have_attribute("data-project-dirty", "true")
             existing_target.close()
+
+            # Save As must reject a stale Builder source even when the change
+            # happens WHILE awaiting the native isSameEntry() identity check.
+            stale = context.new_page()
+            stale.add_init_script(MOCK)
+            stale.on("pageerror", lambda error: errors.append(str(error)))
+            stale.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            scontrols = stale.locator('[data-project-file-controls="ready"]')
+            expect(scontrols).to_be_visible(timeout=45000)
+            stale.locator('[data-project-action="save-as"]').click()
+            expect(stale.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            stale_section = stale.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            if stale_section.get_attribute("open") is None:
+                stale_section.locator("summary").first.click()
+            stale_inspector = stale.locator('[data-builder-inspector="mission"]')
+            expect(stale_inspector).to_be_visible(timeout=15000)
+            title = stale_inspector.locator(
+                "label.inspector-field", has_text="Title").locator("input")
+            title.fill("EDIT BEFORE SAVE AS")
+            stale_inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(scontrols).to_have_attribute("data-project-dirty", "true")
+            stale.evaluate("""() => {
+                const s = window.__yadilabProjectStore;
+                s.aliasSameEntryOnSaveAs = true;
+                s.pauseIdentity = true;
+            }""")
+            old_data = stale.evaluate("window.__yadilabProjectStore.text")
+            old_writes = stale.evaluate("window.__yadilabProjectStore.writes")
+            stale.locator('[data-project-action="save-as"]').click()
+            stale.wait_for_function(
+                "window.__yadilabProjectStore.pendingIdentity === true",
+                timeout=15000)
+            title.fill("EDIT AFTER FILE IDENTITY STARTED")
+            stale_inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(scontrols).to_have_attribute("data-project-dirty", "true")
+            stale.evaluate("""() => {
+                const s = window.__yadilabProjectStore;
+                s.pauseIdentity = false;
+                s.releaseIdentity();
+            }""")
+            expect(stale.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_STALE_BEFORE_WRITE", timeout=15000)
+            require(stale.evaluate("window.__yadilabProjectStore.writes") == old_writes,
+                    "Save As wrote stale Builder bytes after identity wait")
+            require(stale.evaluate("window.__yadilabProjectStore.text") == old_data,
+                    "Save As changed disk despite newer in-memory edits")
+            expect(scontrols).to_have_attribute("data-project-dirty", "true")
+            # The blocked save must not quarantine a file that was never written.
+            # A new Ctrl+S must still save the current Builder content.
+            stale.keyboard.press("Control+s")
+            expect(stale.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=15000)
+            require(stale.evaluate("window.__yadilabProjectStore.writes") ==
+                    old_writes + 1, "Ctrl+S failed after a stale Save As refusal")
+            require("EDIT AFTER FILE IDENTITY STARTED" in stale.evaluate(
+                "window.__yadilabProjectStore.text"),
+                "Recovered Ctrl+S saved the stale source rather than latest edits")
+            expect(scontrols).to_have_attribute("data-project-dirty", "false")
+            stale.close()
+
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -489,13 +562,15 @@ def main():
                 "quarantinePersistsAfterSavingElsewhere": True,
                 "differentFileRecoveryAndCtrlS": True,
                 "unrelatedExistingSaveAsDenied": True,
+                "staleSourceDuringIdentityDenied": True,
+                "recoveredSavePersistsNewerBuilder": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
+                  " external conflict, stale identity and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()

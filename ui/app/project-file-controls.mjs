@@ -192,6 +192,12 @@ export function ProjectFileControls({
     }
     const original = projectSnapshot(before);
     const epoch = fileEpochRef.current;
+    // File identity checks may await browser permissions or the filesystem.
+    // The originating project must still be current at EVERY write boundary.
+    const requireLiveSaveSource = () => {
+      if (fileEpochRef.current !== epoch || projectSnapshot(getWorkspace()) !== original)
+        throw new Error("PROJECT_STALE_BEFORE_WRITE");
+    };
     const filename = forceSaveAs || !handleRef.current
       ? projectFilename(before.source.scenarioId) : nameRef.current;
     // Native picker MUST be started in the direct user-activation call stack.
@@ -208,8 +214,7 @@ export function ProjectFileControls({
     try {
       const handle = picker ? await picker : forceSaveAs ? null : handleRef.current;
       const data = await createProjectDocument(before, { validateSource });
-      if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch)
-        throw new Error("PROJECT_STALE_BEFORE_WRITE");
+      requireLiveSaveSource();
       if (!handle) {
         downloadUnverified(data, filename);
         // A browser download is not a verified durable project save.
@@ -220,8 +225,10 @@ export function ProjectFileControls({
       // A failed write leaves its target quarantined. Re-selecting that same
       // physical file through Save As must NOT bypass the conflict warning.
       await assertSafeRecoveryTarget(quarantinedHandlesRef.current, handle);
-      // Never overwrite a file changed by another tab or external editor.
+      requireLiveSaveSource();
+      // Identity comparison may itself suspend while an editor changes Builder.
       const writingKnownFile = await sameProjectFileEntry(handleRef.current, handle);
+      requireLiveSaveSource();
       if (writingKnownFile && !fileFingerprintRef.current)
         throw new Error("PROJECT_EXPECTED_DIGEST_MISSING");
       try {
