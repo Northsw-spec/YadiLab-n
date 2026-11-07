@@ -101,8 +101,9 @@ assert.equal(await sameProjectFileEntry(handle,differentFile),false);
 await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:null}),
   /PROJECT_FILE_IDENTITY_UNAVAILABLE/,
   "Lack of identity comparison must block potentially destructive Save As");
-await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:async()=>"true"}),
-  /PROJECT_FILE_IDENTITY_INVALID/);
+await assert.rejects(sameProjectFileEntry({...handle,isSameEntry:async()=>"true"},samePhysicalFile),
+  /PROJECT_FILE_IDENTITY_INVALID/,
+  "Malformed answer from the queried current handle must fail closed");
 stored += "EXTERNAL-EDIT";
 const conflictContent = stored;
 await assert.rejects(writeProjectFile(samePhysicalFile,text,
