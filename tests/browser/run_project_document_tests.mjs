@@ -602,5 +602,99 @@ for (const [caseName, corrupt, expected] of [
     expected, "Open must reject correctly hashed " + caseName);
 }
 console.log("PASS PROJECT-009: test params and troubleshooting evidence fail closed on Save/Open, valid selectors and source roundtrip");
+// PROJECT-010: JSON schema validates rule syntax, but unlike Compiler
+// semantics it does not prove that referenced test and resource IDs exist.
+// Check all rule forms including deeply nested all/any/not, at Save and Open.
+const brokenRuleCases = [
+  ["equals.target", p => { p.completion = {
+    op: "equals", target: "missing_device", path: "properties.enabled", value: true,
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["service_enabled.target", p => { p.completion = {
+    op: "service_enabled", target: "missing_device", service: "ssh",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["reachable.from", p => { p.completion = {
+    op: "reachable", from: "missing_device", to: "rds01",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["reachable.to", p => { p.completion = {
+    op: "reachable", from: "attacker", to: "missing_device",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["member_of.group", p => { p.findings[0].when = {
+    op: "member_of", subject: "attacker", group: "missing_device",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["member_of.subject", p => { p.findings[0].when = {
+    op: "member_of", subject: "missing_device", group: "rds01",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["has_permission.subject", p => { p.objectives[0].condition = {
+    op: "has_permission", subject: "missing_device",
+    resource: "rds01", permission: "read",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["has_permission.resource", p => { p.objectives[0].condition = {
+    op: "has_permission", subject: "attacker",
+    resource: "missing_device", permission: "read",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["test_result.test", p => { p.completion = {
+    op: "test_result", test: "missing_test", expected: "TRUE",
+  }; }, /PROJECT_UNKNOWN_RULE_TEST/],
+  ["nested any/not/test_result", p => { p.completion = {
+    op: "all", rules: [{ op: "any", rules: [
+      { op: "reachable", from: "attacker", to: "rds01" },
+      { op: "not", rule: { op: "test_result", test: "missing_test", expected: "FALSE" } },
+    ] }],
+  }; }, /PROJECT_UNKNOWN_RULE_TEST/],
+];
+for (const [label, mutate, expected] of brokenRuleCases) {
+  const broken = structuredClone(source);
+  mutate(broken);
+  assert.equal(validateSource(broken), true, label + " fixture must pass JSON schema");
+  await assert.rejects(createProjectDocument({ ...workspace, source: broken }, opts),
+    expected, "Save must reject schema-valid dangling " + label);
+}
+const validRules = structuredClone(source);
+validRules.findings[0].when = {
+  op: "all", rules: [
+    { op: "reachable", from: "attacker", to: "rds01", protocol: "tcp", port: 3389 },
+    { op: "not", rule: { op: "test_result", test: "admin_rdp", expected: "FALSE" } },
+  ],
+};
+validRules.objectives[0].condition = {
+  op: "any", rules: [
+    { op: "equals", target: "firewall01", path: "properties.rules.0.action", value: "deny" },
+    { op: "service_enabled", target: "rds01", service: "rdp" },
+  ],
+};
+validRules.completion = {
+  op: "all", rules: [
+    { op: "member_of", subject: "attacker", group: "admin01" },
+    { op: "has_permission", subject: "admin01", resource: "rds01", permission: "read" },
+    { op: "test_result", test: "direct_rdp", expected: "FALSE" },
+  ],
+};
+assert.equal(validateSource(validRules), true);
+const validRuleText = await createProjectDocument({ ...workspace, source: validRules }, opts);
+assert.deepEqual((await readProjectDocument(validRuleText, opts)).source, validRules,
+  "Valid nested rule references and original identities must roundtrip exactly");
+for (const [label, mutate, expected] of [
+  ["missing completion resource", p => { p.source.completion = {
+    op: "reachable", from: "missing_device", to: "rds01",
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+  ["unknown finding test", p => { p.source.findings[0].when = {
+    op: "test_result", test: "missing_test", expected: "TRUE",
+  }; }, /PROJECT_UNKNOWN_RULE_TEST/],
+  ["nested objective resource", p => { p.source.objectives[0].condition = {
+    op: "any", rules: [{ op: "not", rule: {
+      op: "has_permission", subject: "attacker",
+      resource: "missing_device", permission: "read",
+    } }],
+  }; }, /PROJECT_UNKNOWN_RULE_RESOURCE/],
+]) {
+  const forged = structuredClone(doc);
+  mutate(forged.content);
+  forged.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(JSON.stringify(forged.content))
+  )).toString("hex");
+  await assert.rejects(readProjectDocument(JSON.stringify(forged), opts),
+    expected, "Open must reject a valid-hash project with " + label);
+}
+console.log("PASS PROJECT-010: all nested rule resource/test IDs checked at Save/Open; valid rules and identities preserved");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
