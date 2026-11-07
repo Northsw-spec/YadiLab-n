@@ -272,9 +272,18 @@ def main():
             expect(controls).to_have_attribute("data-project-dirty", "false")
             require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_hints,
                     "Explicit Open of a project with hints caused an implicit disk write")
+            # Observe an actual Builder edit before Ctrl+S. A status message
+            # may render before Open's finally releases its private busy flag;
+            # editing via the UI also verifies that hints survive normal work.
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-008 hints retained after editing")
+            inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(controls).to_have_attribute("data-project-dirty", "true")
             page.keyboard.press("Control+s")
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
+            expect(controls).to_have_attribute("data-project-dirty", "false")
             require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_hints + 1,
                     "Ctrl+S failed to save a valid project with hints")
             saved_hints = json.loads(page.evaluate("window.__yadilabProjectStore.text"))
