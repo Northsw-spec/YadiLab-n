@@ -4018,6 +4018,8 @@ function App() {
     return () => markApplicationStopped(document);
   }, []);
   const [workspace, setWorkspace] = useState(() => createBuilderWorkspace(welcomeScenario));
+  const lastBuilderWorkspaceRef = useRef(workspace);
+  if (workspace.mode === "builder") lastBuilderWorkspaceRef.current = workspace;
   const projectGuardRef = useRef(() => true);
   const latestDrawioWorkspaceRef = useRef(workspace);
   latestDrawioWorkspaceRef.current = workspace;
@@ -4554,6 +4556,7 @@ function App() {
 
   const openPackage = async (file) => {
     if (!file || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     try {
       const result = await openRuntimePackage(file, {
         packageIO,
@@ -4564,6 +4567,11 @@ function App() {
           revokeObjectURL: (url) => URL.revokeObjectURL(url),
         },
       });
+      if (latestDrawioWorkspaceRef.current !== startedIn) {
+        result.media?.release?.();
+        setDiagnostics([{ severity: "error", code: "PACKAGE_OPEN_STALE_WORKSPACE", message: "Workspace changed during asynchronous package read. Package was not opened." }]);
+        return;
+      }
       setDiagnostics(result.diagnostics);
       if (result.ok) {
         releaseMedia();
@@ -4800,7 +4808,13 @@ function App() {
     setActiveJourney(null);
     setTopologyStateFocus(null);
     const source = workspace.mode === "runtime" ? workspace.source ?? welcomeScenario : workspace.source;
-    setWorkspace(createBuilderWorkspace(source));
+    const previous = lastBuilderWorkspaceRef.current;
+    // Preserve editable topology, manual position overrides and the dirty flag
+    // when returning from a preview of THIS exact Builder source.
+    const resume = workspace.mode === "runtime" && workspace.source &&
+      previous?.mode === "builder" && previous.source === workspace.source
+      ? previous : createBuilderWorkspace(source);
+    setWorkspace(resume);
   };
   const title = workspace.mode === "builder" ? workspace.source.metadata.title : workspace.scenario.metadata.title;
   const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
@@ -4827,7 +4841,8 @@ function App() {
   const exportDiagnosticSession = async () => { if (!troubleshootingCase) return; const session = await createSavedDiagnosticSession({ sessionId: troubleshootingCase.caseId, case: troubleshootingCase, runs: caseRunRecords, comparisons: multiRunView ? [multiRunView] : [] }); downloadJson({ filename: `${troubleshootingCase.caseId}.yadilab-session.json`, mime: "application/json", text: exportSavedDiagnosticSession(session) }); };
   const importDiagnosticSession = async (file) => { if (!file) return; const result = await importSavedDiagnosticSession(await file.text()); if (!result.ok) { setDiagnostics(result.diagnostics.map((message) => ({ severity: "error", code: "DIAGNOSTIC_SESSION_IMPORT_BLOCKED", message }))); return; } setTroubleshootingCase(result.session.case); setCaseRunRecords([...result.session.runs]); setDiagnostics([{ severity: "warning", code: "DIAGNOSTIC_SESSION_IMPORTED_ARCHIVED", message: "Saved Diagnostic Session opened as archived evidence; no archived runtime was activated." }]); };
   const reproduceCase = async () => {
-    if (!troubleshootingCase) return;
+    if (!troubleshootingCase || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     setBusy(true);
     try {
       let working = createBuilderWorkspace(troubleshootingCase.startingSource);
@@ -4837,7 +4852,7 @@ function App() {
       if (!layout.ok) { setDiagnostics(layout.diagnostics); return; }
       const runtime = previewRuntime(layout.workspace);
       setDiagnostics(runtime.diagnostics);
-      if (runtime.ok) { releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "CASE_REPRODUCTION_EXECUTED", message: "Reproduced via canonical source → validation → compiler → Engine. Archived outcome was not reused." }]); }
+      if (runtime.ok && latestDrawioWorkspaceRef.current === startedIn) { releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "CASE_REPRODUCTION_EXECUTED", message: "Reproduced via canonical source → validation → compiler → Engine. Archived outcome was not reused." }]); }
     } finally { setBusy(false); }
   };
   const selectedExperiment = experimentBranches.find((branch) => branch.experimentId === selectedExperimentId) ?? null;
@@ -4848,7 +4863,8 @@ function App() {
     setDiagnostics([{ severity: "warning", code: "EXPERIMENT_CREATED", message: `Experiment skapad från ${forkSource}. Ancestor source är immutable och working copy är isolerad.` }]);
   };
   const runExperiment = async () => {
-    if (!selectedExperiment) return;
+    if (!selectedExperiment || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     setBusy(true);
     try {
       let next = createBuilderWorkspace(selectedExperiment.workingSource);
@@ -4858,8 +4874,9 @@ function App() {
       if (!layout.ok) { setDiagnostics(layout.diagnostics); return; }
       const runtime = previewRuntime(layout.workspace);
       setDiagnostics(runtime.diagnostics);
-      if (runtime.ok) {
+      if (runtime.ok && latestDrawioWorkspaceRef.current === startedIn) {
         const tested = await markExperimentTested(selectedExperiment);
+        if (latestDrawioWorkspaceRef.current !== startedIn) return;
         setExperimentBranches((items) => items.map((item) => item.experimentId === tested.experimentId ? tested : item));
         releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "EXPERIMENT_ENGINE_RUN", message: "Experiment run executed through canonical source → validation → compiler → Engine. Result is modeled Engine truth." }]);
       }
@@ -4972,7 +4989,8 @@ function App() {
     } catch (error) { setDiagnostics([{ severity: "error", code: "VERIFIED_BASELINE_CREATE_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
   const reproduceVerifiedBaselineAction = async () => {
-    if (!selectedBaseline) return;
+    if (!selectedBaseline || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     try {
       const result = await reproduceVerifiedBaseline(selectedBaseline, async (source) => {
         const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
@@ -4982,7 +5000,7 @@ function App() {
         const runtime = previewRuntime(laidOut.workspace);
         return runtime.ok ? runtime.workspace : runtime;
       });
-      if (result.ok) { setWorkspace(result.result); setDiagnostics([{ severity: "warning", code: "VERIFIED_BASELINE_REPRODUCED", message: `Baseline reproducerad via canonical source → validation → compiler → Engine. Arkiverat resultat återanvändes inte.` }]); }
+      if (result.ok && latestDrawioWorkspaceRef.current === startedIn) { setWorkspace(result.result); setDiagnostics([{ severity: "warning", code: "VERIFIED_BASELINE_REPRODUCED", message: `Baseline reproducerad via canonical source → validation → compiler → Engine. Arkiverat resultat återanvändes inte.` }]); }
       else setDiagnostics(result.diagnostics.map((message) => ({ severity: "error", code: "VERIFIED_BASELINE_REPRODUCTION_BLOCKED", message })));
     } catch (error) { setDiagnostics([{ severity: "error", code: "VERIFIED_BASELINE_REPRODUCTION_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
@@ -6418,7 +6436,7 @@ function App() {
               e("button", { type: "button", onClick: reproduceCase, disabled: !troubleshootingCase || busy, "data-case-reproduce": "true" }, "Reproduce via Compiler + Engine"),
             ) : null,
           ),
-          e(NetworkIntentPanel, { workspace, setDiagnostics, onOpenEngineRun: (item, runtimeWorkspace) => { if (runtimeWorkspace) setWorkspace(runtimeWorkspace); setDiagnostics([{ severity: "warning", code: "INTENT_MATRIX_ENGINE_RUN_SELECTED", message: `Exact Engine evidence opened for run ${item.engineRunId ?? "NOT RUN"}; source ${item.sourceIdentity}; flow ${item.flowId}; actual ${item.actual}.` }]); } }),
+          e(NetworkIntentPanel, { workspace, setDiagnostics, onOpenEngineRun: (item, runtimeWorkspace) => { if (runtimeWorkspace && !projectGuardRef.current()) return; if (runtimeWorkspace) setWorkspace(runtimeWorkspace); setDiagnostics([{ severity: "warning", code: "INTENT_MATRIX_ENGINE_RUN_SELECTED", message: `Exact Engine evidence opened for run ${item.engineRunId ?? "NOT RUN"}; source ${item.sourceIdentity}; flow ${item.flowId}; actual ${item.actual}.` }]); } }),
           e("section", { className: "troubleshooting-case-panel experiment-branch-panel", "aria-label": "Experiment Branches", "data-experiment-branches": "ready" },
             e("h2", null, "Scenario Experiments"),
             e("p", null, "Isolated canonical source variants. All what-if results run through the normal Compiler and Engine."),
