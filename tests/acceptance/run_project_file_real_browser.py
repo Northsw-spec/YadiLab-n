@@ -544,6 +544,35 @@ def main():
             expect(scontrols).to_have_attribute("data-project-dirty", "false")
             stale.close()
 
+            # Asynchronous Validate & Compile cannot resurrect a previous
+            # canonical source after New has replaced it. Trigger both actions
+            # within one JS task so compilation is still suspended at await.
+            compile_race = context.new_page()
+            compile_race.add_init_script(MOCK)
+            compile_race.on("pageerror", lambda error: errors.append(str(error)))
+            compile_race.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            crc = compile_race.locator('[data-project-file-controls="ready"]')
+            expect(crc).to_be_visible(timeout=45000)
+            compile_race.evaluate("""() => {
+                const compile = document.querySelector('[data-studio-action="validate-compile"]');
+                const newer = document.querySelector('[data-project-action="new"]');
+                if (!compile || !newer || compile.disabled || newer.disabled)
+                    throw new Error("PROJECT_COMPILE_RACE_TEST_CONTROLS_UNAVAILABLE");
+                compile.click();
+                newer.click();
+            }""")
+            expect(compile_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project", timeout=15000)
+            expect(crc).to_have_attribute("data-project-dirty", "true")
+            # Allow the suspended compiler and any layout microtasks to settle.
+            # Without the guard, their result could reset New to old source.
+            compile_race.wait_for_timeout(1500)
+            expect(compile_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(crc).to_have_attribute("data-project-dirty", "true")
+            require(compile_race.evaluate("window.__yadilabProjectStore.writes") == 0,
+                    "Stale compilation caused an implicit project-file write")
+            compile_race.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -564,13 +593,14 @@ def main():
                 "unrelatedExistingSaveAsDenied": True,
                 "staleSourceDuringIdentityDenied": True,
                 "recoveredSavePersistsNewerBuilder": True,
+                "staleAsyncCompileCannotResurrectOldProject": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict, stale identity and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
+                  " external conflict, stale identity, async compile and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()

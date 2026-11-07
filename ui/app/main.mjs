@@ -4465,6 +4465,9 @@ function App() {
       scenarioId: "new_project", title: "New YadiLab project",
     });
     beginScenarioTransition();
+    // A document replacement invalidates any older async Builder compilation.
+    // Do not keep its busy flag attached to the newly opened project.
+    setBusy(false);
     setImportedProbeAutoOpen(false);
     setNetworkImportOpen(false);
     setNetworkImportSelection(null);
@@ -4479,9 +4482,16 @@ function App() {
 
   const compileAndLayout = async () => {
     if (workspace.mode !== "builder") return;
+    const startedWorkspace = workspace;
+    const startedTransition = scenarioTransitionRef.current;
+    const isLiveCompile = () => scenarioTransitionRef.current === startedTransition
+      && latestDrawioWorkspaceRef.current === startedWorkspace;
     setBusy(true);
     try {
       let next = await compileBuilderWorkspace(workspace, compilerOptions);
+      // A New/Open, source replacement, or Builder edit during async compile
+      // must never allow a stale result to replace the current project.
+      if (!isLiveCompile()) return;
       const largeGuard=classifyScaledOfficeFiveThousandView({
         mode:"builder",resources:workspace.source.resources.length,
         connections:workspace.source.connections.length,
@@ -4514,13 +4524,19 @@ function App() {
       }
       if (next.compile.status === "valid") {
         const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+        if (!isLiveCompile()) return;
         setDiagnostics(layout.diagnostics);
         if (layout.ok) next = layout.workspace;
       } else {
         setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
       }
+      // One final check immediately before mutating the canonical workspace.
+      if (!isLiveCompile()) return;
       setWorkspace(next);
-    } finally { setBusy(false); }
+    } finally {
+      // Old completion must not clear a newer scenario operation's busy flag.
+      if (scenarioTransitionRef.current === startedTransition) setBusy(false);
+    }
   };
 
   const preview = () => {
