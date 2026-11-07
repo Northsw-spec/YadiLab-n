@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
-  sameProjectFileEntry, assertSafeRecoveryTarget,
+  assertProjectOpenDiskUnchanged, sameProjectFileEntry, assertSafeRecoveryTarget,
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
 } from "./project-document.mjs";
 
@@ -137,6 +137,9 @@ export function ProjectFileControls({
     if (!lockHeld) busyRef.current = true;
     try {
       const content = await readProjectFile(file, { validateSource });
+      // A selected native file may change after getFile() returned a snapshot.
+      // Never bind that outdated snapshot as the current on-disk project.
+      if (handle) await assertProjectOpenDiskUnchanged(handle, content.fileSha256);
       if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
         throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_OPEN");
       const next = {
