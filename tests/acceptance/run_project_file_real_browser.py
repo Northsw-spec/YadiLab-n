@@ -357,6 +357,43 @@ def main():
                 page.evaluate(
                     "(saved) => { window.__yadilabProjectStore.text = saved; }",
                     saved_after_ctrl)
+            # PROJECT-007: checksum-valid source instructions must not
+            # point to missing solution resources, layout objects or zones.
+            # Rejected Open cannot replace the active Builder or write bytes.
+            for corruption, expected_code in (
+                ("solution_target", "PROJECT_UNKNOWN_SOLUTION_TARGET"),
+                ("layout_target", "PROJECT_UNKNOWN_LAYOUT_TARGET"),
+                ("layout_parent", "PROJECT_UNKNOWN_LAYOUT_PARENT"),
+            ):
+                page.evaluate("""async ([saved, corruption]) => {
+                    const forged = JSON.parse(saved);
+                    const source = forged.content.source;
+                    if (corruption === 'solution_target')
+                        source.canonicalSolution.operations[0].target = 'missing_device';
+                    else if (corruption === 'layout_target')
+                        source.layoutHints[0].target = 'missing_device';
+                    else
+                        source.layoutHints[0].parent = 'missing_zone';
+                    const bytes = new TextEncoder().encode(JSON.stringify(forged.content));
+                    const digest = await crypto.subtle.digest('SHA-256', bytes);
+                    forged.contentSha256 = [...new Uint8Array(digest)]
+                        .map(n => n.toString(16).padStart(2, '0')).join('');
+                    window.__yadilabProjectStore.text = JSON.stringify(forged);
+                }""", [saved_after_ctrl, corruption])
+                before_orphan_open = page.evaluate("window.__yadilabProjectStore.writes")
+                page.locator('[data-project-action="open"]').click()
+                expect(page.locator('[data-project-message]')).to_contain_text(
+                    expected_code, timeout=20000)
+                require(page.locator(".app-frame").get_attribute(
+                    "data-runtime-scenario-id") == "foundation_acceptance",
+                    "Orphan solution or layout reference replaced the active workspace")
+                require(page.evaluate("window.__yadilabProjectStore.writes")
+                        == before_orphan_open,
+                        "Rejected solution or layout reference wrote a project file")
+                expect(controls).to_have_attribute("data-project-dirty", "false")
+                page.evaluate(
+                    "(saved) => { window.__yadilabProjectStore.text = saved; }",
+                    saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)

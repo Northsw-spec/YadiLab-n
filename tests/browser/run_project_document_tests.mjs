@@ -395,5 +395,60 @@ for (const [label, mutate, code] of [
     "Open must refuse correctly rehashed " + label);
 }
 console.log("PASS PROJECT-006: orphan finding evidence and note targets rejected on Save/Open; valid references roundtrip");
+// PROJECT-007: the Compiler rejects orphan solution mutations and layout
+// references, but a SHA-256-correct .yadilab file must fail earlier on Open.
+// Unknown IDs cannot silently become verified repairs or drawn objects.
+const invalidSolutionTarget = structuredClone(source);
+invalidSolutionTarget.canonicalSolution.operations[0].target = "missing_device";
+assert.equal(validateSource(invalidSolutionTarget), true, "solution orphan is schema-valid");
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: invalidSolutionTarget }, opts),
+  /PROJECT_UNKNOWN_SOLUTION_TARGET/,
+  "Save must reject a repair operation targeting a non-existent resource");
+
+const invalidHintTarget = structuredClone(source);
+invalidHintTarget.layoutHints[0].target = "missing_device";
+assert.equal(validateSource(invalidHintTarget), true, "layout target orphan is schema-valid");
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: invalidHintTarget }, opts),
+  /PROJECT_UNKNOWN_LAYOUT_TARGET/,
+  "Save must reject a layout hint for a missing resource or zone");
+
+const invalidHintParent = structuredClone(source);
+invalidHintParent.layoutHints[0].parent = "missing_zone";
+assert.equal(validateSource(invalidHintParent), true, "layout parent orphan is schema-valid");
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: invalidHintParent }, opts),
+  /PROJECT_UNKNOWN_LAYOUT_PARENT/,
+  "Save must reject a layout hint with a missing parent zone");
+
+const validLayoutAndSolution = structuredClone(source);
+validLayoutAndSolution.layoutHints = [
+  { target: "firewall01", parent: "dmz", rank: 1 },
+  { target: "wan", rank: 0 },
+  { target: "rds01", parent: "server", order: 2 },
+];
+const validLayoutText = await createProjectDocument(
+  { ...workspace, source: validLayoutAndSolution }, opts);
+assert.deepEqual((await readProjectDocument(validLayoutText, opts)).source,
+  validLayoutAndSolution, "Valid layout hierarchy and repair targets must roundtrip exactly");
+
+for (const [kind, mutate, expected] of [
+  ["solution target", d => { d.content.source.canonicalSolution.operations[0].target = "missing_device"; },
+    /PROJECT_UNKNOWN_SOLUTION_TARGET/],
+  ["layout target", d => { d.content.source.layoutHints[0].target = "missing_device"; },
+    /PROJECT_UNKNOWN_LAYOUT_TARGET/],
+  ["layout parent", d => { d.content.source.layoutHints[0].parent = "missing_zone"; },
+    /PROJECT_UNKNOWN_LAYOUT_PARENT/],
+]) {
+  const forged = structuredClone(doc);
+  mutate(forged);
+  forged.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(JSON.stringify(forged.content))
+  )).toString("hex");
+  await assert.rejects(readProjectDocument(JSON.stringify(forged), opts),
+    expected, "Open must reject SHA-256-correct orphan " + kind);
+}
+console.log("PASS PROJECT-007: unknown solution/layout targets and hint parent fail on Save/Open; valid nested layouts roundtrip");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
