@@ -52,6 +52,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_ic030_p2b_drawio_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/drawio"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project_file_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project-file"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

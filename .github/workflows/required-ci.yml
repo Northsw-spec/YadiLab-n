@@ -36,6 +36,7 @@ jobs:
           npm run test:enterprise-import
           npm run test:import-helper
           npm run test:release-identity
+          node tests/browser/run_project_document_tests.mjs
           go test ./launcher/...
       - name: Build and attest source-controlled browser release
         env:

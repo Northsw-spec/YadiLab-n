@@ -57,6 +57,19 @@ export function ProjectFileControls({
   // This callback is used by other user-initiated scenario switches in App.
   beforeSwitchRef.current = canDiscard;
 
+  const previousWorkspaceRef = useRef(workspace);
+  // External scenario switches must detach the old writable file handle.
+  useEffect(() => {
+    const previous = previousWorkspaceRef.current;
+    previousWorkspaceRef.current = workspace;
+    if (workspace.mode === "builder" && workspace.sourceRevision === 0 &&
+        !workspace.dirty && workspace.source !== previous?.source &&
+        projectSnapshot(workspace) !== baselineRef.current) {
+      resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null);
+      setMessage("Different scenario loaded; choose Save As for its own project file.");
+    }
+  }, [workspace]);
+
   useEffect(() => {
     const onBeforeUnload = (event) => {
       if (changedRef.current) { event.preventDefault(); event.returnValue = ""; }

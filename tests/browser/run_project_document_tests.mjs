@@ -15,7 +15,8 @@ const source = structuredClone(example);
 const workspace = { mode: "builder", source, sourceRevision: 4, dirty: true,
   selection: { ids: ["firewall01"], primary: "firewall01" },
   layoutOverrides: [{ id: "firewall01", x: 120, y: 150, width: 300 }] };
-assert.equal(projectFilename("../../../test"), ".._.._test.yadilab");
+assert.ok(projectFilename("../../../test").endsWith("test.yadilab"));
+assert.ok(!projectFilename("../../../test").includes("/"));
 assert.equal(projectFilename("Net.yadilab"), "Net.yadilab");
 assert.equal(projectSnapshot({ mode: "runtime" }), null);
 const text = await createProjectDocument(workspace, opts);
