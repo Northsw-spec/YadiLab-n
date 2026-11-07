@@ -723,7 +723,8 @@ await assert.rejects(assertProjectOpenDiskUnchanged(
   openRead.fileSha256), /PROJECT_OPEN_READBACK_UNAVAILABLE/,
   "Unverifiable physical file cannot be associated");
 await assert.rejects(assertProjectOpenDiskUnchanged({
-  async getFile() { return file("unreadable.yadilab", "x".repeat(PROJECT_MAX_BYTES + 1)); },
+  async getFile() { return { size: PROJECT_MAX_BYTES + 1,
+    async arrayBuffer() { throw new Error("must reject before allocating"); } }; },
 }, openRead.fileSha256), /PROJECT_OPEN_READBACK_UNAVAILABLE/,
   "Open readback must enforce the file size bound before reading");
 await assert.rejects(assertProjectOpenDiskUnchanged(
