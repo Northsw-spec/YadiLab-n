@@ -58,6 +58,9 @@ const draftSchema = structuredClone(schema);
 draftSchema.$id = "urn:app:schema:editable-project-source:0.1.0";
 draftSchema.properties.resources.minItems = 0;
 draftSchema.properties.objectives.minItems = 0;
+// A New Builder's completion is a non-runnable empty conjunction; preserve
+// the strict compiler's nonempty-rule requirement on genuine runtime sources.
+draftSchema.$defs.rule.oneOf[0].properties.rules.minItems = 0;
 const draftValidator = new Ajv2020({ strict: true }).compile(draftSchema);
 const blankDraft = {
   formatId: source.formatId, schemaVersion: source.schemaVersion,
