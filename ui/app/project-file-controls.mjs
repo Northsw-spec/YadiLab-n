@@ -222,6 +222,11 @@ export function ProjectFileControls({
         setDiagnostics([diag("PROJECT_DOWNLOAD_UNVERIFIED", "Save As downloaded a file, but browser restrictions prevent verifying its durable bytes.", "warning")]);
         return;
       }
+      // Calculate the exact-file fingerprint BEFORE performing any native write.
+      // A WebCrypto await after close/readback could suspend with a partially
+      // rebound handle or fail despite the file having been written successfully.
+      const writtenFingerprint = await digestProjectText(data);
+      requireLiveSaveSource();
       // A failed write leaves its target quarantined. Re-selecting that same
       // physical file through Save As must NOT bypass the conflict warning.
       await assertSafeRecoveryTarget(quarantinedHandlesRef.current, handle);
@@ -259,8 +264,9 @@ export function ProjectFileControls({
         return;
       }
       // Association still follows the written file if only current-project edits occurred.
+      // No awaits between the last generation check and association commit.
       handleRef.current = handle;
-      fileFingerprintRef.current = await digestProjectText(data);
+      fileFingerprintRef.current = writtenFingerprint;
       unpersistedRef.current = false;
       nameState(projectFilename(handle.name || filename));
       baselineRef.current = original;
