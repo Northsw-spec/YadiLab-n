@@ -86,6 +86,10 @@ export function ProjectFileControls({
   const finishFallbackOpen = ticket => {
     if (fallbackOpenRef.current !== ticket) return;
     fallbackOpenRef.current = null;
+    if (ticket.focusTimer !== null) {
+      window.clearTimeout(ticket.focusTimer);
+      ticket.focusTimer = null;
+    }
     if (ticket.lockHeld) busyRef.current = false;
   };
   useEffect(() => {
@@ -102,7 +106,29 @@ export function ProjectFileControls({
       }
     };
     input.addEventListener("cancel", onCancel);
-    return () => input.removeEventListener("cancel", onCancel);
+    // Older browsers can return focus after a cancelled file chooser without
+    // ever dispatching input.cancel or input.change. Release only a legacy
+    // ticket with no selected file, after one event-turn grace period so a
+    // real change event can arrive first. Never interrupt an active read.
+    const onFocus = () => {
+      const ticket = fallbackOpenRef.current;
+      if (!ticket || ticket.lockHeld || ticket.fileSelected ||
+          ticket.focusTimer !== null) return;
+      ticket.focusTimer = window.setTimeout(() => {
+        ticket.focusTimer = null;
+        if (fallbackOpenRef.current !== ticket || ticket.fileSelected) return;
+        finishFallbackOpen(ticket);
+        setMessage("File chooser closed without a selection; current project unchanged.");
+      }, 250);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      input.removeEventListener("cancel", onCancel);
+      window.removeEventListener("focus", onFocus);
+      const ticket = fallbackOpenRef.current;
+      if (ticket?.focusTimer !== null && ticket?.focusTimer !== undefined)
+        window.clearTimeout(ticket.focusTimer);
+    };
   }, []);
 
   const previousWorkspaceRef = useRef(workspace);
@@ -211,7 +237,10 @@ export function ProjectFileControls({
       // that such a browser has no reliable way to release.
       const ticket = {
         origin: getWorkspace(), epoch: fileEpochRef.current,
-        lockHeld: "oncancel" in input,
+        // A native oncancel property is null when supported and undefined
+        // in older browsers without the event handler attribute.
+        lockHeld: input.oncancel !== undefined,
+        fileSelected: false, focusTimer: null,
       };
       fallbackOpenRef.current = ticket;
       if (ticket.lockHeld) busyRef.current = true;
@@ -399,6 +428,11 @@ export function ProjectFileControls({
           if (!file) {
             finishFallbackOpen(ticket);
             return;
+          }
+          ticket.fileSelected = true;
+          if (ticket.focusTimer !== null) {
+            window.clearTimeout(ticket.focusTimer);
+            ticket.focusTimer = null;
           }
           if (!projectFilePickerStillCurrent(ticket.origin, ticket.epoch,
             getWorkspace(), fileEpochRef.current)) {
