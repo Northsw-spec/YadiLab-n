@@ -142,6 +142,45 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-025: File System Access picker types are advisory on some
+            # platforms. Never write to a .json or other unexpected filename
+            # and then display a fictional .yadilab name as successfully saved.
+            wrong_extension = context.new_page()
+            wrong_extension.add_init_script(MOCK)
+            wrong_extension.on("pageerror", lambda error: errors.append(str(error)))
+            wrong_extension.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            wec = wrong_extension.locator('[data-project-file-controls="ready"]')
+            expect(wec).to_be_visible(timeout=45000)
+            wrong_extension.locator('[data-project-action="new"]').click()
+            expect(wec).to_have_attribute("data-project-dirty", "true")
+            wrong_extension.evaluate("""() => {
+                window.__originalSavePicker = window.showSaveFilePicker;
+                window.showSaveFilePicker = async () => ({
+                    name: 'misleading-project.json',
+                    async createWritable() {
+                        window.__yadilabProjectStore.writes++;
+                        throw Error('UNEXPECTED_INVALID_EXTENSION_WRITE');
+                    },
+                    async getFile() { return new File([], 'misleading-project.json'); },
+                });
+            }""")
+            wrong_extension.locator('[data-project-action="save-as"]').click()
+            expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_FILE_EXTENSION_INVALID", timeout=20000)
+            require(wrong_extension.evaluate("window.__yadilabProjectStore.writes") == 0,
+                    "PROJECT-025 invalid picker file was written")
+            expect(wec).to_have_attribute("data-project-dirty", "true")
+            expect(wec).to_have_attribute("data-project-filename", "Untitled.yadilab")
+            wrong_extension.evaluate("""() => {
+                window.showSaveFilePicker = window.__originalSavePicker;
+            }""")
+            wrong_extension.locator('[data-project-action="save-as"]').click()
+            expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            require(wrong_extension.evaluate("window.__yadilabProjectStore.writes") == 1,
+                    "PROJECT-025 valid .yadilab recovery did not write exactly once")
+            expect(wec).to_have_attribute("data-project-dirty", "false")
+            wrong_extension.close()
             # PROJECT-018: browsers without File System Access still need a
             # discard guard and a pinned origin while a normal file-input
             # chooser is open. Test the real Chromium file chooser (not a
