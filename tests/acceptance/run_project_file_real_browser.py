@@ -19,7 +19,8 @@ MOCK = r"""
 (() => {
   const store = { text: "", writes: 0, fail: false, reads: 0,
     permissionDenied: false, cancelSave: false, cancelOpen: false,
-    aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0 };
+    aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0,
+    chooseAlternative: false, otherText: "", otherWrites: 0 };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
@@ -46,10 +47,27 @@ MOCK = r"""
   const alias = { ...handle };
   handle.isSameEntry = async other => other === handle || other === alias;
   alias.isSameEntry = async other => other === handle || other === alias;
+  const alternate = {
+    name: "safe-recovery-copy.yadilab",
+    async isSameEntry(other) { return other === alternate; },
+    async createWritable() {
+      if (store.permissionDenied) throw new DOMException("Permission denied", "NotAllowedError");
+      let pending = "";
+      return {
+        async write(blob) { pending = await blob.text(); },
+        async close() { store.otherText = pending; store.otherWrites++; },
+        async abort() { store.abortedWrites++; },
+      };
+    },
+    async getFile() {
+      return new File([store.otherText], this.name, {type:"application/json"});
+    },
+  };
   Object.defineProperty(window, "showSaveFilePicker", {
     configurable: true, value: async () => {
       if (store.cancelSave) throw new DOMException("Save cancelled", "AbortError");
-      return store.aliasSameEntryOnSaveAs ? alias : handle;
+      return store.chooseAlternative ? alternate :
+             store.aliasSameEntryOnSaveAs ? alias : handle;
     },
   });
   Object.defineProperty(window, "showOpenFilePicker", {
@@ -159,7 +177,12 @@ def main():
               window.__yadilabProjectStore.text = saved;
               window.__yadilabProjectStore.aliasSameEntryOnSaveAs = false;
             }""", saved_after_ctrl)
-            # Explicitly re-associate the previously detached handle with Save As.
+            # Re-open is the explicit recovery boundary after a failed write;
+            # a second Save As to the quarantined physical entry must be blocked.
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=15000)
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator("[data-project-message]")).to_contain_text(
                 "Saved and read back", timeout=15000)
@@ -248,7 +271,10 @@ def main():
                     == expected_external, "File bytes were altered on conflict")
             expect(controls).to_have_attribute("data-project-dirty", "true")
             # Native permission denial and picker cancellation remain fail-closed.
-            page.evaluate("window.__yadilabProjectStore.permissionDenied = true")
+            page.evaluate("""() => {
+                window.__yadilabProjectStore.chooseAlternative = true;
+                window.__yadilabProjectStore.permissionDenied = true;
+            }""")
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator("[data-project-message]")).to_contain_text(
                 "Permission denied", timeout=15000)
@@ -350,6 +376,76 @@ def main():
             require(page.evaluate("window.__yadilabProjectStore.writes")
                     == writes_before_conflict,
                     "Switch to unrelated Builder silently wrote old project")
+
+            # Independent Chromium page: an external conflict must quarantine
+            # the file across later Save As attempts and new handle objects.
+            recovery = context.new_page()
+            recovery.add_init_script(MOCK)
+            recovery.on("pageerror", lambda error: errors.append(str(error)))
+            recovery.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            rcontrols = recovery.locator('[data-project-file-controls="ready"]')
+            expect(rcontrols).to_be_visible(timeout=45000)
+            recovery.locator('[data-project-action="save-as"]').click()
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            rsection = recovery.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            if rsection.get_attribute("open") is None:
+                rsection.locator("summary").first.click()
+            rmission = recovery.locator('[data-builder-inspector="mission"]')
+            expect(rmission).to_be_visible(timeout=15000)
+            rmission.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("RECOVERY-PROJECT-UNSAVED")
+            rmission.get_by_role("button", name="Verkställ inspektörsändringar").click()
+            expect(rcontrols).to_have_attribute("data-project-dirty", "true")
+            recovery.evaluate("window.__yadilabProjectStore.text += ' OUTSIDE_EDITOR'")
+            before_recovery_writes = recovery.evaluate(
+                "window.__yadilabProjectStore.writes")
+            expected_external_recovery = recovery.evaluate(
+                "window.__yadilabProjectStore.text")
+            recovery.keyboard.press("Control+s")
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED", timeout=15000)
+            recovery.locator('[data-project-action="save-as"]').click()
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_FILE_REQUIRES_REOPEN", timeout=15000)
+            recovery.evaluate("window.__yadilabProjectStore.aliasSameEntryOnSaveAs = true")
+            recovery.locator('[data-project-action="save-as"]').click()
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_FILE_REQUIRES_REOPEN", timeout=15000)
+            require(recovery.evaluate("window.__yadilabProjectStore.writes") ==
+                    before_recovery_writes, "Quarantined disk entry was overwritten")
+            require(recovery.evaluate("window.__yadilabProjectStore.text") ==
+                    expected_external_recovery, "External project edits were lost")
+            # Save to a physically distinct file is allowed and verified.
+            recovery.evaluate("window.__yadilabProjectStore.chooseAlternative = true")
+            recovery.locator('[data-project-action="save-as"]').click()
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=15000)
+            require("RECOVERY-PROJECT-UNSAVED" in recovery.evaluate(
+                "window.__yadilabProjectStore.otherText"),
+                "Save As to different file lost current editable source")
+            expect(rcontrols).to_have_attribute("data-project-dirty", "false")
+            # A successful different-file Save must NOT erase quarantine
+            # of the original failed physical entry.
+            recovery.evaluate("""() => {
+                window.__yadilabProjectStore.chooseAlternative = false;
+                window.__yadilabProjectStore.aliasSameEntryOnSaveAs = false;
+            }""")
+            recovery.locator('[data-project-action="save-as"]').click()
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_FILE_REQUIRES_REOPEN", timeout=15000)
+            require(recovery.evaluate("window.__yadilabProjectStore.writes") ==
+                    before_recovery_writes,
+                    "Another successful file Save incorrectly cleared old quarantine")
+            # Ordinary Ctrl+S remains functional on the newly associated file.
+            other_before = recovery.evaluate("window.__yadilabProjectStore.otherWrites")
+            recovery.keyboard.press("Control+s")
+            expect(recovery.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=15000)
+            require(recovery.evaluate("window.__yadilabProjectStore.otherWrites") ==
+                    other_before + 1, "Ctrl+S did not use the safe alternate file")
+            recovery.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -364,13 +460,16 @@ def main():
                 "nativeOpenCancelledNoMutation": True,
                 "saveAsAliasExternalConflictDenied": True,
                 "externalEditDuringWritableOpenDenied": True,
+                "quarantinedFailedTargetCannotBeReselected": True,
+                "quarantinePersistsAfterSavingElsewhere": True,
+                "differentFileRecoveryAndCtrlS": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict and write-open race blocked, permission denial, cancel, fallback download,"
+                  " external conflict and write-open race blocked, failed-target quarantine, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()
