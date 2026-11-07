@@ -32,6 +32,7 @@ export function ProjectFileControls({
   const busyRef = useRef(false);
   const handleRef = useRef(null);
   const baselineRef = useRef(projectSnapshot(workspace));
+  const fileEpochRef = useRef(0);
   const nameRef = useRef(projectFilename(workspace.mode === "builder" ? workspace.source.scenarioId : "Untitled"));
   const [name, setName] = useState(nameRef.current);
   const [message, setMessage] = useState("No project file attached");
@@ -52,8 +53,14 @@ export function ProjectFileControls({
     setMessage("Operation failed: " + reason);
     setDiagnostics([diag(error?.code ?? code, reason)]);
   };
-  const canDiscard = () => !changedRef.current ||
-    window.confirm("Projektet har osparade ändringar. Vill du fortsätta utan att spara dem?");
+  const canDiscard = () => {
+    if (busyRef.current) {
+      setMessage("A project file operation is still running.");
+      return false;
+    }
+    return !changedRef.current ||
+      window.confirm("Projektet har osparade ändringar. Vill du fortsätta utan att spara dem?");
+  };
   // This callback is used by other user-initiated scenario switches in App.
   beforeSwitchRef.current = canDiscard;
 
@@ -79,6 +86,7 @@ export function ProjectFileControls({
   }, []);
 
   const resetAssociation = (next, filename, handle) => {
+    fileEpochRef.current++;
     baselineRef.current = projectSnapshot(next);
     handleRef.current = handle;
     nameState(filename);
@@ -89,10 +97,12 @@ export function ProjectFileControls({
     if (!file || busyRef.current) return;
     if (!canDiscard()) return;
     const origin = getWorkspace();
+    const epoch = fileEpochRef.current;
     busyRef.current = true;
     try {
       const content = await readProjectFile(file, { validateSource });
-      if (getWorkspace() !== origin && !canDiscard()) return;
+      if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
+        throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_OPEN");
       const next = {
         mode: "builder", source: content.source, sourceRevision: 0,
         dirty: false, selection: { ids: [] },
@@ -114,13 +124,17 @@ export function ProjectFileControls({
       inputRef.current?.click();
       return;
     }
+    const origin = getWorkspace();
     try {
       const handles = await window.showOpenFilePicker({
         multiple: false, types: pickerTypes, excludeAcceptAllOption: true,
       });
       const handle = handles?.[0];
       if (!handle) return;
-      await openFromFile(await handle.getFile(), handle);
+      const file = await handle.getFile();
+      if (getWorkspace() !== origin)
+        throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_PICKER");
+      await openFromFile(file, handle);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
   };
 
@@ -140,6 +154,7 @@ export function ProjectFileControls({
       return;
     }
     const original = projectSnapshot(before);
+    const epoch = fileEpochRef.current;
     const filename = forceSaveAs || !handleRef.current
       ? projectFilename(before.source.scenarioId) : nameRef.current;
     // Native picker MUST be started in the direct user-activation call stack.
@@ -156,7 +171,8 @@ export function ProjectFileControls({
     try {
       const handle = picker ? await picker : forceSaveAs ? null : handleRef.current;
       const data = await createProjectDocument(before, { validateSource });
-      if (projectSnapshot(getWorkspace()) !== original) throw new Error("PROJECT_STALE_BEFORE_WRITE");
+      if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch)
+        throw new Error("PROJECT_STALE_BEFORE_WRITE");
       if (!handle) {
         downloadUnverified(data, filename);
         // A browser download is not a verified durable project save.
@@ -170,7 +186,7 @@ export function ProjectFileControls({
       nameState(projectFilename(handle.name || filename));
       baselineRef.current = original;
       setRevision(n => n + 1);
-      if (projectSnapshot(getWorkspace()) !== original) {
+      if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch) {
         setMessage("File saved, but the workspace changed during writing: newer edits remain unsaved.");
         setDiagnostics([diag("PROJECT_SAVE_STALE", "The written file passed readback, but more recent edits were not in that file.", "warning")]);
         return;

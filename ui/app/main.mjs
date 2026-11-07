@@ -2314,11 +2314,11 @@ function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
   );
 }
 
-function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, compilerOptions }) {
+function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject }) {
   const parse = async (file) => { if (!file) return; const next = await parseScenarioImport(file); setState(next); setDiagnostics(next.diagnostics); };
   const preview = () => { const next = previewScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); };
   const compile = async () => { const next = await compileScenarioImport(state, compilerOptions); setState(next); setDiagnostics(next.diagnostics); };
-  const activate = () => { const next = activateScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace); };
+  const activate = () => { if (!canReplaceProject()) return; const next = activateScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace); };
   return e("section", { className: "import-workbench", "data-import-workbench": state.status },
     e("h3", null, "Import Workbench"),
     e("p", null, "Parse → Validate → Preview → Compile → Activate. Parse och preview ändrar inte aktiv Runtime."),
@@ -5898,6 +5898,7 @@ function App() {
            checked.sourceSha256!==candidate.sourceSha256)
           denied("SCALE_P2A_SOURCE_CHANGED");
         current(); // No await between final live check and source replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics,{
@@ -5959,6 +5960,7 @@ function App() {
             refreshed.sourceSha256 !== mapped.sourceSha256)
           blocked("IC040_P1B_SOURCE_CHANGED");
         checkCurrent(); // no await between final live check and commit
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics, {
@@ -6152,6 +6154,7 @@ function App() {
           const error = new Error("DRAWIO_CANDIDATE_SOURCE_CHANGED");
           error.code = "DRAWIO_CANDIDATE_SOURCE_CHANGED"; throw error;
         }
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics, {
@@ -6378,6 +6381,7 @@ function App() {
         // Re-read and reparse the ORIGINAL selected file before any mutation.
         await verifyGraphmlOriginalForReviewedActivation(originalFile, sourcePreview, isCurrentSelection);
         checkCurrent();
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics,
@@ -6519,7 +6523,7 @@ function App() {
         ),
         e(ControlSection, { title: "Scenario & Builder", description: "Canonical source authoring, import and builder-only controls.", searchTerms: "Scenario Studio Import Workbench Builder Inspector Fault Injection" },
           e(ScenarioStudioToolbar, { workspace, setWorkspace, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource, canReplaceProject: () => projectGuardRef.current() }),
-          e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace, setDiagnostics, compilerOptions }),
+          e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
           e(Sidebar, { workspace, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),

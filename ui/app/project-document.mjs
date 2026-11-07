@@ -92,7 +92,10 @@ export async function createProjectDocument(workspace, { validateSource } = {}) 
     contentSha256,
     content: payload,
   };
-  return JSON.stringify(document, null, 2) + "\n";
+  const fileText = JSON.stringify(document, null, 2) + "\n";
+  if (encoder.encode(fileText).byteLength > PROJECT_MAX_BYTES)
+    blocked("FILE_TOO_LARGE");
+  return fileText;
 }
 export async function readProjectDocument(text, { validateSource } = {}) {
   if (typeof text !== "string" || encoder.encode(text).byteLength > PROJECT_MAX_BYTES)
