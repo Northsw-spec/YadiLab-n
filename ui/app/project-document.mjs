@@ -36,8 +36,27 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
   }
   const zoneIds = new Set(source.zones.map(x => x.id));
   const resourceIds = new Set(source.resources.map(x => x.id));
+  const zoneParent = new Map();
   for (const zone of source.zones) {
-    if (zone.parent && !zoneIds.has(zone.parent)) blocked("UNKNOWN_ZONE_PARENT");
+    if (zone.parent !== undefined) {
+      if (!zoneIds.has(zone.parent)) blocked("UNKNOWN_ZONE_PARENT");
+      zoneParent.set(zone.id, zone.parent);
+    }
+  }
+  // Schema validation permits cycles. A cycle can make zones unreachable from
+  // the layout roots; reject on both Save and Open before any workspace change.
+  // Iterative, memoized ancestry traversal avoids stack overflow and O(n^2)
+  // walks for 10k+ deeply nested zones.
+  const cleared = new Set();
+  for (const zone of source.zones) {
+    let current = zone.id;
+    const visiting = new Set();
+    while (current !== undefined && !cleared.has(current)) {
+      if (visiting.has(current)) blocked("ZONE_PARENT_CYCLE");
+      visiting.add(current);
+      current = zoneParent.get(current);
+    }
+    for (const id of visiting) cleared.add(id);
   }
   for (const resource of source.resources) {
     if (resource.zone && !zoneIds.has(resource.zone)) blocked("UNKNOWN_RESOURCE_ZONE");
