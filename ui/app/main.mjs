@@ -9,6 +9,7 @@
 
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ProjectFileControls } from "./project-file-controls.mjs";
 import { markApplicationReady, markApplicationStopped } from "../src/browser/runtime-readiness.mjs";
 import { createRoot } from "react-dom/client";
 import {
@@ -2171,12 +2172,12 @@ function BuilderAssetLibrary({ workspace, setWorkspace, setDiagnostics }) {
   );
 }
 
-function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onCompile, onExport }) {
+function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onCompile, onExport, canReplaceProject }) {
   const [scenarioId, setScenarioId] = useState("studio_scenario");
   const [title, setTitle] = useState("Nytt Scenario Studio-scenario");
   if (workspace.mode !== "builder") return null;
   const createDraft = () => {
-    if (workspace.dirty && !window.confirm("Det finns osparade ändringar. Vill du kasta dem och skapa ett nytt draft-scenario?")) return;
+    if (!canReplaceProject()) return;
     setWorkspace(createScenarioDraftWorkspace({ scenarioId, title }));
     setDiagnostics([]);
   };
@@ -2313,11 +2314,11 @@ function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
   );
 }
 
-function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, compilerOptions }) {
+function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject }) {
   const parse = async (file) => { if (!file) return; const next = await parseScenarioImport(file); setState(next); setDiagnostics(next.diagnostics); };
   const preview = () => { const next = previewScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); };
   const compile = async () => { const next = await compileScenarioImport(state, compilerOptions); setState(next); setDiagnostics(next.diagnostics); };
-  const activate = () => { const next = activateScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace); };
+  const activate = () => { if (!canReplaceProject()) return; const next = activateScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace); };
   return e("section", { className: "import-workbench", "data-import-workbench": state.status },
     e("h3", null, "Import Workbench"),
     e("p", null, "Parse → Validate → Preview → Compile → Activate. Parse och preview ändrar inte aktiv Runtime."),
@@ -4017,6 +4018,9 @@ function App() {
     return () => markApplicationStopped(document);
   }, []);
   const [workspace, setWorkspace] = useState(() => createBuilderWorkspace(welcomeScenario));
+  const lastBuilderWorkspaceRef = useRef(workspace);
+  if (workspace.mode === "builder") lastBuilderWorkspaceRef.current = workspace;
+  const projectGuardRef = useRef(() => true);
   const latestDrawioWorkspaceRef = useRef(workspace);
   latestDrawioWorkspaceRef.current = workspace;
   const [importWorkbench, setImportWorkbench] = useState(() => emptyImportWorkbench());
@@ -4456,6 +4460,18 @@ function App() {
     return transitionId;
   };
   const isCurrentScenarioTransition = (transitionId) => scenarioTransitionRef.current === transitionId;
+  const replaceProjectDocument = (value) => {
+    const next = value ?? createScenarioDraftWorkspace({
+      scenarioId: "new_project", title: "New YadiLab project",
+    });
+    beginScenarioTransition();
+    setImportedProbeAutoOpen(false);
+    setNetworkImportOpen(false);
+    setNetworkImportSelection(null);
+    setWorkspace(next);
+    latestDrawioWorkspaceRef.current = next;
+    return next;
+  };
   const commitVerifiedDeliveryRuntime = (runtime, fallback) => {
     setWorkspace(runtime.ok ? runtime.workspace : fallback);
     setVerifiedDeliveryLoadKey((value) => value + 1);
@@ -4539,7 +4555,8 @@ function App() {
   };
 
   const openPackage = async (file) => {
-    if (!file) return;
+    if (!file || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     try {
       const result = await openRuntimePackage(file, {
         packageIO,
@@ -4550,6 +4567,11 @@ function App() {
           revokeObjectURL: (url) => URL.revokeObjectURL(url),
         },
       });
+      if (latestDrawioWorkspaceRef.current !== startedIn) {
+        result.media?.release?.();
+        setDiagnostics([{ severity: "error", code: "PACKAGE_OPEN_STALE_WORKSPACE", message: "Workspace changed during asynchronous package read. Package was not opened." }]);
+        return;
+      }
       setDiagnostics(result.diagnostics);
       if (result.ok) {
         releaseMedia();
@@ -4656,6 +4678,7 @@ function App() {
   };
 
   const openGuidedLab = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const entry = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
     if (!entry) {
@@ -4696,6 +4719,7 @@ function App() {
   };
 
   const openEnterpriseScenario = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const source = enterpriseScenarioById.get(enterpriseScenarioId);
     if (!source) return;
@@ -4732,6 +4756,7 @@ function App() {
   };
 
   const openVerifiedDeliveryScenario = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const source = verifiedDeliveryScenarioById.get(verifiedDeliveryScenarioId);
     if (!source) return;
@@ -4783,7 +4808,13 @@ function App() {
     setActiveJourney(null);
     setTopologyStateFocus(null);
     const source = workspace.mode === "runtime" ? workspace.source ?? welcomeScenario : workspace.source;
-    setWorkspace(createBuilderWorkspace(source));
+    const previous = lastBuilderWorkspaceRef.current;
+    // Preserve editable topology, manual position overrides and the dirty flag
+    // when returning from a preview of THIS exact Builder source.
+    const resume = workspace.mode === "runtime" && workspace.source &&
+      previous?.mode === "builder" && previous.source === workspace.source
+      ? previous : createBuilderWorkspace(source);
+    setWorkspace(resume);
   };
   const title = workspace.mode === "builder" ? workspace.source.metadata.title : workspace.scenario.metadata.title;
   const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
@@ -4810,7 +4841,8 @@ function App() {
   const exportDiagnosticSession = async () => { if (!troubleshootingCase) return; const session = await createSavedDiagnosticSession({ sessionId: troubleshootingCase.caseId, case: troubleshootingCase, runs: caseRunRecords, comparisons: multiRunView ? [multiRunView] : [] }); downloadJson({ filename: `${troubleshootingCase.caseId}.yadilab-session.json`, mime: "application/json", text: exportSavedDiagnosticSession(session) }); };
   const importDiagnosticSession = async (file) => { if (!file) return; const result = await importSavedDiagnosticSession(await file.text()); if (!result.ok) { setDiagnostics(result.diagnostics.map((message) => ({ severity: "error", code: "DIAGNOSTIC_SESSION_IMPORT_BLOCKED", message }))); return; } setTroubleshootingCase(result.session.case); setCaseRunRecords([...result.session.runs]); setDiagnostics([{ severity: "warning", code: "DIAGNOSTIC_SESSION_IMPORTED_ARCHIVED", message: "Saved Diagnostic Session opened as archived evidence; no archived runtime was activated." }]); };
   const reproduceCase = async () => {
-    if (!troubleshootingCase) return;
+    if (!troubleshootingCase || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     setBusy(true);
     try {
       let working = createBuilderWorkspace(troubleshootingCase.startingSource);
@@ -4820,7 +4852,7 @@ function App() {
       if (!layout.ok) { setDiagnostics(layout.diagnostics); return; }
       const runtime = previewRuntime(layout.workspace);
       setDiagnostics(runtime.diagnostics);
-      if (runtime.ok) { releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "CASE_REPRODUCTION_EXECUTED", message: "Reproduced via canonical source → validation → compiler → Engine. Archived outcome was not reused." }]); }
+      if (runtime.ok && latestDrawioWorkspaceRef.current === startedIn) { releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "CASE_REPRODUCTION_EXECUTED", message: "Reproduced via canonical source → validation → compiler → Engine. Archived outcome was not reused." }]); }
     } finally { setBusy(false); }
   };
   const selectedExperiment = experimentBranches.find((branch) => branch.experimentId === selectedExperimentId) ?? null;
@@ -4831,7 +4863,8 @@ function App() {
     setDiagnostics([{ severity: "warning", code: "EXPERIMENT_CREATED", message: `Experiment skapad från ${forkSource}. Ancestor source är immutable och working copy är isolerad.` }]);
   };
   const runExperiment = async () => {
-    if (!selectedExperiment) return;
+    if (!selectedExperiment || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     setBusy(true);
     try {
       let next = createBuilderWorkspace(selectedExperiment.workingSource);
@@ -4841,8 +4874,9 @@ function App() {
       if (!layout.ok) { setDiagnostics(layout.diagnostics); return; }
       const runtime = previewRuntime(layout.workspace);
       setDiagnostics(runtime.diagnostics);
-      if (runtime.ok) {
+      if (runtime.ok && latestDrawioWorkspaceRef.current === startedIn) {
         const tested = await markExperimentTested(selectedExperiment);
+        if (latestDrawioWorkspaceRef.current !== startedIn) return;
         setExperimentBranches((items) => items.map((item) => item.experimentId === tested.experimentId ? tested : item));
         releaseMedia(); setWorkspace(runtime.workspace); setDiagnostics([{ severity: "warning", code: "EXPERIMENT_ENGINE_RUN", message: "Experiment run executed through canonical source → validation → compiler → Engine. Result is modeled Engine truth." }]);
       }
@@ -4955,7 +4989,8 @@ function App() {
     } catch (error) { setDiagnostics([{ severity: "error", code: "VERIFIED_BASELINE_CREATE_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
   const reproduceVerifiedBaselineAction = async () => {
-    if (!selectedBaseline) return;
+    if (!selectedBaseline || !projectGuardRef.current()) return;
+    const startedIn = latestDrawioWorkspaceRef.current;
     try {
       const result = await reproduceVerifiedBaseline(selectedBaseline, async (source) => {
         const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
@@ -4965,7 +5000,7 @@ function App() {
         const runtime = previewRuntime(laidOut.workspace);
         return runtime.ok ? runtime.workspace : runtime;
       });
-      if (result.ok) { setWorkspace(result.result); setDiagnostics([{ severity: "warning", code: "VERIFIED_BASELINE_REPRODUCED", message: `Baseline reproducerad via canonical source → validation → compiler → Engine. Arkiverat resultat återanvändes inte.` }]); }
+      if (result.ok && latestDrawioWorkspaceRef.current === startedIn) { setWorkspace(result.result); setDiagnostics([{ severity: "warning", code: "VERIFIED_BASELINE_REPRODUCED", message: `Baseline reproducerad via canonical source → validation → compiler → Engine. Arkiverat resultat återanvändes inte.` }]); }
       else setDiagnostics(result.diagnostics.map((message) => ({ severity: "error", code: "VERIFIED_BASELINE_REPRODUCTION_BLOCKED", message })));
     } catch (error) { setDiagnostics([{ severity: "error", code: "VERIFIED_BASELINE_REPRODUCTION_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
@@ -5007,6 +5042,12 @@ function App() {
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
       e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
         onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+      e(ProjectFileControls, {
+        workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+        setWorkspace, onReplace: replaceProjectDocument,
+        validateSource: source => validateContract("source", source),
+        setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
+      }),
     ),
     e("section", { className: "mission-strip" }, e("strong", null, title)),
     selectedGuidedLab ? e("section", { className: "curriculum-strip", "data-curriculum-wave": "guided_troubleshooting_wave1" },
@@ -5020,6 +5061,7 @@ function App() {
     networkImportOpen ? e(NetworkTopologyImportPanel, { compilerOptions, setDiagnostics,
       workspaceIdentity: workspace, getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
       initialSelection: networkImportSelection, onClose: () => { setNetworkImportOpen(false); setNetworkImportSelection(null); }, onActivate: (next, openProbes, bounded) => {
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         if(bounded){
           setScaledTenThousandSessionActive(true);
@@ -5502,6 +5544,7 @@ function App() {
         const sourceModelHash=Array.from(new Uint8Array(sourceDigest),
           b=>b.toString(16).padStart(2,"0")).join("");
         current(); // no await between final live/consent gate and activation
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setScaledTenThousandSessionActive(true);
         setScaledTenThousandFocus({
@@ -5630,6 +5673,7 @@ function App() {
            JSON.stringify(verified.origins)!==JSON.stringify(candidate.origins))
           blocked("SCALE_P3C2_SOURCE_CHANGED");
         current(); // Never await between last workspace check and replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         scaledOfficeFiveThousandFocusEpoch.current++;
         setImportedProbeAutoOpen(false);
@@ -5761,6 +5805,7 @@ function App() {
            JSON.stringify(verified.origins)!==JSON.stringify(candidate.origins))
           blocked("SCALE_P2B1_SOURCE_CHANGED");
         current(); // Never await between last workspace check and replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         scaledOfficeThousandFocusEpoch.current++;
         setImportedProbeAutoOpen(false);
@@ -5874,6 +5919,7 @@ function App() {
            checked.sourceSha256!==candidate.sourceSha256)
           denied("SCALE_P2A_SOURCE_CHANGED");
         current(); // No await between final live check and source replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics,{
@@ -5935,6 +5981,7 @@ function App() {
             refreshed.sourceSha256 !== mapped.sourceSha256)
           blocked("IC040_P1B_SOURCE_CHANGED");
         checkCurrent(); // no await between final live check and commit
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics, {
@@ -6128,6 +6175,7 @@ function App() {
           const error = new Error("DRAWIO_CANDIDATE_SOURCE_CHANGED");
           error.code = "DRAWIO_CANDIDATE_SOURCE_CHANGED"; throw error;
         }
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics, {
@@ -6354,6 +6402,7 @@ function App() {
         // Re-read and reparse the ORIGINAL selected file before any mutation.
         await verifyGraphmlOriginalForReviewedActivation(originalFile, sourcePreview, isCurrentSelection);
         checkCurrent();
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);
         setDiagnostics([...layout.diagnostics,
@@ -6387,7 +6436,7 @@ function App() {
               e("button", { type: "button", onClick: reproduceCase, disabled: !troubleshootingCase || busy, "data-case-reproduce": "true" }, "Reproduce via Compiler + Engine"),
             ) : null,
           ),
-          e(NetworkIntentPanel, { workspace, setDiagnostics, onOpenEngineRun: (item, runtimeWorkspace) => { if (runtimeWorkspace) setWorkspace(runtimeWorkspace); setDiagnostics([{ severity: "warning", code: "INTENT_MATRIX_ENGINE_RUN_SELECTED", message: `Exact Engine evidence opened for run ${item.engineRunId ?? "NOT RUN"}; source ${item.sourceIdentity}; flow ${item.flowId}; actual ${item.actual}.` }]); } }),
+          e(NetworkIntentPanel, { workspace, setDiagnostics, onOpenEngineRun: (item, runtimeWorkspace) => { if (runtimeWorkspace && !projectGuardRef.current()) return; if (runtimeWorkspace) setWorkspace(runtimeWorkspace); setDiagnostics([{ severity: "warning", code: "INTENT_MATRIX_ENGINE_RUN_SELECTED", message: `Exact Engine evidence opened for run ${item.engineRunId ?? "NOT RUN"}; source ${item.sourceIdentity}; flow ${item.flowId}; actual ${item.actual}.` }]); } }),
           e("section", { className: "troubleshooting-case-panel experiment-branch-panel", "aria-label": "Experiment Branches", "data-experiment-branches": "ready" },
             e("h2", null, "Scenario Experiments"),
             e("p", null, "Isolated canonical source variants. All what-if results run through the normal Compiler and Engine."),
@@ -6494,8 +6543,8 @@ function App() {
           ),
         ),
         e(ControlSection, { title: "Scenario & Builder", description: "Canonical source authoring, import and builder-only controls.", searchTerms: "Scenario Studio Import Workbench Builder Inspector Fault Injection" },
-          e(ScenarioStudioToolbar, { workspace, setWorkspace, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource }),
-          e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace, setDiagnostics, compilerOptions }),
+          e(ScenarioStudioToolbar, { workspace, setWorkspace, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource, canReplaceProject: () => projectGuardRef.current() }),
+          e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
           e(Sidebar, { workspace, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),

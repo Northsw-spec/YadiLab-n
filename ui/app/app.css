@@ -681,3 +681,11 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .network-import-actions button { min-height: 2.7rem; padding: .55rem .9rem; }
 .network-import-actions [data-network-import-runtime] { background: #174e54; color: #effcfb; border: 1px solid #6eb7ad; font-weight: 700; }
 .network-import-runtime-button { margin: .35rem 0 .4rem; background: #174e54; color: #effcfb; border: 1px solid #6eb7ad; border-radius: 8px; padding: .65rem .9rem; font-weight: 700; }
+
+/* Explicit desktop-style project files. Never autosave editable projects. */
+.project-file-controls { display: grid; gap: .3rem; padding: .7rem; margin: .35rem 0; border: 1px solid var(--border-color, #6b8897); border-radius: 9px; background: rgba(15, 42, 51, .64); }
+.project-file-controls .project-file-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
+.project-file-controls .project-file-buttons button { min-height: 2.3rem; padding: .38rem .75rem; }
+.project-file-controls [data-project-status="unsaved"] { color: #f0c281; font-weight: 700; }
+.project-file-controls [data-project-status="unchanged"] { color: #a2e8c1; }
+.project-file-controls small { display: block; font-size: .76rem; opacity: .92; }
