@@ -28,7 +28,7 @@ function downloadUnverified(text, filename) {
  */
 export function ProjectFileControls({
   workspace, getWorkspace, onReplace, setWorkspace,
-  validateSource, setDiagnostics, beforeSwitchRef, busy,
+  validateSource, setDiagnostics, beforeSwitchRef, busy, getScenarioTransitionId,
 }) {
   const inputRef = useRef(null);
   const busyRef = useRef(false);
@@ -41,6 +41,7 @@ export function ProjectFileControls({
   const baselineRef = useRef(projectSnapshot(workspace));
   const lastBuilderSnapshotRef = useRef(projectSnapshot(workspace));
   const fileEpochRef = useRef(0);
+  const previousTransitionRef = useRef(getScenarioTransitionId());
   const nameRef = useRef(projectFilename(workspace.mode === "builder" ? workspace.source.scenarioId : "Untitled"));
   const [name, setName] = useState(nameRef.current);
   const [message, setMessage] = useState("No project file attached");
@@ -83,9 +84,12 @@ export function ProjectFileControls({
   // increment the existing Builder revision and must retain that handle.
   useEffect(() => {
     const previous = previousWorkspaceRef.current;
+    const transition = getScenarioTransitionId();
+    const sourceReplaced = transition !== previousTransitionRef.current;
+    previousTransitionRef.current = transition;
     previousWorkspaceRef.current = workspace;
     if (workspace.mode === "builder" && workspace.source !== previous?.source) {
-      const sameProjectEdit = sameEditableProjectRevision(previous, workspace);
+      const sameProjectEdit = sameEditableProjectRevision(previous, workspace, sourceReplaced);
       if (!sameProjectEdit) {
         resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null, null, true);
         setMessage("Different scenario loaded and not saved; choose Save As for its own project file.");
@@ -120,6 +124,9 @@ export function ProjectFileControls({
     // Open/New call this before React renders the replacement. Record the
     // replacement so the external-switch effect cannot detach its valid handle.
     previousWorkspaceRef.current = next;
+    // Open/New may advance the transition before React rerenders. Keep the
+    // just-approved replacement associated; guard only later source swaps.
+    previousTransitionRef.current = getScenarioTransitionId();
     baselineRef.current = projectSnapshot(next);
     lastBuilderSnapshotRef.current = baselineRef.current;
     handleRef.current = handle;

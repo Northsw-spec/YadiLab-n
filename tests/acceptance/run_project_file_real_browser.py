@@ -974,6 +974,58 @@ def main():
                 "New scenario performed an unintended write to the old project")
             expect(different_controls).to_have_attribute("data-project-dirty", "true")
             different_scenario.close()
+            # PROJECT-014: a new scenario can reuse the SAME canonical
+            # scenarioId but represents a distinct authored project. The
+            # previous native handle/verified baseline must be detached.
+            reused_id = context.new_page()
+            reused_id.add_init_script(MOCK)
+            reused_id.on("pageerror", lambda error: errors.append(str(error)))
+            reused_id.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            ric = reused_id.locator('[data-project-file-controls="ready"]')
+            expect(ric).to_be_visible(timeout=45000)
+            prior_scenario_id = reused_id.locator(".app-frame").get_attribute(
+                "data-runtime-scenario-id")
+            reused_id.locator('[data-project-action="save-as"]').click()
+            expect(reused_id.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            prior_file_bytes = reused_id.evaluate(
+                "window.__yadilabProjectStore.text")
+            prior_file_writes = reused_id.evaluate(
+                "window.__yadilabProjectStore.writes")
+            prior_native_name = ric.get_attribute("data-project-filename")
+            require(prior_native_name == "verified-network.yadilab",
+                    "PROJECT-014 baseline native file handle was not associated")
+            reused_id.evaluate("""() => {
+                const section = document.querySelector('[data-scenario-studio]');
+                if (!section) throw new Error("PROJECT-014 studio unavailable");
+                let parent = section.closest('details');
+                while (parent) {
+                    parent.open = true;
+                    parent = parent.parentElement?.closest('details') ?? null;
+                }
+            }""")
+            reused_id.locator(
+                '[data-studio-scenario-id]').fill(prior_scenario_id)
+            reused_id.locator('[data-studio-action="create"]').click()
+            expect(reused_id.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", prior_scenario_id)
+            expect(ric).to_have_attribute(
+                "data-project-filename", prior_scenario_id + ".yadilab")
+            expect(ric).to_have_attribute("data-project-dirty", "true")
+            require(reused_id.evaluate(
+                "window.__yadilabProjectStore.text") == prior_file_bytes,
+                "Same-ID scenario replacement unexpectedly modified prior disk bytes")
+            reused_id.keyboard.press("Control+s")
+            expect(reused_id.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
+            require(reused_id.evaluate(
+                "window.__yadilabProjectStore.writes") == prior_file_writes,
+                "Same-ID Studio draft overwrote the previous native project")
+            require(reused_id.evaluate(
+                "window.__yadilabProjectStore.text") == prior_file_bytes,
+                "Same-ID Studio draft changed the prior project on disk")
+            expect(ric).to_have_attribute("data-project-dirty", "true")
+            reused_id.close()
             # Asynchronous Validate & Compile cannot resurrect a previous
             # canonical source after New has replaced it. Trigger both actions
             # within one JS task so compilation is still suspended at await.

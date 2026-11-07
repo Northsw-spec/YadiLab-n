@@ -762,6 +762,24 @@ assert.equal(sameEditableProjectRevision(savedScenario, {
 assert.equal(sameEditableProjectRevision(savedScenario, {
   ...genuineEdit, source: { scenarioId: "" },
 }), false, "Empty canonical scenario identity must never retain an existing handle");
+// PROJECT-014: an explicit project transition is stronger than a reused
+// public scenario ID. Distinct native projects may have the same scenarioId
+// and independent revision counters, so those are not proof of file lineage.
+assert.equal(sameEditableProjectRevision(savedScenario, genuineEdit, false), true,
+  "An ordinary in-place Builder edit preserves the known native association");
+assert.equal(sameEditableProjectRevision(savedScenario, genuineEdit, true), false,
+  "A switched project with the SAME ID and HIGHER revision must detach");
+assert.equal(sameEditableProjectRevision({
+  ...savedScenario, source: { scenarioId: "import_reused_name" },
+}, {
+  ...genuineEdit, source: { scenarioId: "import_reused_name" },
+}, true), false,
+  "A higher-revision imported project may not inherit a same-ID handle");
+assert.equal(sameEditableProjectRevision(savedScenario, {
+  ...genuineEdit, sourceRevision: 13, source: { scenarioId: "another_project" },
+}, true), false,
+  "Cross-project replacement stays detached even when the scenario differs");
+console.log("PASS PROJECT-014: explicit scenario transition invalidates native file association even for reused scenario ID");
 console.log("PASS PROJECT-013: native project association retained only for same-scenario Builder edits");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
