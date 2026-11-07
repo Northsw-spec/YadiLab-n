@@ -266,5 +266,44 @@ for (const action of ["openGuidedLab","openEnterpriseScenario","openVerifiedDeli
   assert.match(body,/const layout = await autoLayoutBuilder\(next, new ElkLayoutBackend\(\)\);[\s\S]*?if \(!isLiveLaunch\(\)\) return;\s+if \(!layout\.ok\)/,
     action+" missing post-ELK validation before diagnostics");
 }
+// PROJECT-004: schema-valid but cyclic zone parent references must never
+// enter editable project files. The compiler rejects cycles, so the manual
+// Save/Open boundary must reject them too rather than admitting hidden zones.
+const selfParent = structuredClone(source);
+selfParent.zones[0].parent = selfParent.zones[0].id;
+assert.equal(validateSource(selfParent), true, "fixture must pass the source JSON schema");
+await assert.rejects(createProjectDocument({ ...workspace, source: selfParent }, opts),
+  /PROJECT_ZONE_PARENT_CYCLE/, "self-parent must be rejected before writing");
+const twoZoneCycle = structuredClone(source);
+twoZoneCycle.zones[0].parent = twoZoneCycle.zones[1].id;
+twoZoneCycle.zones[1].parent = twoZoneCycle.zones[0].id;
+assert.equal(validateSource(twoZoneCycle), true);
+await assert.rejects(createProjectDocument({ ...workspace, source: twoZoneCycle }, opts),
+  /PROJECT_ZONE_PARENT_CYCLE/, "mutual zone parent cycle must be blocked");
+
+// An attacker can forge a fresh, valid SHA-256 over a cyclic project file.
+// Structural validation, NOT just checksum equality, must reject it on Open.
+const forgedCycle = structuredClone(doc);
+forgedCycle.content.source.zones[0].parent = forgedCycle.content.source.zones[0].id;
+forgedCycle.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+  "SHA-256", new TextEncoder().encode(JSON.stringify(forgedCycle.content))
+)).toString("hex");
+await assert.rejects(readProjectDocument(JSON.stringify(forgedCycle), opts),
+  /PROJECT_ZONE_PARENT_CYCLE/, "validly hashed cyclic project must not be opened");
+
+// Iterative ancestry validation must support deeply nested acyclic zones
+// without recursion overflow or quadratic work at project-file scale.
+const deepZones = structuredClone(source);
+for (let i = 0; i < 5000; i++) deepZones.zones.push({
+  id: "depth_" + i, label: "Depth " + i, kind: "custom",
+  ...(i ? { parent: "depth_" + (i - 1) } : {}),
+});
+const deepText = await createProjectDocument({ ...workspace, source: deepZones }, opts);
+assert.deepEqual((await readProjectDocument(deepText, opts)).source.zones, deepZones.zones);
+const deepCycle = structuredClone(deepZones);
+deepCycle.zones[4].parent = "depth_4999";
+await assert.rejects(createProjectDocument({ ...workspace, source: deepCycle }, opts),
+  /PROJECT_ZONE_PARENT_CYCLE/, "long ancestor loop must be rejected");
+console.log("PASS PROJECT-004: self, mutual, forged-valid-hash and deep ancestor cycles rejected; nested acyclic zones preserved");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
