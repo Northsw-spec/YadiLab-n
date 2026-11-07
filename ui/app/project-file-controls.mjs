@@ -3,7 +3,7 @@ import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
   assertProjectOpenDiskUnchanged, sameProjectFileEntry, assertSafeRecoveryTarget,
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
-  projectNeedsUnloadWarning, sameEditableProjectRevision,
+  projectNeedsUnloadWarning, projectFilePickerStillCurrent, sameEditableProjectRevision,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -32,6 +32,7 @@ export function ProjectFileControls({
 }) {
   const inputRef = useRef(null);
   const busyRef = useRef(false);
+  const fallbackOpenRef = useRef(null);
   const handleRef = useRef(null);
   // Keep failed target identities even after a successful Save As to a
   // different file. Reopening a file is the explicit recovery boundary.
@@ -81,6 +82,28 @@ export function ProjectFileControls({
   };
   // This callback is used by other user-initiated scenario switches in App.
   beforeSwitchRef.current = canDiscard;
+
+  const finishFallbackOpen = ticket => {
+    if (fallbackOpenRef.current !== ticket) return;
+    fallbackOpenRef.current = null;
+    if (ticket.lockHeld) busyRef.current = false;
+  };
+  useEffect(() => {
+    // File inputs fire cancel when the chooser is dismissed in browsers that
+    // support this event. Without cancel support, do not acquire a long-lived
+    // lock: preserve an origin ticket and deny stale file selections instead.
+    const input = inputRef.current;
+    if (!input) return;
+    const onCancel = () => {
+      const ticket = fallbackOpenRef.current;
+      if (ticket) {
+        finishFallbackOpen(ticket);
+        setMessage("Cancelled; current project was not changed.");
+      }
+    };
+    input.addEventListener("cancel", onCancel);
+    return () => input.removeEventListener("cancel", onCancel);
+  }, []);
 
   const previousWorkspaceRef = useRef(workspace);
   // Any new canonical source must detach the old file handle; ordinary edits
@@ -159,7 +182,8 @@ export function ProjectFileControls({
       // A selected native file may change after getFile() returned a snapshot.
       // Never bind that outdated snapshot as the current on-disk project.
       if (handle) await assertProjectOpenDiskUnchanged(handle, content.fileSha256);
-      if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
+      if (!projectFilePickerStillCurrent(origin, epoch,
+        getWorkspace(), fileEpochRef.current))
         throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_OPEN");
       const next = {
         mode: "builder", source: content.source, sourceRevision: 0,
@@ -177,12 +201,27 @@ export function ProjectFileControls({
   };
 
   const openNative = async () => {
-    if (busy || busyRef.current) return;
+    if (busy || busyRef.current || fallbackOpenRef.current) return;
+    if (!canDiscard()) return;
     if (typeof window.showOpenFilePicker !== "function") {
-      inputRef.current?.click();
+      const input = inputRef.current;
+      if (!input) return;
+      // Older browsers may not support input[type=file] cancel. Retain
+      // stale-origin protection but do not strand the app behind a lock
+      // that such a browser has no reliable way to release.
+      const ticket = {
+        origin: getWorkspace(), epoch: fileEpochRef.current,
+        lockHeld: "oncancel" in input,
+      };
+      fallbackOpenRef.current = ticket;
+      if (ticket.lockHeld) busyRef.current = true;
+      try { input.click(); }
+      catch (error) {
+        finishFallbackOpen(ticket);
+        showError(error, "PROJECT_OPEN_PICKER_BLOCKED");
+      }
       return;
     }
-    if (!canDiscard()) return;
     const origin = getWorkspace();
     const epoch = fileEpochRef.current;
     // Reserve the same lock used by Save/New and scenario switching BEFORE
@@ -196,7 +235,8 @@ export function ProjectFileControls({
       const handle = handles?.[0];
       if (!handle) return;
       const file = await handle.getFile();
-      if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
+      if (!projectFilePickerStillCurrent(origin, epoch,
+        getWorkspace(), fileEpochRef.current))
         throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_PICKER");
       // Transfer temporary ownership of the lock to the same verified reader.
       // The outer finally releases it only after Open has fully completed.
@@ -352,9 +392,25 @@ export function ProjectFileControls({
       e("input", { type: "file", accept: ".yadilab", ref: inputRef,
         "data-project-input": "true", style: { display: "none" },
         onChange: (event) => {
+          const ticket = fallbackOpenRef.current;
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void openFromFile(file);
+          if (!ticket) return;
+          if (!file) {
+            finishFallbackOpen(ticket);
+            return;
+          }
+          if (!projectFilePickerStillCurrent(ticket.origin, ticket.epoch,
+            getWorkspace(), fileEpochRef.current)) {
+            finishFallbackOpen(ticket);
+            showError(new Error("PROJECT_WORKSPACE_CHANGED_DURING_PICKER"),
+              "PROJECT_OPEN_BLOCKED");
+            return;
+          }
+          // The chooser already requested discard confirmation and, when
+          // supported, owns the lock. Release it only after verified Open.
+          void openFromFile(file, null, true, ticket.lockHeld)
+            .finally(() => finishFallbackOpen(ticket));
         } }),
       e("span", { "data-project-status": changed ? "unsaved" : "unchanged" },
         name, changed ? " · UNSAVED" : " · unchanged"),
