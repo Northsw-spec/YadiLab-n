@@ -51,6 +51,44 @@ assert.equal("engineState" in restored, false);
 assert.equal("selection" in restored, false);
 assert.equal("dirty" in restored, false);
 assert.equal(JSON.stringify(JSON.parse(await createProjectDocument(workspace, opts))), JSON.stringify(doc));
+// PROJECT-026: a truly blank New project is a legitimate editable draft, not
+// a compiled/runnable scenario. It must Save/Open without inventing resources,
+// links, test results or objectives. The executable source contract is unchanged.
+const draftSchema = structuredClone(schema);
+draftSchema.$id = "urn:app:schema:editable-project-source:0.1.0";
+draftSchema.properties.resources.minItems = 0;
+draftSchema.properties.objectives.minItems = 0;
+const draftValidator = new Ajv2020({ strict: true }).compile(draftSchema);
+const blankDraft = {
+  formatId: source.formatId, schemaVersion: source.schemaVersion,
+  scenarioId: "new_project",
+  metadata: { title: "New YadiLab project", language: "sv",
+    briefing: "An editable blank project, not an Engine-verified lab." },
+  requires: { capabilities: [], profiles: [] },
+  zones: [], resources: [], connections: [], tests: [], findings: [], objectives: [],
+  completion: { op: "all", rules: [] },
+};
+assert.equal(validateSource(blankDraft), false,
+  "Executable scenarios must still require a resource and an objective");
+assert.equal(draftValidator(blankDraft), true,
+  "Editable project schema must accept a genuinely blank canonical draft");
+const blankBytes = await createProjectDocument(
+  { mode: "builder", source: blankDraft, layoutOverrides: [] },
+  { validateSource: draftValidator });
+const blankOpened = await readProjectDocument(blankBytes,
+  { validateSource: draftValidator });
+assert.deepEqual(blankOpened.source, blankDraft,
+  "Blank New project must reopen with zero invented resources or objectives");
+assert.deepEqual(blankOpened.layoutOverrides, []);
+await assert.rejects(createProjectDocument({
+  mode: "builder",
+  source: { ...blankDraft, connections: [{
+    id: "fabricated-link", kind: "network",
+    from: { resource: "not-real" }, to: { resource: "also-not-real" },
+  }] }, layoutOverrides: [],
+}, { validateSource: draftValidator }), /PROJECT_DANGLING_CONNECTION/,
+"Editable draft exception may not authorize fabricated connectivity");
+console.log("PASS PROJECT-026: blank editable .yadilab project Save/Open without weakening executable source gate or fabricating topology");
 const file = (name, text) => ({ name, size: new TextEncoder().encode(text).length,
   async arrayBuffer() { return new TextEncoder().encode(text).buffer; } });
 assert.deepEqual((await readProjectFile(file("network.yadilab", text), opts)).source, source);
