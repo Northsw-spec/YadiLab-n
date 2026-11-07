@@ -30,8 +30,11 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
   const validated = validateSource(source);
   if (validated !== true && validated?.valid !== true) blocked("SOURCE_SCHEMA_INVALID");
   const ids = new Set();
+  // Only canonical objects with declared `id` fields participate in the
+  // global identity namespace. The source schema defines editorial `hints`
+  // as { level, text } without IDs; requiring one blocks valid Save/Open.
   for (const key of ["zones", "resources", "connections", "tests", "findings",
-    "objectives", "troubleshootingObjectives", "hints", "notes"]) {
+    "objectives", "troubleshootingObjectives", "notes"]) {
     if (source[key] !== undefined) identifiers(source[key], ids, "DUPLICATE_ID");
   }
   const zoneIds = new Set(source.zones.map(x => x.id));
