@@ -321,6 +321,42 @@ def main():
                 page.evaluate(
                     "(saved) => { window.__yadilabProjectStore.text = saved; }",
                     saved_after_ctrl)
+            # PROJECT-006: a valid checksum does not legitimize orphaned
+            # evidence or annotations. Neither may replace the active Builder.
+            for corruption, expected_code in (
+                ("orphan_evidence", "PROJECT_UNKNOWN_EVIDENCE_TEST"),
+                ("orphan_note", "PROJECT_UNKNOWN_NOTE_TARGET"),
+            ):
+                page.evaluate("""async ([saved, corruption]) => {
+                    const forged = JSON.parse(saved);
+                    const source = forged.content.source;
+                    if (corruption === 'orphan_evidence') {
+                        source.findings[0].evidenceTests = ['not_a_test'];
+                    } else {
+                        source.notes = [{ id: 'orphan_note',
+                            text: 'Previously reviewed evidence',
+                            target: 'not_a_resource' }];
+                    }
+                    const bytes = new TextEncoder().encode(JSON.stringify(forged.content));
+                    const digest = await crypto.subtle.digest('SHA-256', bytes);
+                    forged.contentSha256 = [...new Uint8Array(digest)]
+                      .map(n => n.toString(16).padStart(2, '0')).join('');
+                    window.__yadilabProjectStore.text = JSON.stringify(forged);
+                }""", [saved_after_ctrl, corruption])
+                before_orphan_open = page.evaluate("window.__yadilabProjectStore.writes")
+                page.locator('[data-project-action="open"]').click()
+                expect(page.locator('[data-project-message]')).to_contain_text(
+                    expected_code, timeout=20000)
+                require(page.locator(".app-frame").get_attribute(
+                    "data-runtime-scenario-id") == "foundation_acceptance",
+                    "Invalid evidence reference replaced the active Builder")
+                require(page.evaluate("window.__yadilabProjectStore.writes")
+                        == before_orphan_open,
+                        "Invalid evidence reference caused an implicit file write")
+                expect(controls).to_have_attribute("data-project-dirty", "false")
+                page.evaluate(
+                    "(saved) => { window.__yadilabProjectStore.text = saved; }",
+                    saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)
