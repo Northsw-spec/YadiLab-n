@@ -23,7 +23,7 @@ MOCK = r"""
     chooseAlternative: false, otherText: "", otherWrites: 0,
     pauseIdentity: false, pendingIdentity: false, releaseIdentity: null,
     pauseOpenPicker: false, pendingOpenPicker: false, releaseOpenPicker: null,
-    openPickerCalls: 0 };
+    openPickerCalls: 0, editAfterOpenSnapshot: false };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
@@ -44,7 +44,14 @@ MOCK = r"""
     },
     async getFile() {
       store.reads++;
-      return new File([store.text], this.name, {type:"application/json"});
+      const snapshot = new File([store.text], this.name, {type:"application/json"});
+      if (store.editAfterOpenSnapshot) {
+        store.editAfterOpenSnapshot = false;
+        // Model another OS process changing the physical file after the
+        // first native File snapshot was captured, before Open can commit.
+        queueMicrotask(() => { store.text += " EXTERNAL_CHANGE_DURING_OPEN"; });
+      }
+      return snapshot;
     },
   };
   const alias = { ...handle };
@@ -349,6 +356,37 @@ def main():
             require(page.locator(".app-frame").get_attribute(
                 "data-runtime-scenario-id") == "foundation_acceptance",
                 "Pending native Open replaced the wrong Builder project")
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            # PROJECT-012: another OS writer modifies the underlying
+            # physical file immediately after showOpenFilePicker.getFile()
+            # returned a valid snapshot. Native Open must verify it still
+            # matches the disk at association time, not merely trust the
+            # earlier checksum-valid snapshot.
+            page.evaluate("""(saved) => {
+                const store = window.__yadilabProjectStore;
+                store.text = saved;
+                store.editAfterOpenSnapshot = true;
+            }""", saved_after_ctrl)
+            writes_before_swapped_open = page.evaluate(
+                "window.__yadilabProjectStore.writes")
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED_DURING_OPEN", timeout=20000)
+            require(page.locator(".app-frame").get_attribute(
+                "data-runtime-scenario-id") == "foundation_acceptance",
+                "Externally replaced file unexpectedly changed active Builder")
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_swapped_open,
+                    "Opening a swapped project wrote to the physical file")
+            require(page.evaluate("window.__yadilabProjectStore.text")
+                    == saved_after_ctrl + " EXTERNAL_CHANGE_DURING_OPEN",
+                    "Open incorrectly overwrote the external writer's bytes")
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
+                          saved_after_ctrl)
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
             expect(controls).to_have_attribute("data-project-dirty", "false")
             # A tampered stored file is not allowed to mutate the current workspace.
             page.evaluate("""() => {

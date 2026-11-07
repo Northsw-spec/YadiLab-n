@@ -327,6 +327,37 @@ export async function digestProjectText(text) {
   if (typeof text !== "string") blocked("FILE_INVALID");
   return sha256(text);
 }
+// A File acquired from showOpenFilePicker() is a snapshot. While its source
+// is being parsed, another OS process may replace the actual disk contents.
+// Check the SAME handle again just before attaching it to the Builder.
+// A later Save also checks external changes, but Open must not claim a stale
+// snapshot represents the currently selected physical file.
+export async function assertProjectOpenDiskUnchanged(handle, expectedFileSha256) {
+  if (!handle || typeof handle.getFile !== "function")
+    blocked("OPEN_READBACK_UNAVAILABLE");
+  if (typeof expectedFileSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(expectedFileSha256))
+    blocked("EXPECTED_DIGEST_INVALID");
+  let diskFile;
+  try { diskFile = await handle.getFile(); }
+  catch { blocked("OPEN_READBACK_UNAVAILABLE"); }
+  if (!diskFile || typeof diskFile.arrayBuffer !== "function" ||
+      (diskFile.size !== undefined && (!Number.isSafeInteger(diskFile.size) ||
+       diskFile.size < 1 || diskFile.size > PROJECT_MAX_BYTES)))
+    blocked("OPEN_READBACK_UNAVAILABLE");
+  let bytes;
+  try { bytes = await diskFile.arrayBuffer(); }
+  catch { blocked("OPEN_READBACK_UNAVAILABLE"); }
+  if (!(bytes instanceof ArrayBuffer) ||
+      bytes.byteLength < 1 || bytes.byteLength > PROJECT_MAX_BYTES)
+    blocked("OPEN_READBACK_UNAVAILABLE");
+  let text;
+  try { text = decoder.decode(bytes); }
+  catch { blocked("EXTERNAL_FILE_CHANGED_DURING_OPEN"); }
+  if (await sha256(text) !== expectedFileSha256)
+    blocked("EXTERNAL_FILE_CHANGED_DURING_OPEN");
+  return true;
+}
 // File System Access may return a fresh JS handle for the same physical path
 // selected again through Save As. Comparing JS object references is unsafe.
 // If an existing project association cannot be compared, reject the overwrite.

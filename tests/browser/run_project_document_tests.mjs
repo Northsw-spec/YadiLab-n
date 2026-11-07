@@ -8,6 +8,7 @@ import example from "../../ui/app/welcome-scenario.json" with { type: "json" };
 import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
+  assertProjectOpenDiskUnchanged,
   projectFilename, projectSnapshot, projectHasUnsavedChanges, sameProjectFileEntry,
   assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
@@ -696,5 +697,39 @@ for (const [label, mutate, expected] of [
     expected, "Open must reject a valid-hash project with " + label);
 }
 console.log("PASS PROJECT-010: all nested rule resource/test IDs checked at Save/Open; valid rules and identities preserved");
+// PROJECT-012: File System Access exposes a point-in-time File snapshot.
+// The physical file can change after Open obtains it but before association.
+// Only a second, exact-fingerprint read of the original handle can authorize
+// association to the selected project; no disk write is part of Open.
+const openRead = await readProjectFile(file("open-snapshot.yadilab", text), opts);
+let liveOpenBytes = text;
+let openReadCalls = 0;
+const openDiskHandle = {
+  async getFile() {
+    openReadCalls++;
+    return file("open-snapshot.yadilab", liveOpenBytes);
+  },
+};
+assert.equal(await assertProjectOpenDiskUnchanged(openDiskHandle,
+  openRead.fileSha256), true, "Identical selected disk bytes permit Open");
+assert.equal(openReadCalls, 1, "Readback must inspect the original physical handle");
+liveOpenBytes += " EXTERNAL_CHANGE_AFTER_SNAPSHOT";
+await assert.rejects(assertProjectOpenDiskUnchanged(
+  openDiskHandle, openRead.fileSha256), /PROJECT_EXTERNAL_FILE_CHANGED_DURING_OPEN/,
+  "An external write after File snapshot must invalidate Open");
+liveOpenBytes = text;
+await assert.rejects(assertProjectOpenDiskUnchanged(
+  { async getFile() { throw new Error("Access revoked"); } },
+  openRead.fileSha256), /PROJECT_OPEN_READBACK_UNAVAILABLE/,
+  "Unverifiable physical file cannot be associated");
+await assert.rejects(assertProjectOpenDiskUnchanged({
+  async getFile() { return { size: PROJECT_MAX_BYTES + 1,
+    async arrayBuffer() { throw new Error("must reject before allocating"); } }; },
+}, openRead.fileSha256), /PROJECT_OPEN_READBACK_UNAVAILABLE/,
+  "Open readback must enforce the file size bound before reading");
+await assert.rejects(assertProjectOpenDiskUnchanged(
+  openDiskHandle, "invalid"), /PROJECT_EXPECTED_DIGEST_INVALID/,
+  "Open readback must not bypass the required SHA-256 fingerprint");
+console.log("PASS PROJECT-012: native Open detects physical disk swap after verified snapshot; changed/unreadable handles rejected");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
