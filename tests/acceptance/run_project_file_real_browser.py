@@ -223,6 +223,66 @@ def main():
                 "window.__yadilabProjectStore.writes") == fallback_writes,
                 "Fallback cancel or declined discard performed implicit disk writes")
             fallback_open.close()
+            # PROJECT-019: older browsers may not expose input.oncancel.
+            # Focus returning from a dismissed chooser must retire its ticket,
+            # allowing another explicit Open. Late selection from the old
+            # chooser must not activate a project when its ticket is gone.
+            legacy_fallback = context.new_page()
+            legacy_fallback.add_init_script(MOCK)
+            legacy_fallback.on("pageerror", lambda error: errors.append(str(error)))
+            legacy_fallback.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            legacy_controls = legacy_fallback.locator(
+                '[data-project-file-controls="ready"]')
+            expect(legacy_controls).to_be_visible(timeout=45000)
+            require(legacy_fallback.evaluate("""() => {
+                delete window.showOpenFilePicker;
+                const input = document.querySelector('[data-project-input]');
+                Object.defineProperty(input, 'oncancel', {
+                    configurable: true, value: undefined,
+                });
+                return typeof window.showOpenFilePicker !== 'function' &&
+                    input.oncancel === undefined;
+            }"""), "PROJECT-019 legacy input setup failed")
+            legacy_writes = legacy_fallback.evaluate(
+                "window.__yadilabProjectStore.writes")
+            with legacy_fallback.expect_file_chooser() as old_chooser_info:
+                legacy_fallback.locator('[data-project-action="open"]').click()
+            old_chooser = old_chooser_info.value
+            legacy_fallback.evaluate("""() =>
+                window.dispatchEvent(new Event('focus'))""")
+            expect(legacy_fallback.locator('[data-project-message]')).to_contain_text(
+                "File chooser closed without a selection", timeout=10000)
+            require(legacy_fallback.evaluate(
+                "window.__yadilabProjectStore.writes") == legacy_writes,
+                "Legacy fallback chooser cancellation wrote project content")
+            # A selection delivered after focus cleanup cannot reopen the
+            # old project implicitly or attach a stale native file.
+            old_chooser.set_files({
+                "name": "stale-legacy.yadilab",
+                "mimeType": "application/json",
+                "buffer": fallback_bytes.encode("utf-8"),
+            })
+            expect(legacy_controls).to_have_attribute(
+                "data-project-filename", "foundation_acceptance.yadilab")
+            require(legacy_fallback.locator(
+                '[data-project-message]').inner_text().startswith(
+                "File chooser closed without a selection"),
+                "Late legacy selection was accepted after cancel recovery")
+            with legacy_fallback.expect_file_chooser() as retry_chooser_info:
+                legacy_fallback.locator('[data-project-action="open"]').click()
+            retry_chooser_info.value.set_files({
+                "name": "recovered-legacy.yadilab",
+                "mimeType": "application/json",
+                "buffer": fallback_bytes.encode("utf-8"),
+            })
+            expect(legacy_fallback.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(legacy_controls).to_have_attribute(
+                "data-project-filename", "recovered-legacy.yadilab")
+            require(legacy_fallback.evaluate(
+                "window.__yadilabProjectStore.writes") == legacy_writes,
+                "Legacy cancellation recovery performed an implicit save")
+            legacy_fallback.close()
             # PROJECT-016: beforeunload must request a browser warning when
             # the source is clean but an explicit native Save remains in flight.
             # This test uses a controlled pending writable open, not a timer.
