@@ -1449,17 +1449,32 @@ def main():
                 "window.__yadilabProjectStore.text") == previous_bytes,
                 "Loading another scenario changed the previous project file")
             different_scenario.keyboard.press("Control+s")
-            # Scenario Studio deliberately starts with an incomplete draft:
-            # schema validation must fail before any native target is touched.
+            # PROJECT-026: an empty Scenario Studio draft is editable and
+            # saveable, but it must NEVER reuse or overwrite the previous
+            # project's nonempty native file. A new empty destination is needed.
             expect(different_scenario.locator('[data-project-message]')).to_contain_text(
-                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
             require(different_scenario.evaluate(
                 "window.__yadilabProjectStore.text") == previous_bytes,
-                "New scenario overwrote the original .yadilab through inherited handle")
+                "New draft overwrote the original .yadilab through inherited handle")
             require(different_scenario.evaluate(
                 "window.__yadilabProjectStore.writes") == previous_writes,
-                "New scenario performed an unintended write to the old project")
+                "New draft performed an unintended write to the old project")
             expect(different_controls).to_have_attribute("data-project-dirty", "true")
+            different_scenario.evaluate(
+                "window.__yadilabProjectStore.chooseAlternative = true")
+            different_scenario.locator('[data-project-action="save-as"]').click()
+            expect(different_scenario.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(different_controls).to_have_attribute("data-project-dirty", "false")
+            expect(different_controls).to_have_attribute(
+                "data-project-filename", "safe-recovery-copy.yadilab")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.otherWrites") == 1,
+                "New editable draft did not Save As into separate empty target")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.text") == previous_bytes,
+                "Separate draft Save As modified the original project file")
             different_scenario.close()
             # PROJECT-014: a new scenario can reuse the SAME canonical
             # scenarioId but represents a distinct authored project. The
