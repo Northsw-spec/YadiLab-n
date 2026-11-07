@@ -796,5 +796,22 @@ assert.equal(projectNeedsUnloadWarning(true, true), true,
 assert.equal(projectNeedsUnloadWarning(false, false), false,
   "After completion, a clean project must return to ordinary closing behavior");
 console.log("PASS PROJECT-016: beforeunload warning covers active native file I/O as well as unsaved Builder state");
+// PROJECT-017: native write failure can leave disk state uncertain while the
+// in-memory source is byte-for-byte equal to the last verified baseline.
+// The failed-write unpersisted marker, not source differences alone, must
+// continue to force both discard confirmation and beforeunload protection.
+const verifiedBeforeFailure = projectHasUnsavedChanges(emptyExample, emptyExample, false);
+const uncertainAfterFailure = projectHasUnsavedChanges(emptyExample, emptyExample, true);
+assert.equal(verifiedBeforeFailure, false,
+  "Verified clean project must not be labeled unsaved before native failure");
+assert.equal(uncertainAfterFailure, true,
+  "Failed write must override a clean/equal in-memory source snapshot");
+assert.equal(projectNeedsUnloadWarning(uncertainAfterFailure, false), true,
+  "A failed write must request close protection even after file lock is released");
+assert.equal(projectNeedsUnloadWarning(
+  projectHasUnsavedChanges(emptyExample, emptyExample, false), false), false,
+  "A verified recovery write must clear closing protection on clean source");
+console.log("PASS PROJECT-017: failed write marker preserves unsaved/discard/unload protections until verified recovery");
+
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
