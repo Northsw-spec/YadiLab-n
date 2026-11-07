@@ -307,6 +307,7 @@ import { createCompilerSchemaValidator } from "../../validator/src/compiler-adap
 import { validateContract } from "../../validator/src/index.ts";
 import { SafePackageIO, ZipJsArchiveBackend } from "../../package-io/src/index.ts";
 import { ElkLayoutBackend } from "../../layout/src/elk-backend.ts";
+import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologySearchIndex, filterTopologyNodes, searchTopology } from "../src/canvas/topology-navigation.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
@@ -4716,15 +4717,19 @@ function App() {
 
   const openGuidedLab = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
+    const startingWorkspace = latestDrawioWorkspaceRef.current;
     const transitionId = beginScenarioTransition();
+    const isLiveLaunch = () => scenarioLaunchStillCurrent(
+      transitionId, scenarioTransitionRef.current,
+      startingWorkspace, latestDrawioWorkspaceRef.current);
     const entry = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
     if (!entry) {
-      if (isCurrentScenarioTransition(transitionId)) setDiagnostics(guidedLabCatalog.diagnostics.length ? guidedLabCatalog.diagnostics : [{ severity: "error", code: "CURRICULUM_LAB_NOT_SELECTED", message: "Select a built-in guided lab first." }]);
+      if (isLiveLaunch()) setDiagnostics(guidedLabCatalog.diagnostics.length ? guidedLabCatalog.diagnostics : [{ severity: "error", code: "CURRICULUM_LAB_NOT_SELECTED", message: "Select a built-in guided lab first." }]);
       return;
     }
     let next = createBuilderWorkspace(cloneGuidedLabSource(entry));
     if (!startRuntime) {
-      if (isCurrentScenarioTransition(transitionId)) {
+      if (isLiveLaunch()) {
         setWorkspace(next);
         setDiagnostics([{ severity: "warning", code: "CURRICULUM_LAB_OPENED_IN_BUILDER", message: `Opened guided lab '${entry.title}' in Builder. Compile it before Runtime preview.` }]);
       }
@@ -4733,13 +4738,16 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!isCurrentScenarioTransition(transitionId)) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         setWorkspace(next);
         setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+      // A user may create/open/edit another project while ELK is resolving.
+      // Neither diagnostics nor the older Runtime may replace that project.
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         setWorkspace(next);
         setDiagnostics(layout.diagnostics);
@@ -4747,22 +4755,27 @@ function App() {
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
+      if (!isLiveLaunch()) return;
       setDiagnostics(runtime.diagnostics);
       if (runtime.ok) setWorkspace(runtime.workspace);
       else setWorkspace(next);
     } catch (error) {
-      if (isCurrentScenarioTransition(transitionId)) setDiagnostics([{ severity: "error", code: "CURRICULUM_LAB_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "CURRICULUM_LAB_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally { if (isCurrentScenarioTransition(transitionId)) setBusy(false); }
   };
 
   const openEnterpriseScenario = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
+    const startingWorkspace = latestDrawioWorkspaceRef.current;
     const transitionId = beginScenarioTransition();
+    const isLiveLaunch = () => scenarioLaunchStillCurrent(
+      transitionId, scenarioTransitionRef.current,
+      startingWorkspace, latestDrawioWorkspaceRef.current);
     const source = enterpriseScenarioById.get(enterpriseScenarioId);
     if (!source) return;
     let next = createBuilderWorkspace(structuredClone(source));
     if (!startRuntime) {
-      if (isCurrentScenarioTransition(transitionId)) {
+      if (isLiveLaunch()) {
         setWorkspace(next);
         setDiagnostics([]);
       }
@@ -4771,13 +4784,16 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!isCurrentScenarioTransition(transitionId)) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         setWorkspace(next);
         setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+      // A user may create/open/edit another project while ELK is resolving.
+      // Neither diagnostics nor the older Runtime may replace that project.
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         setWorkspace(next);
         setDiagnostics(layout.diagnostics);
@@ -4785,21 +4801,26 @@ function App() {
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
+      if (!isLiveLaunch()) return;
       setDiagnostics(runtime.diagnostics);
       setWorkspace(runtime.ok ? runtime.workspace : next);
     } catch (error) {
-      if (isCurrentScenarioTransition(transitionId)) setDiagnostics([{ severity: "error", code: "ENTERPRISE_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "ENTERPRISE_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally { if (isCurrentScenarioTransition(transitionId)) setBusy(false); }
   };
 
   const openVerifiedDeliveryScenario = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
+    const startingWorkspace = latestDrawioWorkspaceRef.current;
     const transitionId = beginScenarioTransition();
+    const isLiveLaunch = () => scenarioLaunchStillCurrent(
+      transitionId, scenarioTransitionRef.current,
+      startingWorkspace, latestDrawioWorkspaceRef.current);
     const source = verifiedDeliveryScenarioById.get(verifiedDeliveryScenarioId);
     if (!source) return;
     let next = createBuilderWorkspace(structuredClone(source));
     if (!startRuntime) {
-      if (isCurrentScenarioTransition(transitionId)) {
+      if (isLiveLaunch()) {
         setWorkspace(next);
         setDiagnostics([]);
       }
@@ -4808,13 +4829,16 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!isCurrentScenarioTransition(transitionId)) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         setWorkspace(next);
         setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+      // A user may create/open/edit another project while ELK is resolving.
+      // Neither diagnostics nor the older Runtime may replace that project.
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         setWorkspace(next);
         setDiagnostics(layout.diagnostics);
@@ -4822,10 +4846,11 @@ function App() {
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
+      if (!isLiveLaunch()) return;
       setDiagnostics(runtime.diagnostics);
       commitVerifiedDeliveryRuntime(runtime, next);
     } catch (error) {
-      if (isCurrentScenarioTransition(transitionId)) setDiagnostics([{ severity: "error", code: "VERIFIED_DELIVERY_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "VERIFIED_DELIVERY_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally { if (isCurrentScenarioTransition(transitionId)) setBusy(false); }
   };
 

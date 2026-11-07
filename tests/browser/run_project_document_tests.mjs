@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { scenarioLaunchStillCurrent } from "../../ui/app/scenario-launch-guard.mjs";
 import { webcrypto } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import schema from "../../schema/scenario-source.schema.json" with { type: "json" };
@@ -231,4 +233,38 @@ assert.deepEqual(largeReopened.source.resources[largeReopened.source.resources.l
   large.resources[large.resources.length - 1]);
 assert.equal(Buffer.byteLength(largeFile, "utf8") < PROJECT_MAX_BYTES, true);
 console.log("PASS PROJECT-001 SCALE: 10,000 source devices, 10,000 linked port references, and manual coordinates survive exact project roundtrip");
+// A delayed ELK result must never commit to a different project generation,
+// or overwrite an edit made while the same launch was in flight.
+const startingWorkspace = { source: "old" };
+const newerWorkspace = { source: "new" };
+assert.equal(scenarioLaunchStillCurrent(12,12,startingWorkspace,startingWorkspace),true);
+assert.equal(scenarioLaunchStillCurrent(12,13,startingWorkspace,startingWorkspace),false);
+assert.equal(scenarioLaunchStillCurrent(12,12,startingWorkspace,newerWorkspace),false);
+assert.equal(scenarioLaunchStillCurrent(12,12,null,null),false);
+let liveEpoch = 12, liveWorkspace = startingWorkspace, committed = newerWorkspace;
+let releaseLayout;
+const heldLayout = new Promise(resolve => { releaseLayout = resolve; });
+const staleLaunch = (async () => {
+  await heldLayout;
+  if (scenarioLaunchStillCurrent(12,liveEpoch,startingWorkspace,liveWorkspace))
+    committed = startingWorkspace;
+})();
+liveEpoch = 13; liveWorkspace = newerWorkspace;
+releaseLayout();
+await staleLaunch;
+assert.equal(committed,newerWorkspace,"Delayed layout result replaced a New project");
+// Structural wiring checks: each actual asynchronous launch handler must recheck
+// after the awaited layout and before touching the canonical workspace.
+const uiSource = readFileSync(new URL("../../ui/app/main.mjs",import.meta.url),"utf8");
+for (const action of ["openGuidedLab","openEnterpriseScenario","openVerifiedDeliveryScenario"]) {
+  const start = uiSource.indexOf(`  const ${action} = async (startRuntime) => {`);
+  const end = uiSource.indexOf("\n  };",start);
+  assert.ok(start>=0 && end>start,action+" launch handler missing");
+  const body = uiSource.slice(start,end);
+  assert.match(body,/await compileBuilderWorkspace\(next, compilerOptions\);\s+if \(!isLiveLaunch\(\)\) return;/,
+    action+" missing post-compile validation");
+  assert.match(body,/const layout = await autoLayoutBuilder\(next, new ElkLayoutBackend\(\)\);[\s\S]*?if \(!isLiveLaunch\(\)\) return;\s+if \(!layout\.ok\)/,
+    action+" missing post-ELK validation before diagnostics");
+}
+console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
