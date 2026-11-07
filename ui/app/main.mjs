@@ -9,6 +9,7 @@
 
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ProjectFileControls } from "./project-file-controls.mjs";
 import { markApplicationReady, markApplicationStopped } from "../src/browser/runtime-readiness.mjs";
 import { createRoot } from "react-dom/client";
 import {
@@ -2171,12 +2172,12 @@ function BuilderAssetLibrary({ workspace, setWorkspace, setDiagnostics }) {
   );
 }
 
-function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onCompile, onExport }) {
+function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onCompile, onExport, canReplaceProject }) {
   const [scenarioId, setScenarioId] = useState("studio_scenario");
   const [title, setTitle] = useState("Nytt Scenario Studio-scenario");
   if (workspace.mode !== "builder") return null;
   const createDraft = () => {
-    if (workspace.dirty && !window.confirm("Det finns osparade ändringar. Vill du kasta dem och skapa ett nytt draft-scenario?")) return;
+    if (!canReplaceProject()) return;
     setWorkspace(createScenarioDraftWorkspace({ scenarioId, title }));
     setDiagnostics([]);
   };
@@ -4017,6 +4018,7 @@ function App() {
     return () => markApplicationStopped(document);
   }, []);
   const [workspace, setWorkspace] = useState(() => createBuilderWorkspace(welcomeScenario));
+  const projectGuardRef = useRef(() => true);
   const latestDrawioWorkspaceRef = useRef(workspace);
   latestDrawioWorkspaceRef.current = workspace;
   const [importWorkbench, setImportWorkbench] = useState(() => emptyImportWorkbench());
@@ -4456,6 +4458,18 @@ function App() {
     return transitionId;
   };
   const isCurrentScenarioTransition = (transitionId) => scenarioTransitionRef.current === transitionId;
+  const replaceProjectDocument = (value) => {
+    const next = value ?? createScenarioDraftWorkspace({
+      scenarioId: "new_project", title: "New YadiLab project",
+    });
+    beginScenarioTransition();
+    setImportedProbeAutoOpen(false);
+    setNetworkImportOpen(false);
+    setNetworkImportSelection(null);
+    setWorkspace(next);
+    latestDrawioWorkspaceRef.current = next;
+    return next;
+  };
   const commitVerifiedDeliveryRuntime = (runtime, fallback) => {
     setWorkspace(runtime.ok ? runtime.workspace : fallback);
     setVerifiedDeliveryLoadKey((value) => value + 1);
@@ -4539,7 +4553,7 @@ function App() {
   };
 
   const openPackage = async (file) => {
-    if (!file) return;
+    if (!file || !projectGuardRef.current()) return;
     try {
       const result = await openRuntimePackage(file, {
         packageIO,
@@ -4656,6 +4670,7 @@ function App() {
   };
 
   const openGuidedLab = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const entry = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
     if (!entry) {
@@ -4696,6 +4711,7 @@ function App() {
   };
 
   const openEnterpriseScenario = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const source = enterpriseScenarioById.get(enterpriseScenarioId);
     if (!source) return;
@@ -4732,6 +4748,7 @@ function App() {
   };
 
   const openVerifiedDeliveryScenario = async (startRuntime) => {
+    if (!projectGuardRef.current()) return;
     const transitionId = beginScenarioTransition();
     const source = verifiedDeliveryScenarioById.get(verifiedDeliveryScenarioId);
     if (!source) return;
@@ -5007,6 +5024,12 @@ function App() {
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
       e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
         onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+      e(ProjectFileControls, {
+        workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+        setWorkspace, onReplace: replaceProjectDocument,
+        validateSource: source => validateContract("source", source),
+        setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
+      }),
     ),
     e("section", { className: "mission-strip" }, e("strong", null, title)),
     selectedGuidedLab ? e("section", { className: "curriculum-strip", "data-curriculum-wave": "guided_troubleshooting_wave1" },
@@ -5020,6 +5043,7 @@ function App() {
     networkImportOpen ? e(NetworkTopologyImportPanel, { compilerOptions, setDiagnostics,
       workspaceIdentity: workspace, getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
       initialSelection: networkImportSelection, onClose: () => { setNetworkImportOpen(false); setNetworkImportSelection(null); }, onActivate: (next, openProbes, bounded) => {
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         if(bounded){
           setScaledTenThousandSessionActive(true);
@@ -6494,7 +6518,7 @@ function App() {
           ),
         ),
         e(ControlSection, { title: "Scenario & Builder", description: "Canonical source authoring, import and builder-only controls.", searchTerms: "Scenario Studio Import Workbench Builder Inspector Fault Injection" },
-          e(ScenarioStudioToolbar, { workspace, setWorkspace, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource }),
+          e(ScenarioStudioToolbar, { workspace, setWorkspace, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource, canReplaceProject: () => projectGuardRef.current() }),
           e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace, setDiagnostics, compilerOptions }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
