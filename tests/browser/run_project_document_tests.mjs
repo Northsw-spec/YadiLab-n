@@ -62,6 +62,29 @@ await assert.rejects(readProjectFile({ name:"x.yadilab",size:1,async arrayBuffer
 const tamper = (mutate) => { const copy=structuredClone(doc); mutate(copy); return JSON.stringify(copy); };
 await assert.rejects(readProjectDocument(tamper(x=>x.content.source.scenarioId="tampered"),opts), /PROJECT_CHECKSUM_MISMATCH/);
 await assert.rejects(readProjectDocument(tamper(x=>x.schemaVersion=999),opts), /PROJECT_FORMAT_UNSUPPORTED/);
+// PROJECT-024: reject corrupt content BEFORE invoking schema/semantic validators.
+// An invalid checksum never authorizes traversal of a large, untrusted source.
+// A matching checksum still cannot legitimize dangling canonical references.
+const tamperedSource = structuredClone(doc);
+tamperedSource.content.source.connections[0].to.resource = "missing_device";
+let corruptValidatorCalls = 0;
+await assert.rejects(readProjectDocument(JSON.stringify(tamperedSource), {
+  validateSource: () => {
+    corruptValidatorCalls++;
+    throw Error("CORRUPT_SOURCE_MUST_NOT_REACH_VALIDATOR");
+  },
+}), /PROJECT_CHECKSUM_MISMATCH/,
+"Corrupt project content must fail its checksum before schema validation");
+assert.equal(corruptValidatorCalls, 0,
+  "Checksum failure must not call even a provided source validator");
+tamperedSource.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+  "SHA-256", new TextEncoder().encode(JSON.stringify(tamperedSource.content))
+)).toString("hex");
+await assert.rejects(readProjectDocument(JSON.stringify(tamperedSource), opts),
+  /PROJECT_DANGLING_CONNECTION/,
+  "A valid checksum must not bypass referential-integrity checks");
+console.log("PASS PROJECT-024: integrity gate precedes untrusted schema traversal; matching hash still requires semantic validation");
+
 await assert.rejects(readProjectDocument("{",opts), /PROJECT_JSON_INVALID/);
 await assert.rejects(readProjectDocument(tamper(x=>x.extra=true),opts), /PROJECT_SHAPE_INVALID/);
 await assert.rejects(createProjectDocument({mode:"runtime",source},opts), /PROJECT_BUILDER_REQUIRED/);
