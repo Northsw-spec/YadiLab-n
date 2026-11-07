@@ -23,11 +23,18 @@ MOCK = r"""
     chooseAlternative: false, otherText: "", otherWrites: 0,
     pauseIdentity: false, pendingIdentity: false, releaseIdentity: null,
     pauseOpenPicker: false, pendingOpenPicker: false, releaseOpenPicker: null,
-    openPickerCalls: 0, editAfterOpenSnapshot: false };
+    openPickerCalls: 0, editAfterOpenSnapshot: false,
+    pauseWritableOpen: false, pendingWritableOpen: false, releaseWritableOpen: null };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
       if (store.permissionDenied) throw new DOMException("Permission denied", "NotAllowedError");
+      if (store.pauseWritableOpen) {
+        store.pendingWritableOpen = true;
+        await new Promise(resolve => { store.releaseWritableOpen = resolve; });
+        store.pendingWritableOpen = false;
+        store.releaseWritableOpen = null;
+      }
       if (store.editDuringWritableOpen) {
         store.text += " EXTERNAL_MODIFICATION_DURING_OPEN";
         store.editDuringWritableOpen = false;
@@ -135,6 +142,74 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-016: beforeunload must request a browser warning when
+            # the source is clean but an explicit native Save remains in flight.
+            # This test uses a controlled pending writable open, not a timer.
+            unload_guard = context.new_page()
+            unload_guard.add_init_script(MOCK)
+            unload_guard.on("pageerror", lambda error: errors.append(str(error)))
+            unload_guard.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            ug_controls = unload_guard.locator('[data-project-file-controls="ready"]')
+            expect(ug_controls).to_be_visible(timeout=45000)
+            unload_guard.locator('[data-project-action="save-as"]').click()
+            expect(unload_guard.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(ug_controls).to_have_attribute("data-project-dirty", "false")
+            # One animation-frame boundary allows the first Save's finally to
+            # release its lock before the next native action.
+            unload_guard.evaluate("""() => new Promise(resolve =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve)))""")
+            baseline_writes = unload_guard.evaluate(
+                "window.__yadilabProjectStore.writes")
+            idle_warning = unload_guard.evaluate("""() => {
+                const event = new Event('beforeunload', { cancelable: true });
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            }""")
+            require(idle_warning is False,
+                    "An idle clean native project needlessly blocked tab close")
+            unload_guard.evaluate("""() => {
+                window.__yadilabProjectStore.pauseWritableOpen = true;
+            }""")
+            unload_guard.locator('[data-project-action="save"]').click()
+            unload_guard.wait_for_function(
+                "window.__yadilabProjectStore.pendingWritableOpen === true",
+                timeout=20000)
+            expect(ug_controls).to_have_attribute("data-project-dirty", "false")
+            active_warning = unload_guard.evaluate("""() => {
+                const event = new Event('beforeunload', { cancelable: true });
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            }""")
+            require(active_warning is True,
+                    "Active native Save on a clean project did not request an unload warning")
+            require(unload_guard.evaluate(
+                "window.__yadilabProjectStore.writes") == baseline_writes,
+                "A paused writable open unexpectedly committed to disk")
+            unload_guard.evaluate("""() => {
+                const s = window.__yadilabProjectStore;
+                s.pauseWritableOpen = false;
+                s.releaseWritableOpen();
+            }""")
+            expect(unload_guard.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            unload_guard.wait_for_function(
+                "window.__yadilabProjectStore.writes > " + str(baseline_writes),
+                timeout=15000)
+            unload_guard.evaluate("""() => new Promise(resolve =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve)))""")
+            finished_warning = unload_guard.evaluate("""() => {
+                const event = new Event('beforeunload', { cancelable: true });
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            }""")
+            require(finished_warning is False,
+                    "Completed verified Save left the native file unload warning active")
+            require(unload_guard.evaluate(
+                "window.__yadilabProjectStore.writes") == baseline_writes + 1,
+                "Resumed explicit Save was not verified as exactly one disk write")
+            unload_guard.close()
+
             # PROJECT-015: React may batch updates when two explicit
             # project actions fire in one JS task. New MUST publish its
             # unpersisted state synchronously before Open checks the guard;
