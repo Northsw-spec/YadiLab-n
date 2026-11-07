@@ -284,6 +284,43 @@ def main():
             expect(controls).to_have_attribute("data-project-dirty", "false")
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)
+            # PROJECT-005: even a correctly SHA-256-rehashed file must not
+            # open into Builder when a link names an absent interface, or when
+            # two interfaces of the same resource share the same identity.
+            for corruption, expected_code in (
+                ("unknown_port", "PROJECT_UNKNOWN_CONNECTION_PORT"),
+                ("duplicate_interface", "PROJECT_DUPLICATE_INTERFACE_ID"),
+            ):
+                page.evaluate("""async ([saved, corruption]) => {
+                    const forged = JSON.parse(saved);
+                    const scenario = forged.content.source;
+                    if (corruption === 'unknown_port') {
+                        scenario.connections[0].from.port = 'ghost_port';
+                    } else {
+                        scenario.resources[0].interfaces =
+                            [{ id: 'eth0' }, { id: 'eth0' }];
+                    }
+                    const raw = new TextEncoder().encode(JSON.stringify(forged.content));
+                    const hash = await crypto.subtle.digest('SHA-256', raw);
+                    forged.contentSha256 = [...new Uint8Array(hash)]
+                        .map(n => n.toString(16).padStart(2, '0')).join('');
+                    window.__yadilabProjectStore.text = JSON.stringify(forged);
+                }""", [saved_after_ctrl, corruption])
+                before_corrupt_open = page.evaluate(
+                    "window.__yadilabProjectStore.writes")
+                page.locator('[data-project-action="open"]').click()
+                expect(page.locator('[data-project-message]')).to_contain_text(
+                    expected_code, timeout=20000)
+                require(page.locator(".app-frame").get_attribute(
+                    "data-runtime-scenario-id") == "foundation_acceptance",
+                    "Invalid network port reference replaced the active workspace")
+                require(page.evaluate("window.__yadilabProjectStore.writes")
+                        == before_corrupt_open,
+                        "Rejected port identity unexpectedly wrote a project file")
+                expect(controls).to_have_attribute("data-project-dirty", "false")
+                page.evaluate(
+                    "(saved) => { window.__yadilabProjectStore.text = saved; }",
+                    saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)

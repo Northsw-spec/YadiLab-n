@@ -213,7 +213,8 @@ await assert.rejects(writeProjectFile({ ...handle,async createWritable() {
 const large = structuredClone(source);
 for (let i = 0; i < 10000; i++) {
   large.resources.push({ id: "device_" + i, type: "server.generic",
-    label: "Device " + i, zone: large.zones[0].id, properties: {} });
+    label: "Device " + i, zone: large.zones[0].id,
+    interfaces: [{ id: "eth0" }, { id: "eth1" }], properties: {} });
   large.connections.push({ id: "wire_" + i, kind: "network",
     from: { resource: "device_" + i, port: "eth0" },
     to: { resource: "device_" + ((i+1) % 10000), port: "eth1" }, properties: {} });
@@ -305,5 +306,56 @@ deepCycle.zones[4].parent = "depth_4999";
 await assert.rejects(createProjectDocument({ ...workspace, source: deepCycle }, opts),
   /PROJECT_ZONE_PARENT_CYCLE/, "long ancestor loop must be rejected");
 console.log("PASS PROJECT-004: self, mutual, forged-valid-hash and deep ancestor cycles rejected; nested acyclic zones preserved");
+// PROJECT-005: a checksum-correct .yadilab document must not admit links
+// to missing ports or ambiguous duplicate interface IDs, even if JSON schema
+// itself accepts the object. These invariants already exist in the Compiler.
+const missingPort = structuredClone(source);
+missingPort.connections[0].from.port = "ghost_port";
+assert.equal(validateSource(missingPort), true, "missing port fixture is schema-valid");
+await assert.rejects(
+  createProjectDocument({ ...workspace, source: missingPort }, opts),
+  /PROJECT_UNKNOWN_CONNECTION_PORT/,
+  "Save must refuse links pointing at undeclared source-side ports");
+const missingToPort = structuredClone(source);
+missingToPort.connections[0].to.port = "ghost_port";
+assert.equal(validateSource(missingToPort), true);
+await assert.rejects(
+  createProjectDocument({ ...workspace, source: missingToPort }, opts),
+  /PROJECT_UNKNOWN_CONNECTION_PORT/,
+  "Save must refuse links pointing at undeclared target-side ports");
+const duplicatePorts = structuredClone(source);
+duplicatePorts.resources[0].interfaces = [{ id: "eth0" }, { id: "eth0" }];
+assert.equal(validateSource(duplicatePorts), true);
+await assert.rejects(
+  createProjectDocument({ ...workspace, source: duplicatePorts }, opts),
+  /PROJECT_DUPLICATE_INTERFACE_ID/,
+  "Save must refuse duplicate interface identity within a resource");
+const validPorts = structuredClone(source);
+validPorts.resources[0].interfaces = [{ id: "eth0" }, { id: "eth1" }];
+validPorts.resources[1].interfaces = [{ id: "outside" }];
+validPorts.connections[0].from.port = "eth0";
+validPorts.connections[0].to.port = "outside";
+const validPortsText = await createProjectDocument({ ...workspace, source: validPorts }, opts);
+assert.deepEqual((await readProjectDocument(validPortsText, opts)).source, validPorts,
+  "Valid source- and target-port identities must survive exact roundtrip");
+const forgedMissingPort = structuredClone(doc);
+forgedMissingPort.content.source.connections[0].from.port = "ghost_port";
+forgedMissingPort.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+  "SHA-256", new TextEncoder().encode(JSON.stringify(forgedMissingPort.content))
+)).toString("hex");
+await assert.rejects(
+  readProjectDocument(JSON.stringify(forgedMissingPort), opts),
+  /PROJECT_UNKNOWN_CONNECTION_PORT/,
+  "Correctly rehashed corrupt port reference must fail on Open");
+const forgedDuplicatePorts = structuredClone(doc);
+forgedDuplicatePorts.content.source.resources[0].interfaces = [{id: "eth0"}, {id: "eth0"}];
+forgedDuplicatePorts.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+  "SHA-256", new TextEncoder().encode(JSON.stringify(forgedDuplicatePorts.content))
+)).toString("hex");
+await assert.rejects(
+  readProjectDocument(JSON.stringify(forgedDuplicatePorts), opts),
+  /PROJECT_DUPLICATE_INTERFACE_ID/,
+  "Correctly rehashed ambiguous ports must fail on Open");
+console.log("PASS PROJECT-005: missing endpoints and duplicate port IDs fail closed; declared 10k link/port references and valid mappings roundtrip");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
