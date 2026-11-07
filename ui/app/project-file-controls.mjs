@@ -72,15 +72,29 @@ export function ProjectFileControls({
   beforeSwitchRef.current = canDiscard;
 
   const previousWorkspaceRef = useRef(workspace);
-  // External scenario switches must detach the old writable file handle.
+  // Any new canonical source must detach the old file handle; ordinary edits
+  // increment the existing Builder revision and must retain that handle.
   useEffect(() => {
     const previous = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
-    if (workspace.mode === "builder" && workspace.sourceRevision === 0 &&
-        !workspace.dirty && workspace.source !== previous?.source &&
-        projectSnapshot(workspace) !== baselineRef.current) {
-      resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null);
-      setMessage("Different scenario loaded; choose Save As for its own project file.");
+    if (workspace.mode === "builder" && workspace.source !== previous?.source) {
+      const sameProjectEdit = previous?.mode === "builder" &&
+        workspace.dirty && workspace.sourceRevision > previous.sourceRevision;
+      if (!sameProjectEdit) {
+        resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null);
+        setMessage("Different scenario loaded; choose Save As for its own project file.");
+      }
+    } else if (workspace.mode === "runtime" && workspace.source !== previous?.source) {
+      // A different Runtime (package/experiment) is not a preview of the
+      // current editable project. Do not retain its file handle or dirty flag.
+      fileEpochRef.current++;
+      handleRef.current = null;
+      fileFingerprintRef.current = null;
+      baselineRef.current = null;
+      lastBuilderSnapshotRef.current = null;
+      nameState("Runtime (no project file)");
+      setMessage("Different Runtime opened. Return to Builder to save its source.");
+      setRevision(n => n + 1);
     }
   }, [workspace]);
 
@@ -94,6 +108,9 @@ export function ProjectFileControls({
 
   const resetAssociation = (next, filename, handle, fileFingerprint = null) => {
     fileEpochRef.current++;
+    // Open/New call this before React renders the replacement. Record the
+    // replacement so the external-switch effect cannot detach its valid handle.
+    previousWorkspaceRef.current = next;
     baselineRef.current = projectSnapshot(next);
     lastBuilderSnapshotRef.current = baselineRef.current;
     handleRef.current = handle;

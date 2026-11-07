@@ -241,6 +241,45 @@ def main():
             require("PROJECT-001 unsaved after external file change" in
                     page.locator(".mission-strip").inner_text(),
                     "Runtime→Builder lost the user's unsaved editable source")
+            # Cancelled native Open must not discard an unsaved project.
+            page.evaluate("window.__yadilabProjectStore.cancelOpen = true")
+            def accept(dialog):
+                dialog.accept()
+            page.once("dialog", accept)
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "Cancelled", timeout=15000)
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            require("PROJECT-001 unsaved after external file change" in
+                    page.locator(".mission-strip").inner_text(),
+                    "Cancelled Open discarded the current Builder edits")
+            page.evaluate("window.__yadilabProjectStore.cancelOpen = false")
+            # An unrelated built-in Builder must receive a fresh file
+            # association after explicit operator discard consent.
+            builder_menu = page.locator(".workspace-menu", has=page.locator(
+                "summary", has_text="Builder"))
+            expect(builder_menu).to_have_count(1)
+            if builder_menu.get_attribute("open") is None:
+                builder_menu.locator("summary").click()
+            declined = []
+            def decline_switch(dialog):
+                declined.append(dialog.type)
+                dialog.dismiss()
+            page.once("dialog", decline_switch)
+            builder_menu.get_by_role("button", name="Öppna enterprise i byggläget").click()
+            require(declined == ["confirm"], "Builder switch lost the unsaved-change warning")
+            require("PROJECT-001 unsaved after external file change" in
+                    page.locator(".mission-strip").inner_text(),
+                    "Cancelled Builder switch altered the current project")
+            page.once("dialog", accept)
+            builder_menu.get_by_role("button", name="Öppna enterprise i byggläget").click()
+            expect(page.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance", timeout=15000)
+            expect(controls).not_to_have_attribute(
+                "data-project-filename", "verified-network.yadilab", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_conflict,
+                    "Switch to unrelated Builder silently wrote old project")
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -251,6 +290,8 @@ def main():
                 "externalModificationDenied": True, "permissionDenied": True,
                 "pickerCancelNoWrite": True, "fallbackDownloadUnverified": True,
                 "runtimeBuilderUnsavedRetained": True,
+                "nativeOpenCancelledNoMutation": True,
+                "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
