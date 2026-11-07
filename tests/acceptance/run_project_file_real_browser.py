@@ -583,11 +583,35 @@ def main():
             restore_race.goto(a.url, wait_until="domcontentloaded", timeout=30000)
             rrc = restore_race.locator('[data-project-file-controls="ready"]')
             expect(rrc).to_be_visible(timeout=45000)
+            # Reuse the *known compilable* authored-source path exercised
+            # earlier in this suite, rather than relying on an untouched
+            # welcome draft being Runtime-ready at its initial render.
+            inspector_section = restore_race.locator(
+                "details.control-section").filter(
+                    has_text="Builder Inspector & Authoring")
+            if inspector_section.get_attribute("open") is None:
+                inspector_section.locator("summary").first.click()
+            inspector = restore_race.locator('[data-builder-inspector="mission"]')
+            expect(inspector).to_be_visible(timeout=15000)
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-001 runtime restore source")
+            inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
             rstudio = restore_race.locator("details.control-section").filter(
                 has_text="Scenario & Builder")
             if rstudio.get_attribute("open") is None:
                 rstudio.locator("summary").first.click()
-            restore_race.locator('[data-studio-action="validate-compile"]').click()
+            compile_button = restore_race.locator(
+                '[data-studio-action="validate-compile"]')
+            compile_button.click()
+            try:
+                expect(compile_button).to_be_disabled(timeout=30000)
+            except AssertionError as error:
+                status = restore_race.locator(
+                    '[data-studio-draft-revision]').inner_text()
+                raise AssertionError(
+                    "Runtime fixture compilation did not become valid: " + status) from error
             run_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
                 "summary", has_text="Run & Preview"))
             if run_menu.get_attribute("open") is None:
@@ -631,6 +655,9 @@ def main():
             })
             restore_race.wait_for_function(
                 "window.__staleRuntimeFileRead?.pending === true", timeout=15000)
+            # The authored Builder source may still be unsaved in Runtime,
+            # so explicitly confirm the user-requested replacement.
+            restore_race.once("dialog", lambda dialog: dialog.accept())
             restore_race.locator('[data-project-action="new"]').click()
             expect(restore_race.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", "new_project", timeout=15000)
