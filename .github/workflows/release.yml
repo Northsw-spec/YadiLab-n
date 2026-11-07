@@ -31,6 +31,8 @@ jobs:
           YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
+          npm run build:browser
+          node scripts/verify_browser_release.mjs
           npm run build:launcher
           node scripts/verify_browser_release.mjs
           node scripts/verify_release_identity.mjs
