@@ -134,8 +134,25 @@ def main():
             page.locator('[data-project-action="new"]').click()
             expect(page.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", "new_project")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
             require(page.evaluate("window.__yadilabProjectStore.writes") == writes,
                     "New project implicitly wrote to disk")
+            # No user edits, but this project has NEVER been written to a file.
+            # It MUST prompt before any action that would discard it.
+            new_rejected = []
+            def reject_new(dialog):
+                new_rejected.append(dialog.type)
+                dialog.dismiss()
+            page.once("dialog", reject_new)
+            page.locator('[data-project-action="open"]').click()
+            require(new_rejected == ["confirm"],
+                    "Empty newly created project was treated as saved")
+            expect(page.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            def accept_new(dialog):
+                dialog.accept()
+            page.once("dialog", accept_new)
             page.locator('[data-project-action="open"]').click()
             expect(page.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", "foundation_acceptance")
@@ -286,7 +303,8 @@ def main():
                 "nativeHandleWriteAndReadback": True, "newNoAutosave": True,
                 "openRestoresEditableCanonicalSource": True,
                 "tamperedSourceRejectedWithoutMutation": True,
-                "unsavedNewCancellation": True, "ctrlSSaveReadback": True,
+                "unsavedNewCancellation": True, "neverSavedNewProjectGuard": True,
+                "ctrlSSaveReadback": True,
                 "externalModificationDenied": True, "permissionDenied": True,
                 "pickerCancelNoWrite": True, "fallbackDownloadUnverified": True,
                 "runtimeBuilderUnsavedRetained": True,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
-  projectFilename, projectSnapshot,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -32,6 +32,7 @@ export function ProjectFileControls({
   const busyRef = useRef(false);
   const handleRef = useRef(null);
   const fileFingerprintRef = useRef(null);
+  const unpersistedRef = useRef(false); // welcome sample is not an unsaved user-created project
   const baselineRef = useRef(projectSnapshot(workspace));
   const lastBuilderSnapshotRef = useRef(projectSnapshot(workspace));
   const fileEpochRef = useRef(0);
@@ -46,7 +47,8 @@ export function ProjectFileControls({
       workspace.mode === "builder" ? workspace.layoutOverrides : null]);
   if (workspace.mode === "builder") lastBuilderSnapshotRef.current = currentSnapshot;
   // Runtime preview is not a project save: pending Builder edits stay pending.
-  const changed = lastBuilderSnapshotRef.current !== baselineRef.current;
+  const changed = projectHasUnsavedChanges(lastBuilderSnapshotRef.current,
+    baselineRef.current, unpersistedRef.current);
   const changedRef = useRef(changed);
   changedRef.current = changed;
   const nameState = (value) => { nameRef.current = value; setName(value); };
@@ -81,8 +83,8 @@ export function ProjectFileControls({
       const sameProjectEdit = previous?.mode === "builder" &&
         workspace.dirty && workspace.sourceRevision > previous.sourceRevision;
       if (!sameProjectEdit) {
-        resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null);
-        setMessage("Different scenario loaded; choose Save As for its own project file.");
+        resetAssociation(workspace, projectFilename(workspace.source.scenarioId), null, null, true);
+        setMessage("Different scenario loaded and not saved; choose Save As for its own project file.");
       }
     } else if (workspace.mode === "runtime" && workspace.source !== previous?.source) {
       // A different Runtime (package/experiment) is not a preview of the
@@ -90,6 +92,7 @@ export function ProjectFileControls({
       fileEpochRef.current++;
       handleRef.current = null;
       fileFingerprintRef.current = null;
+      unpersistedRef.current = false;
       baselineRef.current = null;
       lastBuilderSnapshotRef.current = null;
       nameState("Runtime (no project file)");
@@ -106,8 +109,9 @@ export function ProjectFileControls({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
-  const resetAssociation = (next, filename, handle, fileFingerprint = null) => {
+  const resetAssociation = (next, filename, handle, fileFingerprint = null, unpersisted = false) => {
     fileEpochRef.current++;
+    unpersistedRef.current = unpersisted;
     // Open/New call this before React renders the replacement. Record the
     // replacement so the external-switch effect cannot detach its valid handle.
     previousWorkspaceRef.current = next;
@@ -169,7 +173,7 @@ export function ProjectFileControls({
     if (busy || busyRef.current || !canDiscard()) return;
     const next = onReplace(null);
     if (!next || next.mode !== "builder") return;
-    resetAssociation(next, "Untitled.yadilab", null);
+    resetAssociation(next, "Untitled.yadilab", null, null, true);
     setMessage("New unsaved project. Save As to choose a file.");
     setDiagnostics([diag("PROJECT_NEW", "Created a new editable project with no associated file.", "warning")]);
   };
@@ -222,9 +226,18 @@ export function ProjectFileControls({
         fileFingerprintRef.current = null;
         throw error;
       }
-      // Association still follows the written file even if edits occurred during I/O.
+      // A different project may have been activated during asynchronous I/O.
+      // Never bind an old file handle or baseline to that new project.
+      if (fileEpochRef.current !== epoch) {
+        setMessage("File was written, but the active project changed. Current project remains unsaved.");
+        setDiagnostics([diag("PROJECT_SAVE_ASSOCIATION_STALE",
+          "The verified write belongs to an earlier project. Current project was not marked saved.", "warning")]);
+        return;
+      }
+      // Association still follows the written file if only current-project edits occurred.
       handleRef.current = handle;
       fileFingerprintRef.current = await digestProjectText(data);
+      unpersistedRef.current = false;
       nameState(projectFilename(handle.name || filename));
       baselineRef.current = original;
       lastBuilderSnapshotRef.current = projectSnapshot(getWorkspace());

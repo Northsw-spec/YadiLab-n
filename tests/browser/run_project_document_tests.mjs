@@ -6,7 +6,7 @@ import example from "../../ui/app/welcome-scenario.json" with { type: "json" };
 import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
-  projectFilename, projectSnapshot,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges,
 } from "../../ui/app/project-document.mjs";
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
 const validateSource = new Ajv2020({ strict: true }).compile(schema);
@@ -19,6 +19,17 @@ assert.ok(projectFilename("../../../test").endsWith("test.yadilab"));
 assert.ok(!projectFilename("../../../test").includes("/"));
 assert.equal(projectFilename("Net.yadilab"), "Net.yadilab");
 assert.equal(projectSnapshot({ mode: "runtime" }), null);
+const emptyExample = projectSnapshot({ mode: "builder", source, layoutOverrides: [] });
+assert.equal(projectHasUnsavedChanges(emptyExample, emptyExample, false), false,
+  "Initial welcome project is a sample, not a newly created project");
+assert.equal(projectHasUnsavedChanges(emptyExample, emptyExample, true), true,
+  "Brand new project must remain unsaved with zero user edits");
+assert.equal(projectHasUnsavedChanges(null, emptyExample, true), true,
+  "Unpersisted project remains unsaved in Runtime preview");
+assert.equal(projectHasUnsavedChanges(emptyExample + " edited", emptyExample, false), true,
+  "Editing a verified saved project must re-enable unsaved warning");
+assert.equal(projectHasUnsavedChanges(emptyExample, emptyExample, false), false,
+  "Successful verified save clears the unsaved state");
 const text = await createProjectDocument(workspace, opts);
 const doc = JSON.parse(text);
 assert.equal(doc.formatId, PROJECT_FORMAT);
