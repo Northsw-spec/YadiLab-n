@@ -10,7 +10,7 @@ import {
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
   assertProjectOpenDiskUnchanged,
   projectFilename, projectSnapshot, projectHasUnsavedChanges, projectNeedsUnloadWarning,
-  sameEditableProjectRevision,
+  projectFilePickerStillCurrent, sameEditableProjectRevision,
   sameProjectFileEntry,
   assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
@@ -813,5 +813,21 @@ assert.equal(projectNeedsUnloadWarning(
   "A verified recovery write must clear closing protection on clean source");
 console.log("PASS PROJECT-017: failed write marker preserves unsaved/discard/unload protections until verified recovery");
 
+// PROJECT-018: a fallback file-picker selection is authorized only if the
+// exact originating Builder workspace and file epoch are still current.
+// Scenario names and revision numbers are not proof of identity.
+const pickerOrigin = { mode: "builder", source: { scenarioId: "same_name" } };
+const pickerReplacement = { mode: "builder", source: { scenarioId: "same_name" } };
+assert.equal(projectFilePickerStillCurrent(pickerOrigin, 15, pickerOrigin, 15), true,
+  "The same unchanged origin must allow its selected file");
+assert.equal(projectFilePickerStillCurrent(pickerOrigin, 15, pickerReplacement, 15), false,
+  "A different source with identical public scenarioId must be rejected");
+assert.equal(projectFilePickerStillCurrent(pickerOrigin, 15, pickerOrigin, 16), false,
+  "A native association reset during the picker must reject stale selection");
+assert.equal(projectFilePickerStillCurrent(pickerOrigin, -1, pickerOrigin, -1), false,
+  "Invalid epoch must not authorize file selection");
+assert.equal(projectFilePickerStillCurrent(pickerOrigin, 15.5, pickerOrigin, 15.5), false,
+  "Nonintegral file epoch must be rejected");
+console.log("PASS PROJECT-018: native/fallback Open selection bound to initial workspace identity and file epoch");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
