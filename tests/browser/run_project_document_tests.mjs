@@ -211,6 +211,61 @@ await assert.rejects(writeProjectFile({ ...handle, async getFile() {
 await assert.rejects(writeProjectFile({ ...handle,async createWritable() {
   return {async write(){throw Error("DISK_FULL");},async abort(){},async close(){}};
 }},text),/DISK_FULL/);
+// PROJECT-023: an external process can replace a verified project file with
+// a very large one just before Save or during createWritable. Reject its
+// advertised size BEFORE arrayBuffer() allocates memory, and never write into
+// that unsafe target. The same bound applies to the verified post-write readback.
+let oversizedConflictReads = 0;
+let oversizedConflictWritables = 0;
+await assert.rejects(writeProjectFile({
+  async getFile() { return { size: PROJECT_MAX_BYTES + 1,
+    async arrayBuffer() { oversizedConflictReads++; throw Error("unsafe allocation"); } }; },
+  async createWritable() { oversizedConflictWritables++; throw Error("must not open"); },
+}, text, { expectedFileSha256: fromDisk.fileSha256 }),
+/PROJECT_EXTERNAL_FILE_CHANGED/,
+"An oversized externally replaced project must be rejected before allocation");
+assert.equal(oversizedConflictReads, 0);
+assert.equal(oversizedConflictWritables, 0);
+
+let conflictReadPhase = 0;
+let midWriteUnsafeReads = 0;
+let midWriteWrites = 0;
+let midWriteAborts = 0;
+await assert.rejects(writeProjectFile({
+  async getFile() {
+    conflictReadPhase++;
+    if (conflictReadPhase === 1) return file("network.yadilab", firstWrite);
+    return { size: PROJECT_MAX_BYTES + 1,
+      async arrayBuffer() { midWriteUnsafeReads++; throw Error("unsafe allocation"); } };
+  },
+  async createWritable() { return {
+    async write() { midWriteWrites++; },
+    async close() { throw Error("should not close"); },
+    async abort() { midWriteAborts++; },
+  }; },
+}, text, { expectedFileSha256: fromDisk.fileSha256 }),
+/PROJECT_EXTERNAL_FILE_CHANGED/,
+"An oversized replacement during writable-open must abort without writing");
+assert.equal(conflictReadPhase, 2);
+assert.equal(midWriteUnsafeReads, 0);
+assert.equal(midWriteWrites, 0);
+assert.equal(midWriteAborts, 1);
+
+let oversizedReadbackReads = 0;
+let oversizedReadbackWrites = 0;
+await assert.rejects(writeProjectFile({
+  async createWritable() { return {
+    async write() { oversizedReadbackWrites++; },
+    async close() {},
+  }; },
+  async getFile() { return { size: PROJECT_MAX_BYTES + 1,
+    async arrayBuffer() { oversizedReadbackReads++; throw Error("unsafe allocation"); } }; },
+}, text), /PROJECT_READBACK_INVALID/,
+"An oversized post-write file must not be read into browser memory");
+assert.equal(oversizedReadbackWrites, 1);
+assert.equal(oversizedReadbackReads, 0);
+console.log("PASS PROJECT-023: Save conflict and readback reject oversized disk files before allocation");
+
 // A genuine 10k/10k source must roundtrip every device, link, endpoint and port
 // without inventing new connectivity or changing unselected canonical fields.
 const large = structuredClone(source);
