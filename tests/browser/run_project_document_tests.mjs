@@ -357,5 +357,43 @@ await assert.rejects(
   /PROJECT_DUPLICATE_INTERFACE_ID/,
   "Correctly rehashed ambiguous ports must fail on Open");
 console.log("PASS PROJECT-005: missing endpoints and duplicate port IDs fail closed; declared 10k link/port references and valid mappings roundtrip");
+// PROJECT-006: preserve the chain from findings to real evidence tests and
+// from annotations to existing canonical objects. JSON schema and SHA-256
+// alone cannot prove that these references are resolvable.
+const orphanEvidence = structuredClone(source);
+orphanEvidence.findings[0].evidenceTests = ["not_a_test"];
+assert.equal(validateSource(orphanEvidence), true, "orphan evidence is schema-valid");
+await assert.rejects(createProjectDocument({ ...workspace, source: orphanEvidence }, opts),
+  /PROJECT_UNKNOWN_EVIDENCE_TEST/, "Save must refuse an evidence reference to a missing test");
+const orphanNote = structuredClone(source);
+orphanNote.notes = [{ id: "orphan_note", text: "Source was inspected", target: "not_a_resource" }];
+assert.equal(validateSource(orphanNote), true, "orphan note is schema-valid");
+await assert.rejects(createProjectDocument({ ...workspace, source: orphanNote }, opts),
+  /PROJECT_UNKNOWN_NOTE_TARGET/, "Save must refuse a note attached to a missing object");
+const validEvidence = structuredClone(source);
+validEvidence.notes = [
+  { id: "network_note", text: "Reviewed connection", target: "fw_rds" },
+  { id: "test_note", text: "Test evidence", target: "direct_rdp" },
+  { id: "zone_note", text: "Zone location", target: "dmz" },
+];
+const validEvidenceText = await createProjectDocument({ ...workspace, source: validEvidence }, opts);
+assert.deepEqual((await readProjectDocument(validEvidenceText, opts)).source, validEvidence,
+  "Valid evidence, note targets and link identities must survive exact project roundtrip");
+for (const [label, mutate, code] of [
+  ["orphan evidence", d => { d.content.source.findings[0].evidenceTests = ["not_a_test"]; },
+    /PROJECT_UNKNOWN_EVIDENCE_TEST/],
+  ["orphan note", d => { d.content.source.notes = [
+    { id: "orphan_note", text: "Source was inspected", target: "not_a_resource" }]; },
+    /PROJECT_UNKNOWN_NOTE_TARGET/],
+]) {
+  const forged = structuredClone(doc);
+  mutate(forged);
+  forged.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(JSON.stringify(forged.content))
+  )).toString("hex");
+  await assert.rejects(readProjectDocument(JSON.stringify(forged), opts), code,
+    "Open must refuse correctly rehashed " + label);
+}
+console.log("PASS PROJECT-006: orphan finding evidence and note targets rejected on Save/Open; valid references roundtrip");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
