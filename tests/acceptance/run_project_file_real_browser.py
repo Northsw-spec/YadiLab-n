@@ -445,6 +445,62 @@ def main():
                 page.evaluate(
                     "(saved) => { window.__yadilabProjectStore.text = saved; }",
                     saved_after_ctrl)
+            # PROJECT-009: a checksum-valid test referencing a deleted
+            # resource, or troubleshooting evidence referencing a missing
+            # device, must not replace Builder or trigger a disk write.
+            for corruption, expected_code in (
+                ("test_resource", "PROJECT_UNKNOWN_TEST_RESOURCE"),
+                ("troubleshooting_source", "PROJECT_UNKNOWN_TROUBLESHOOTING_RESOURCE"),
+                ("duplicate_requirement", "PROJECT_DUPLICATE_TROUBLESHOOTING_REQUIREMENT_ID"),
+            ):
+                page.evaluate("""async ([saved, corruption]) => {
+                    const forged = JSON.parse(saved);
+                    const source = forged.content.source;
+                    if (corruption === "test_resource") {
+                        source.tests.push({
+                            id: "browser_audit", type: "identity.password_audit",
+                            params: { target: "missing_device" },
+                        });
+                    } else {
+                        source.troubleshootingObjectives = [{
+                            id: "browser_evidence", title: "Network review",
+                            required: true, evidenceOrder: "ordered",
+                            requirements: [
+                                { id: "observe", label: "Observe route",
+                                  kind: "observation", targetId: "firewall01" },
+                                { id: "probe", label: "Probe service",
+                                  kind: "active_probe",
+                                  sourceId: corruption === "troubleshooting_source"
+                                    ? "missing_device" : "attacker",
+                                  destinationId: "rds01" },
+                            ],
+                        }];
+                        if (corruption === "duplicate_requirement") {
+                            source.troubleshootingObjectives[0].requirements[1].id =
+                                "observe";
+                        }
+                    }
+                    const raw = new TextEncoder().encode(JSON.stringify(forged.content));
+                    const sha = await crypto.subtle.digest("SHA-256", raw);
+                    forged.contentSha256 = [...new Uint8Array(sha)]
+                        .map(n => n.toString(16).padStart(2, "0")).join("");
+                    window.__yadilabProjectStore.text = JSON.stringify(forged);
+                }""", [saved_after_ctrl, corruption])
+                before_blocked_open = page.evaluate(
+                    "window.__yadilabProjectStore.writes")
+                page.locator('[data-project-action="open"]').click()
+                expect(page.locator('[data-project-message]')).to_contain_text(
+                    expected_code, timeout=20000)
+                require(page.locator(".app-frame").get_attribute(
+                    "data-runtime-scenario-id") == "foundation_acceptance",
+                    "Unknown test or troubleshooting resource replaced Builder")
+                require(page.evaluate("window.__yadilabProjectStore.writes")
+                        == before_blocked_open,
+                        "Denied test or troubleshooting source caused disk writes")
+                expect(controls).to_have_attribute("data-project-dirty", "false")
+                page.evaluate(
+                    "(saved) => { window.__yadilabProjectStore.text = saved; }",
+                    saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)

@@ -83,6 +83,68 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
         blocked("UNKNOWN_CONNECTION_PORT");
     }
   }
+  // Mirror the Compiler's explicit validation for Foundation test types.
+  // Other test types retain their existing schema and compiler contracts:
+  // do not infer undocumented selector semantics or invent resources.
+  const validPort = value => Number.isInteger(value) && value >= 1 && value <= 65535;
+  const checkTestResource = (params, key) => {
+    if (typeof params[key] !== "string" || params[key].length === 0)
+      blocked("TEST_PARAM_REQUIRED");
+    if (!resourceIds.has(params[key])) blocked("UNKNOWN_TEST_RESOURCE");
+  };
+  for (const test of source.tests) {
+    const params = test.params;
+    if (test.type === "network.port_scan" ||
+        test.type === "virtualization.management_exposure") {
+      checkTestResource(params, "from");
+      checkTestResource(params, "to");
+      if (params.protocol !== undefined &&
+          params.protocol !== "tcp" && params.protocol !== "udp")
+        blocked("TEST_PARAM_INVALID");
+      if (test.type === "virtualization.management_exposure") {
+        if (!validPort(params.port)) blocked("TEST_PARAM_REQUIRED");
+      } else if (!validPort(params.port) &&
+          !(Array.isArray(params.ports) && params.ports.length > 0 &&
+            params.ports.every(validPort))) {
+        blocked("TEST_PARAM_REQUIRED");
+      }
+    } else if (["identity.password_audit", "logging.visibility_test",
+      "logging.alert_test", "backup.restore_test"].includes(test.type)) {
+      checkTestResource(params, "target");
+      if (params.path !== undefined &&
+          (typeof params.path !== "string" || !params.path.length))
+        blocked("TEST_PARAM_INVALID");
+      if (params.equals !== undefined && typeof params.equals !== "boolean")
+        blocked("TEST_PARAM_INVALID");
+    }
+  }
+  // A troubleshooting requirement has a local ID namespace within its
+  // objective, not a global canonical resource ID. Check known references
+  // and minimum selector presence before persisting the evidence model.
+  for (const objective of source.troubleshootingObjectives ?? []) {
+    const requirementIds = new Set();
+    for (const requirement of objective.requirements) {
+      if (requirementIds.has(requirement.id))
+        blocked("DUPLICATE_TROUBLESHOOTING_REQUIREMENT_ID");
+      requirementIds.add(requirement.id);
+      if (requirement.kind === "observation") {
+        if (requirement.category === undefined &&
+            requirement.targetId === undefined && requirement.command === undefined)
+          blocked("TROUBLESHOOTING_REQUIREMENT_EMPTY");
+        if (requirement.targetId !== undefined &&
+            !resourceIds.has(requirement.targetId))
+          blocked("UNKNOWN_TROUBLESHOOTING_RESOURCE");
+      } else {
+        if (["category", "sourceId", "destinationId", "protocol", "port",
+          "queryName", "truth"].every(key => requirement[key] === undefined))
+          blocked("TROUBLESHOOTING_REQUIREMENT_EMPTY");
+        for (const key of ["sourceId", "destinationId"]) {
+          if (requirement[key] !== undefined && !resourceIds.has(requirement[key]))
+            blocked("UNKNOWN_TROUBLESHOOTING_RESOURCE");
+        }
+      }
+    }
+  }
   // Evidence and annotations must not silently refer to deleted or renamed
   // canonical objects. The schema enforces ID syntax but not referential
   // integrity; apply the same object sets as Compiler semantic validation.
