@@ -1,0 +1,7 @@
+YadiLab Foundation v0.40.0
+Candidate ZIP independent clean unzip full regression: PASS.
+Candidate ZIP SHA-256: 1007014c028f1290bdb8f52f934434ea8e3d0a5a6726545523c5401597e9117e
+Candidate ZIP CRC, clean artifact set and executable permissions: PASS.
+Candidate browser dependency + non-Parrot gates: BLOCKED / 77 (correct behavior).
+Final ZIP's exact byte result + SHA recorded externally after final readback.
+NOT A PRODUCT VERIFIED RELEASE; real browser and target Parrot checks remain unverified.

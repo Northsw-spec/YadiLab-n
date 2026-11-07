@@ -1,0 +1,15 @@
+import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import {fileURLToPath} from "node:url";
+import {validateVisualLayout} from "../../dist-layout-test/layout/src/index.js";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../.."); const base=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/scenario-normalized.json"),"utf8"));
+let c=0;const has=(d,code,m)=>{assert.ok(d.some(x=>x.code===code),m);c++};
+const makeLayout=(model=base)=>({formatId:"infrastructure-cyber-lab.layout",schemaVersion:"0.1.0",scenarioId:model.scenarioId,engine:"elk.layered",nodes:[...model.zones.map((z,i)=>({id:z.id,x:i*800,y:0,width:720,height:480,...(z.parent?{parent:z.parent}:{})})),...model.resources.map((r,i)=>({id:r.id,x:40+(i%2)*220,y:72+Math.floor(i/2)*130,width:180,height:96,...(r.zone?{parent:r.zone}:{})}))]});
+let layout=makeLayout(); layout=structuredClone(layout); layout.nodes.find(x=>x.id==="mgmt").x=100; has(validateVisualLayout(base,layout),"LAYOUT_NODE_OVERLAP","sibling overlap detected");
+layout=structuredClone(makeLayout()); const rds=layout.nodes.find(x=>x.id==="rds01");rds.x=650;has(validateVisualLayout(base,layout),"LAYOUT_NODE_OUTSIDE_ZONE","child outside zone detected");has(validateVisualLayout(base,layout),"LAYOUT_ZONE_OVERFLOW","zone overflow detected");
+layout=structuredClone(makeLayout());layout.nodes.find(x=>x.id==="rds01").y=32;has(validateVisualLayout(base,layout),"LAYOUT_ZONE_HEADER_OVERLAP","child intruding into zone header detected");
+layout=structuredClone(makeLayout());layout.nodes.find(x=>x.id==="wan").x=-1;has(validateVisualLayout(base,layout),"LAYOUT_NODE_OUTSIDE_CANVAS","negative root coordinate detected");
+layout=makeLayout();has(validateVisualLayout(base,layout,{canvas:{width:1000,height:1000}}),"LAYOUT_NODE_OUTSIDE_CANVAS","explicit canvas overflow detected");
+const longLabel=structuredClone(base);longLabel.resources.find(x=>x.id==="rds01").label="X".repeat(100);has(validateVisualLayout(longLabel,makeLayout(longLabel)),"LAYOUT_LABEL_UNREADABLE","unreadable label detected");
+layout=structuredClone(makeLayout());layout.nodes.find(x=>x.id==="mgmt").x=100000;has(validateVisualLayout(base,layout),"LAYOUT_UNREASONABLE_WHITESPACE","extreme whitespace detected");
+const edges=structuredClone(base);const template=structuredClone(edges.connections.find(x=>x.id==="wan_fw"));edges.connections.push({...structuredClone(template),id:"wan_fw_2"},{...structuredClone(template),id:"wan_fw_3"});has(validateVisualLayout(edges,makeLayout(edges)),"LAYOUT_EDGE_OVERLAP_EXCESSIVE","excessive coincident edges detected");
+const mismatch=structuredClone(makeLayout());mismatch.scenarioId="other";has(validateVisualLayout(base,mismatch),"LAYOUT_VISUAL_SCENARIO_MISMATCH","scenario mismatch detected");
+console.log(`PASS visual validation adversarial suite: ${c} assertions.`);

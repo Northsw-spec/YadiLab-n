@@ -1,0 +1,16 @@
+YadiLab Foundation v0.21.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 21 PASS;
+- Builder Canvas Interactions functional/adversarial suites PASS;
+- multi-select/resize/connect remain projections/commands over canonical model state;
+- no React Flow-only canonical node/edge store introduced;
+- browser dependency readiness remains fail-closed when real dependencies/lock are absent;
+- launcher and acceptance-contract suites remain PASS;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* directories excluded.

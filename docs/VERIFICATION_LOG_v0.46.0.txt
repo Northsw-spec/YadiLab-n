@@ -1,0 +1,12 @@
+YadiLab Foundation v0.46.0 — worktree verification
+source: exact Google Drive YadiLab_Foundation_v0.45.0.zip
+source SHA256: 42c677097698c2b310d1636f52ddf066142fced340db8ea95bf49c85bc2db690
+Phase 46 executable toolchain functional suite: 12 assertions PASS
+Phase 46 executable toolchain adversarial suite: 20 assertions PASS
+Phase 45 sealed transport suite: 42 assertions PASS
+Foundation regression segment 1 through Phase 44 snapshot: PASS; monolithic command hit execution timeout after those PASS results
+Foundation regression deterministic tail (Phase 45 transport -> dependencies/notices/release/launcher/acceptance/Builder): PASS
+Current real toolchain execution gate: 77/BLOCKED because genuine package-lock/node_modules are absent
+Real dependency-resolved browser build: BLOCKED
+Real Parrot OS x86-64 acceptance: BLOCKED
+Final packaged-byte readback recorded after ZIP creation.

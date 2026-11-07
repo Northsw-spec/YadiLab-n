@@ -1,0 +1,53 @@
+YadiLab Foundation v0.68.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.67.0.zip bytes
+Baseline SHA256: be3fdb72c385ce57811dfdb9bc3309850bfb31690ba3fe6c77c5ee048b708bbd
+Baseline source-checkout identity: 970088f9e5d37e6fa2b4218d563f83cedffc52795d233998c30a2e8016c59b8b
+
+Phase 68 — Windows + Linux Fault Packs
+- Added foundation.os.windows@0.1.0 with 10 deterministic faults.
+- Added foundation.os.linux@0.1.0 with 10 deterministic faults.
+- Preserved foundation.network.core@0.2.0 unchanged from the v0.67.0 checkpoint.
+- Fault Injection UI now selects an exact built-in pack before fault selection.
+- Existing preview-token semantics continue to bind exact pack identity/version.
+- Added generic active-overlay target/path overlap rejection so independent packs cannot silently overwrite the same modeled state.
+- Same-path mutations on different resources remain allowed.
+- Independent Windows and Linux faults can coexist in one overlay with two exact pack locks.
+- RDP/SMB/WinRM and SSH/HTTP faults are verified against the existing deterministic Service Engine.
+- No real Windows/Linux command execution, Diagnostic/Observation Engine, probabilistic mutation, AI/ML/LLM logic or multi-fault generator is claimed in this phase.
+
+Focused Phase 68 verification before whole-Foundation regression
+- Fault Pack schemas: network + Windows + Linux built-in packs PASS.
+- Existing Fault Engine functional: 25 assertions PASS.
+- Existing Fault Engine adversarial: 18 assertions PASS.
+- Phase 67 Wave-1 functional: 318 assertions PASS.
+- Phase 67 Wave-1 adversarial: 10 assertions PASS.
+- Windows + Linux Fault Packs functional: 228 assertions PASS.
+- Windows + Linux Fault Packs adversarial: 7/7 PASS.
+- Fault Injection UI functional: 15/15 PASS.
+- Fault Injection UI adversarial: 15/15 PASS.
+- Draft 2020-12 schema suite: 42/42 fixture expectations PASS; 15/15 schemas meta-valid.
+
+Whole-Foundation regression
+- Exact test:foundation chain contains 157 deterministic commands after Phase 68 adds two permanent OS-pack commands.
+- Commands 0–133: explicit exit 0.
+- Command 134 (offline dependency snapshot transport): 44/44 assertions PASS, explicit exit 0.
+- Commands 135–144: explicit exit 0.
+- Command 145 (launcher smoke): explicit exit 0.
+- Command 146 (acceptance contract): explicit exit 0.
+- Commands 147–156: explicit exit 0.
+- Automated command log contains one explicit EXIT 0 for every command ID 0–156: 157/157 PASS.
+- No timeout occurrence is interpreted as PASS.
+
+External gates remain fail-closed and are not inferred from Foundation tests:
+- signed dependency snapshot production without an external operator private key;
+- genuine npm dependency resolution/install and executable browser toolchain;
+- dependency-resolved React browser release;
+- actual server-stopped React/Chromium offline acceptance;
+- Parrot OS x86-64 acceptance.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+
+Final archive SHA-256, exact source-checkout identity, reproducible ZIP comparison, ZIP byte/mode readback and Google Drive raw-byte readback belong in the external v0.68.0 verification report because embedding the final artifact/source hashes in identity-covered source would be self-referential.

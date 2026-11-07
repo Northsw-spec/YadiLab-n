@@ -1,0 +1,94 @@
+{
+  "formatId": "infrastructure-cyber-lab.save",
+  "schemaVersion": "0.1.0",
+  "scenarioHash": "8e5eace8fb97dd06f16909c8289038713c66ebaa6c5fa114ce72317d2154f4c5",
+  "engineVersion": "0.8.0",
+  "stateRevision": 1,
+  "clock": {
+    "mode": "virtual",
+    "tick": 1
+  },
+  "resourceState": {
+    "attacker": {
+      "id": "attacker",
+      "type": "actor.attacker",
+      "label": "External attacker",
+      "zone": "wan",
+      "interfaces": [],
+      "properties": {},
+      "asset": {
+        "id": "actor.attacker",
+        "version": "1.0.0"
+      }
+    },
+    "firewall01": {
+      "id": "firewall01",
+      "type": "network.firewall",
+      "label": "Firewall",
+      "zone": "dmz",
+      "interfaces": [],
+      "properties": {
+        "rules": [
+          {
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "port": 3389,
+            "action": "deny"
+          }
+        ]
+      },
+      "asset": {
+        "id": "network.firewall",
+        "version": "1.0.0"
+      }
+    },
+    "rds01": {
+      "id": "rds01",
+      "type": "windows.rds_host",
+      "label": "RDS01",
+      "zone": "server",
+      "interfaces": [],
+      "properties": {
+        "rdp": {
+          "enabled": true,
+          "port": 3389
+        },
+        "nla": false
+      },
+      "asset": {
+        "id": "windows.rds_host",
+        "version": "1.0.0"
+      }
+    },
+    "admin01": {
+      "id": "admin01",
+      "type": "windows.workstation",
+      "label": "Admin workstation",
+      "zone": "mgmt",
+      "interfaces": [],
+      "properties": {},
+      "asset": {
+        "id": "endpoint.windows",
+        "version": "1.0.0"
+      }
+    }
+  },
+  "completedObjectives": [
+    "block_direct_rdp"
+  ],
+  "evidence": [
+    {
+      "sequence": 1,
+      "testId": "direct_rdp",
+      "outcome": "FALSE",
+      "summary": "direct_rdp: FALSE"
+    },
+    {
+      "sequence": 2,
+      "testId": "admin_rdp",
+      "outcome": "TRUE",
+      "summary": "admin_rdp: TRUE"
+    }
+  ]
+}

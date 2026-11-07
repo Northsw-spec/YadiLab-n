@@ -1,0 +1,9 @@
+{
+  "displayName": "YadiLab",
+  "shortName": "YadiLab",
+  "tagline": "Visual Infrastructure & Cybersecurity Lab",
+  "scenarioExtension": ".yadilab",
+  "progressExtension": ".yadiprogress",
+  "notebookExtension": ".yadinotebook",
+  "sessionExtension": ".yadisession"
+}

@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-import-report:0.1.0",
+  "title": "Enterprise Import Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "status",
+    "adapter",
+    "source",
+    "mapping",
+    "stats",
+    "diagnostics",
+    "unmappedFields",
+    "conflicts"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.enterprise-import-report"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "BLOCKED"
+      ]
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "mediaType",
+        "sha256",
+        "byteSize"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "pattern": "^src_[0-9a-f]{64}$"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "baselineIdentity": {
+      "$ref": "#/$defs/sha256"
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tables",
+        "records",
+        "entities",
+        "facts",
+        "unknownFacts",
+        "invalidFacts"
+      ],
+      "properties": {
+        "tables": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entities": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "facts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknownFacts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalidFacts": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "unmappedFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "table",
+          "field",
+          "occurrences"
+        ],
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "occurrences": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conflictId",
+          "code",
+          "message",
+          "refs"
+        ],
+        "properties": {
+          "conflictId": {
+            "$ref": "#/$defs/id"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "table": {
+          "type": "string",
+          "minLength": 1
+        },
+        "row": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mappingId": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    }
+  }
+}

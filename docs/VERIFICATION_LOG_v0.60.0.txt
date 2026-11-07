@@ -1,0 +1,51 @@
+YadiLab Foundation v0.60.0 — source verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED
+Baseline: exact YadiLab_Foundation_v0.59.0.zip
+Baseline SHA256: e9d6405ba8d57513563405a0f2f9f92abe4aeb8dea6d7e133d749c68b172e0af
+
+Phase 60 — safe XLSX + ODS enterprise import
+- EnterpriseImportAdapter parse contract now permits asynchronous archive-backed adapters.
+- Built-in XLSX media type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.
+- Built-in ODS media type: application/vnd.oasis.opendocument.spreadsheet.
+- Production workbook archive backend uses the pinned zip.js PackageIO archive boundary; current sandbox does not contain the dependency bytes and does not claim production zip.js execution.
+- Tests inject an independent Node-only ZIP reader over actual workbook ZIP bytes.
+- Workbook archive limits enforce path safety, duplicate rejection, bounded file count/sizes and compression ratio.
+- Constrained XML parser rejects DTD/ENTITY, custom entities, non-XML processing instructions, malformed duplicate attributes, excess depth and excess node count; it performs no remote resolution.
+- XLSX: multi-sheet names/relationships, shared/inline strings, scalar values and physical sheet/row/column provenance.
+- XLSX: VBA/ActiveX/OLE parts rejected; external workbook/data relationships rejected; ordinary external hyperlinks are not followed.
+- ODS: multi-sheet content/manifest parsing, scalar values, bounded row/column repeats and physical provenance.
+- ODS: Basic/Scripts active content and encrypted members rejected; external data sources rejected; ordinary hyperlinks are ignored with warning and never fetched.
+- Formulas are never evaluated. Cached formula values may be used only with IMPORT_WORKBOOK_CACHED_FORMULA_VALUE warning; formula without cache is treated as missing with warning.
+- Global headerRow and per-sheet headerRows options are deterministic and validated.
+- Official offline XLSX/ODS examples + matching mapping profile use the same normal import pipeline, with no special template parser.
+
+Focused verification before full regression
+- Draft 2020-12 schema suite: 26/26 fixture expectations PASS; 9/9 schemas meta-valid.
+- Enterprise Model: 10/10 functional + 13/13 adversarial PASS.
+- Enterprise Import including XLSX/ODS: 30/30 functional + 28/28 adversarial PASS.
+- PackageIO regression: 25 functional + 59 adversarial PASS.
+- Branding guard: PASS after genericizing new diagnostic strings.
+- Generated TypeScript contract reproducibility: PASS.
+
+Whole Foundation regression before documentation freeze
+- Exact test:foundation chain: 137 deterministic commands.
+- Commands 0-60: PASS.
+- Commands 61-110: PASS.
+- Commands 111-125: PASS before execution-harness timeout while command 126 was running.
+- Command 126 was not counted from the timed-out attempt.
+- Commands 126-136: PASS in deterministic fail-fast rerun.
+- Therefore first full coverage: 137/137 PASS.
+
+External promotion gates before documentation freeze
+- Snapshot producer without provisioned external signing key: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED; genuine npm package-lock/dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved browser build: 77/BLOCKED.
+- Parrot OS x86-64 acceptance: 77/BLOCKED; current host Debian 13.
+
+Final frozen-source verification
+- After this log is written, no source/checkpoint file is changed before final regression and packaging.
+- Final exact source tree is required to pass all 137 commands in explicit successful segments; no timeout/interrupted command may be counted without a successful rerun.
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT candidate until deterministic archive/readback and Google Drive byte readback complete.

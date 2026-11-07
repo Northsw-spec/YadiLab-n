@@ -1,0 +1,54 @@
+
+> visual-infrastructure-lab-app@0.21.0 check:browser-readiness
+> node scripts/check_browser_build_readiness.mjs
+
+{
+  "ready": false,
+  "blockers": [
+    {
+      "code": "PACKAGE_LOCK_MISSING",
+      "message": "package-lock.json is required before a dependency-resolved browser build can be certified."
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "@xyflow/react",
+      "expected": "12.11.6"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "@zip.js/zip.js",
+      "expected": "2.18.2"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "ajv",
+      "expected": "8.17.1"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "elkjs",
+      "expected": "0.12.0"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "esbuild",
+      "expected": "0.28.2"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "react",
+      "expected": "19.3.0"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "react-dom",
+      "expected": "19.3.0"
+    },
+    {
+      "code": "DEPENDENCY_NOT_INSTALLED",
+      "package": "typescript",
+      "expected": "5.9.2"
+    }
+  ],
+  "installed": []
+}

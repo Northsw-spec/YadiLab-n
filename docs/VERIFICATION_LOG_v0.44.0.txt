@@ -1,0 +1,16 @@
+YadiLab Foundation v0.44.0 — checkpoint verification
+Authority: YadiLab Masterprompt v1.2 VERIFIED / LOCKED
+Input: exact YadiLab_Foundation_v0.43.0.zip, SHA256 244903a1be08ea66a7a51887a606eca94e77f1157658792ba51240100f25a975
+Phase: 44 — fail-closed offline dependency snapshot attestation and resume handoff
+Dependency/browser-build gate: 31 assertions PASS
+Dependency/browser-build adversarial: 34 assertions PASS
+Offline dependency snapshot suite: 28 assertions PASS
+Phase 43 browser-workflow independent ZIP selftest: 5 fixture scenarios PASS
+Phase 43 acceptance workflow fail-closed/static contract: 27 assertions PASS
+Worktree whole Foundation regression through Phase 44: PASS exit 0
+Current npm cache: empty (0 content / 0 index entries)
+Current dependency-resolved browser build: BLOCKED exit 77 (project package-lock and installed exact dependencies absent)
+Current ready browser release: BLOCKED exit 77 (ui/dist absent)
+Current Parrot target acceptance: BLOCKED exit 77 (host Debian 13, not Parrot)
+Actual dependency-resolved React/React Flow/ELK/Ajv/zip.js Chromium workflow: NOT VERIFIED in this environment.
+Classification: VERIFIED DEVELOPMENT CHECKPOINT; never infer VERIFIED PRODUCT RELEASE from this record.

@@ -1,0 +1,51 @@
+YadiLab Foundation v0.59.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED
+Baseline: exact YadiLab_Foundation_v0.58.0.zip
+Baseline SHA-256: 85d741b55645e1e43a6ac2e4544cae1edbf947b6cc0446922d5c860cd1dbe72f
+
+Phase 59 — Enterprise Import Adapter Framework
+- Enterprise baseline schema upgraded compatibly to 0.2.0 with entity provenance refs and per-provenance mapping metadata.
+- New Draft 2020-12 mapping-profile and import-report schemas.
+- Trusted/versioned adapter interface.
+- Built-in dependency-free JSON, CSV and TSV adapters.
+- Exact raw-source SHA-256 and content-addressed source IDs.
+- Canonical mapping-profile SHA-256.
+- Mapping classes: EXACT, ALIAS, USER_MAPPED.
+- Per-value provenance includes source locator, raw-value hash, mapping ID and mapping class.
+- Required structural fields block; optional missing values may remain explicit UNKNOWN.
+- Deterministic conversion failures become INVALID rather than guessed values.
+- Duplicate entity IDs surface an explicit import conflict; no silent merge.
+- Unmapped fields are reported transparently.
+- Replaying identical source/mapping/options produces the same baseline identity.
+- CSV/TSV/JSON normalize to the same semantic entity/fact values for equivalent source data.
+
+Focused verification on frozen source
+- Draft 2020-12 meta-validation: 9/9 schemas PASS.
+- Schema fixture expectations: 26/26 PASS.
+- Enterprise Model functional: 10/10 PASS.
+- Enterprise Model adversarial: 13/13 PASS.
+- Enterprise Import functional: 18/18 PASS.
+- Enterprise Import adversarial: 17/17 PASS.
+- Type generation reproducibility: PASS.
+- Branding guard: PASS.
+
+Whole Foundation regression on final frozen source
+- Exact test:foundation chain: 137 deterministic commands.
+- Final requirement: 137/137 explicit PASS using segmented fail-fast execution; a harness timeout may not count as PASS without a successful rerun.
+- Precise successful-log FAIL/AssertionError/Traceback scan required PASS.
+
+External gates
+- Snapshot producer without externally provisioned signing key: expected 77/BLOCKED.
+- Dependency readiness without genuine package-lock/node_modules closure: expected 77/BLOCKED.
+- Executable browser toolchain: expected 77/BLOCKED.
+- Dependency-resolved browser build: expected 77/BLOCKED.
+- Parrot OS x86-64 acceptance on current Debian 13 host: expected 77/BLOCKED.
+
+Release delta vs exact v0.58.0 after transient cleanup
+- 24 added files.
+- 14 intentionally changed files.
+- 0 removed files.
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+No XLSX/ODS/GraphML/Nmap XML adapter, real operator trust anchor, genuine signed npm snapshot, dependency-resolved browser workflow, real offline React reload, or Parrot acceptance is claimed as PASS.

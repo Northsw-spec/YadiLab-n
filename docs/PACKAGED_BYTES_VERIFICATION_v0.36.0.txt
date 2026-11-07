@@ -1,0 +1,12 @@
+YadiLab v0.36.0 — packaged-byte verification
+Baseline: exact-byte v0.35.0 source ZIP SHA-256 b78336e45eecaf34bc25b8e06b7512e2ad0f111337d68bce8fdaef259d06348f
+
+Candidate ZIP: deterministic 415-file archive; no dist-*/node_modules; correct Unix executable metadata; ZIP CRC PASS.
+Candidate extracted with system unzip (preserves Unix file modes).
+Candidate extracted `npm run test:foundation`: PASS / exit 0.
+Candidate regression log SHA-256: b73ffdad31cbc8e385bf5a13706ad16e1f0d59fb834b17f13b85de3404dc7429
+Candidate browser readiness: BLOCKED/77, dependencies unavailable.
+Candidate real Parrot acceptance: BLOCKED/77, Debian host.
+
+Package status: PASS (candidate). Final ZIP exact-byte readback is independently retested before storage.
+Target release label: VERIFIED DEVELOPMENT CHECKPOINT, not VERIFIED RELEASE.

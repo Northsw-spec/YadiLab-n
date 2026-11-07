@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yadilab.local/schema/yadilab-network-workbook.schema.json",
+  "title": "Network Workbook Schema v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requiredSheets", "optionalSheets"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "requiredSheets": { "const": ["Metadata", "Nodes"] },
+    "optionalSheets": { "type": "array", "items": { "type": "string", "enum": ["Zones", "Interfaces", "Links", "Routes", "VLANs", "STP", "Services", "Firewall", "NAT", "Flows", "Layout"] } }
+  }
+}

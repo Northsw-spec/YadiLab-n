@@ -1,0 +1,9 @@
+YadiLab Foundation v0.42.0 — worktree verification
+source: exact extracted YadiLab_Foundation_v0.41.0.zip
+source SHA256: b0edbead7a640a593347d001bcd0d22ca50abd01a795b2c93cd2a85fa9a042cd
+Phase 42 new verifier: 30 assertions PASS
+Launcher distribution smoke (updated staged promoter): PASS
+Foundation v0.1-v0.42 full regression: PASS (exit 0)
+Final packaged-byte readback recorded separately after ZIP creation.
+Real dependency-resolved browser build: blocked (missing npm registry/cache).
+Real Parrot OS x86-64 target acceptance: blocked (host Debian).

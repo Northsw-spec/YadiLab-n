@@ -1,0 +1,95 @@
+
+> visual-infrastructure-lab-app@0.34.0 test:foundation
+> python3 tests/run_schema_checks.py && node scripts/check-branding.mjs && rm -rf dist-compiler-test && tsc -p tests/tsconfig.compiler.json && node tests/compiler/run_compiler_tests.mjs && node tests/compiler/run_compiler_adversarial.mjs && python3 tests/validate_compiler_outputs.py && rm -rf dist-versioning-test && tsc -p tests/tsconfig.versioning.json && node tests/versioning/run_versioning_tests.mjs && node tests/versioning/run_versioning_adversarial.mjs && rm -rf dist-renderer-test && tsc -p tests/tsconfig.renderer.json && node tests/renderer/run_renderer_tests.mjs && node tests/renderer/run_renderer_adversarial.mjs && rm -rf dist-capabilitypacks-test && tsc -p tests/tsconfig.capabilitypacks.json && node tests/capability-packs/run_capability_pack_tests.mjs && node tests/capability-packs/run_capability_pack_adversarial.mjs && rm -rf dist-assetlibrary-test && tsc -p tests/tsconfig.assetlibrary.json && node tests/assets/run_asset_library_tests.mjs && node tests/assets/run_asset_library_adversarial.mjs && rm -rf dist-engine-test && tsc -p tests/tsconfig.engine.json && node tests/engine/run_engine_tests.mjs && node tests/engine/run_engine_adversarial.mjs && node tests/regression/run_regression_tests.mjs && node tests/regression/run_regression_adversarial.mjs && rm -rf dist-packageio-test && tsc -p tests/tsconfig.packageio.json && node tests/package-io/run_package_io_tests.mjs && node tests/package-io/run_package_io_adversarial.mjs && rm -rf dist-cli-test && tsc -p tests/tsconfig.cli.json && node tests/cli/run_cli_tests.mjs && node tests/cli/run_cli_adversarial.mjs && rm -rf dist-canvas-test && tsc -p tests/tsconfig.canvas.json && node tests/canvas/run_canvas_tests.mjs && node tests/canvas/run_canvas_adversarial.mjs && rm -rf dist-layout-test && tsc -p tests/tsconfig.layout.json && node tests/layout/run_layout_tests.mjs && node tests/layout/run_layout_adversarial.mjs && node tests/layout/run_visual_validation_tests.mjs && node tests/layout/run_visual_validation_adversarial.mjs && rm -rf dist-certification-test && tsc -p tests/tsconfig.certification.json && node tests/certification/run_certification_tests.mjs && node tests/certification/run_certification_adversarial.mjs && rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_browser_tests.mjs && node tests/browser/run_browser_adversarial.mjs && node tests/browser/run_package_session_tests.mjs && node tests/browser/run_package_session_adversarial.mjs && node tests/browser/run_package_export_tests.mjs && node tests/browser/run_package_export_adversarial.mjs && node tests/browser/run_runtime_history_tests.mjs && node tests/browser/run_runtime_history_adversarial.mjs && node tests/browser/run_runtime_explainability_tests.mjs && node tests/browser/run_runtime_explainability_adversarial.mjs && node scripts/generate_pwa_manifest.mjs && rm -rf dist-persistence-test && tsc -p tests/tsconfig.persistence.json && node tests/persistence/run_persistence_tests.mjs && node tests/persistence/run_persistence_adversarial.mjs && node tests/persistence/run_progress_session_tests.mjs && node tests/persistence/run_progress_session_adversarial.mjs && node tests/persistence/run_pwa_checks.mjs && python3 tests/validate_persistence_outputs.py && node tests/dependencies/run_dependency_tests.mjs && node tests/dependencies/run_dependency_adversarial.mjs && node scripts/generate_third_party_notices.mjs && node tests/dependencies/run_notice_tests.mjs && node tests/dependencies/run_notice_adversarial.mjs && node scripts/generate_web_shell.mjs && go test ./launcher/... && bash tests/launcher/run_launcher_smoke.sh && bash tests/acceptance/run_acceptance_contract_tests.sh && node tests/browser/run_builder_inspector_tests.mjs && node tests/browser/run_builder_inspector_adversarial.mjs && node tests/browser/run_builder_authoring_tests.mjs && node tests/browser/run_builder_authoring_adversarial.mjs && node tests/browser/run_builder_interactions_tests.mjs && node tests/browser/run_builder_interactions_adversarial.mjs && node tests/browser/run_builder_notes_tests.mjs && node tests/browser/run_builder_notes_adversarial.mjs && node tests/browser/run_builder_assets_tests.mjs && node tests/browser/run_builder_assets_adversarial.mjs
+
+PASS meta-schema: scenario-source.schema.json
+PASS meta-schema: scenario-normalized.schema.json
+PASS meta-schema: layout.schema.json
+PASS meta-schema: package-manifest.schema.json
+PASS meta-schema: save-state.schema.json
+PASS meta-schema: catalog.schema.json
+PASS catalog/builtin-catalog.json
+PASS valid/scenario-source.json: expected=valid actual=valid
+PASS valid/scenario-source-profile.json: expected=valid actual=valid
+PASS valid/scenario-source-notes.json: expected=valid actual=valid
+PASS valid/scenario-normalized.json: expected=valid actual=valid
+PASS valid/scenario-normalized-notes.json: expected=valid actual=valid
+PASS valid/layout.json: expected=valid actual=valid
+PASS valid/package-manifest.json: expected=valid actual=valid
+PASS valid/save-state.json: expected=valid actual=valid
+PASS invalid/source-unknown-field.json: expected=invalid actual=invalid
+PASS invalid/source-bad-id.json: expected=invalid actual=invalid
+PASS invalid/source-note-empty.json: expected=invalid actual=invalid
+PASS invalid/manifest-traversal.json: expected=invalid actual=invalid
+PASS invalid/save-bad-truth.json: expected=invalid actual=invalid
+PASS invalid/compiler-missing-capability.json: expected=valid actual=valid
+PASS invalid/compiler-unknown-resource.json: expected=valid actual=valid
+PASS invalid/compiler-profile-mismatch.json: expected=valid actual=valid
+PASS invalid/compiler-version-unavailable.json: expected=valid actual=valid
+PASS invalid/compiler-zone-cycle.json: expected=valid actual=valid
+PASS invalid/compiler-duplicate-global-id.json: expected=valid actual=valid
+PASS schema suite: 19/19 fixture expectations met; 6/6 schemas pass Draft 2020-12 meta-validation.
+PASS branding guard: no hardcoded display brand in protected source paths.
+PASS compiler suite: 61 assertions; generated outputs written for independent schema validation.
+PASS compiler adversarial suite: 40 assertions.
+PASS compiled-foundation.json: normalized schema valid
+PASS compiled-profile.json: normalized schema valid
+PASS compiler output schema validation: 2/2
+PASS versioning/migration suite: 15 assertions.
+PASS versioning/migration adversarial suite: 12 assertions.
+PASS headless renderer suite: 12 assertions.
+PASS headless renderer adversarial suite: 6 assertions.
+PASS capability-pack registry suite: 25 assertions.
+PASS capability-pack registry adversarial suite: 11 assertions.
+PASS asset library suite: 112 assertions.
+PASS asset library adversarial suite: 12 assertions.
+PASS engine suite: 99 assertions.
+PASS engine adversarial suite: 50 assertions.
+PASS regression suite: 24 assertions.
+PASS regression adversarial suite: 22 assertions.
+PASS PackageIO suite: 25 assertions.
+PASS PackageIO adversarial suite: 59 assertions.
+PASS CLI suite: 68 assertions.
+PASS CLI adversarial suite: 22 assertions.
+PASS canvas projection suite: 19 assertions.
+PASS canvas projection adversarial suite: 10 assertions.
+PASS layout suite: 16 assertions.
+PASS layout adversarial suite: 14 assertions.
+PASS visual validation suite: 3 assertions.
+PASS visual validation adversarial suite: 9 assertions.
+PASS scenario certification suite: 11 assertions.
+PASS scenario certification adversarial suite: 8 assertions.
+PASS browser foundation suite: 102 assertions.
+PASS browser adversarial suite: 44 assertions.
+PASS browser package-session suite: 20 assertions.
+PASS browser package-session adversarial suite: 20 assertions.
+PASS browser package-export suite: 20 assertions.
+PASS browser package-export adversarial suite: 20 assertions.
+PASS runtime history suite: 59 assertions.
+PASS runtime history adversarial suite: 28 assertions.
+PASS runtime explainability suite: 37 assertions.
+PASS runtime explainability adversarial suite: 10 assertions.
+PASS persistence suite: 34 assertions.
+PASS persistence adversarial suite: 23 assertions.
+PASS progress-session suite: 36 assertions.
+PASS progress-session adversarial suite: 28 assertions.
+PASS PWA static contract: 15 assertions.
+PASS runtime-save.json: save-state schema valid
+PASS dependency/browser-build gate suite: 24 assertions.
+PASS dependency/browser-build adversarial suite: 13 assertions.
+PASS third-party notices baseline: 8 direct dependencies inventoried deterministically.
+PASS third-party notices/inventory suite: 19 assertions.
+PASS third-party notices/inventory adversarial suite: 8 assertions.
+ok  	app.local/foundation/launcher	(cached)
+PASS launcher smoke: loopback-only distribution + trusted built-in assets + path/security + static ELF.
+PASS acceptance contract: fail-closed Parrot target gate + browser probe assets.
+PASS builder inspector suite: 37 assertions.
+PASS builder inspector adversarial suite: 24 assertions.
+PASS builder authoring suite: 29 assertions.
+PASS builder authoring adversarial suite: 17 assertions.
+PASS builder interactions suite: 31 assertions.
+PASS builder interactions adversarial suite: 33 assertions.
+PASS builder notes suite: 9 assertions.
+PASS builder notes adversarial suite: 10 assertions.
+PASS Builder Asset Library suite: 11 assertions.
+PASS Builder Asset Library adversarial suite: 9 assertions.

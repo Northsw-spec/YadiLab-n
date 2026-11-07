@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<NessusClientData_v2>
+  <Report name="not-nmap"><ReportHost name="192.0.2.10"/></Report>
+</NessusClientData_v2>

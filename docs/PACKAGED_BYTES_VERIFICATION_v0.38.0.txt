@@ -1,0 +1,8 @@
+YadiLab Foundation v0.38.0 — packaged-byte verification
+Exact baseline v0.37.0 ZIP SHA-256: ea3fa237ca26f13e9e3fb0a657ff2d9c01a3725d8d9ca131e8ac1a31f10775af
+Candidate packaged-byte readback: PASS (full Foundation regression from clean system-unzip; SHA-256 log 124633b106a03e7b39b01718739b1aff244ccaf59f8edbfb9d273b031da24a7c)
+Final packaged-byte readback: PASS (requires independent readback of exact final ZIP; separately verified at delivery)
+Executable permissions, ZIP structure, no test transients and no superseded Masterprompt references: PASS
+Browser dependency gate expected: BLOCKED/77
+Parrot target gate expected: BLOCKED/77
+Development checkpoint only; NOT VERIFIED RELEASE.

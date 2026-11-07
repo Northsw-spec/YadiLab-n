@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-mapping-review:0.1.0",
+  "title": "Enterprise Import Mapping Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "status",
+    "adapter",
+    "source",
+    "mapping",
+    "availableTables",
+    "tables",
+    "diagnostics"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.enterprise-mapping-review"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "adapter": {
+      "$ref": "#/$defs/adapter"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "mapping": {
+      "$ref": "#/$defs/mapping"
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tableReview"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "availableTables": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "mappingClass": {
+      "type": "string",
+      "enum": [
+        "EXACT",
+        "ALIAS",
+        "USER_MAPPED"
+      ]
+    },
+    "mappingStatus": {
+      "type": "string",
+      "enum": [
+        "RESOLVED",
+        "MISSING",
+        "AMBIGUOUS"
+      ]
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "mediaType",
+        "sha256",
+        "byteSize"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "pattern": "^src_[0-9a-f]{64}$"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "availableField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "occurrences"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurrences": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "class"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "class": {
+          "$ref": "#/$defs/mappingClass"
+        }
+      }
+    },
+    "mappingReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mappingId",
+        "role",
+        "required",
+        "status",
+        "candidates"
+      ],
+      "properties": {
+        "mappingId": {
+          "$ref": "#/$defs/id"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "entity.id",
+            "entity.label",
+            "fact"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/mappingStatus"
+        },
+        "selectedField": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selectedClass": {
+          "$ref": "#/$defs/mappingClass"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/candidate"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "RESOLVED"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "selectedField",
+              "selectedClass"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "MISSING",
+                  "AMBIGUOUS"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "selectedField"
+                  ]
+                },
+                {
+                  "required": [
+                    "selectedClass"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "tableReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableId",
+        "sourceTable",
+        "sourceTablePresent",
+        "availableFields",
+        "mappings"
+      ],
+      "properties": {
+        "tableId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceTable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "availableFields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/availableField"
+          }
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappingReview"
+          }
+        },
+        "sourceTablePresent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "table": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mappingId": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    }
+  }
+}

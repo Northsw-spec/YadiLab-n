@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { createTroubleshootingCase } from "../../dist-browser-test/ui/src/browser/troubleshooting-case.js";
+import { createExperimentBranch, replaceExperimentWorkingSource, verifyExperimentBranch, importExperimentBranch } from "../../dist-browser-test/ui/src/browser/experiment-branch.js";
+
+const source = JSON.parse(await fs.readFile("tests/fixtures/valid/scenario-source.json", "utf8"));
+const parent = await createTroubleshootingCase({ source, title: "Adversarial parent" });
+let branch = await createExperimentBranch({ source, title: "Adversarial" });
+await assert.rejects(() => replaceExperimentWorkingSource(branch, { ...source, scenarioId: "other-scenario" }), /SCENARIO_MISMATCH/);
+const wrongAncestor = { ...branch, ancestorSourceIdentity: "0".repeat(64) };
+assert.equal((await verifyExperimentBranch(wrongAncestor)).ok, false);
+const wrongWorking = { ...branch, workingSourceIdentity: "0".repeat(64) };
+assert.equal((await verifyExperimentBranch(wrongWorking)).ok, false);
+const duplicate = { ...branch, experimentId: branch.experimentId, branchIdentity: branch.branchIdentity };
+assert.equal((await verifyExperimentBranch(duplicate)).ok, true);
+assert.equal((await importExperimentBranch("{}\n")).ok, false);
+assert.equal((await importExperimentBranch("not-json")).ok, false);
+branch = await replaceExperimentWorkingSource(branch, { ...branch.workingSource, metadata: { ...branch.workingSource.metadata, title: "safe text <script>" } });
+assert.equal(branch.workingSource.metadata.title, "safe text <script>");
+assert.equal(parent.workingSource.metadata.title, source.metadata.title);
+console.log("PASS v1.6 Dev1 adversarial: scenario mismatch, ancestor/working tamper, malformed import, identity safety, text-only metadata");

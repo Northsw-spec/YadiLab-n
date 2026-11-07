@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<!DOCTYPE nmaprun [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<nmaprun scanner="nmap" start="1761660201" version="7.94" xmloutputversion="1.05">
+  <host><status state="up"/><address addr="192.0.2.13" addrtype="ipv4"/><hostnames><hostname name="&xxe;" type="user"/></hostnames></host>
+</nmaprun>

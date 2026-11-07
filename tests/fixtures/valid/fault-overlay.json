@@ -1,0 +1,53 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-overlay",
+  "schemaVersion": "0.1.0",
+  "overlayId": "fault_overlay",
+  "scenarioId": "fault_lab",
+  "scenarioHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "mode": "RUNTIME_INJECTION",
+  "packLocks": [
+    {
+      "packId": "foundation.network.core",
+      "version": "0.1.0",
+      "packIdentity": "2f87ea5ff35822fc99f9d181ee82429c453fef26870e102bee354c5b2a38429d"
+    }
+  ],
+  "instances": [
+    {
+      "instanceId": "fault_0001",
+      "packId": "foundation.network.core",
+      "packVersion": "0.1.0",
+      "packIdentity": "2f87ea5ff35822fc99f9d181ee82429c453fef26870e102bee354c5b2a38429d",
+      "faultId": "routing.remove_default_gateway",
+      "faultVersion": "0.1.0",
+      "seed": 7,
+      "bindings": {
+        "target": "client1"
+      },
+      "operations": [
+        {
+          "op": "remove",
+          "target": "client1",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "inverseOperations": [
+        {
+          "op": "set",
+          "target": "client1",
+          "path": "properties.defaultGateway",
+          "value": "10.0.0.1"
+        }
+      ],
+      "beforeStateRevision": 0,
+      "afterStateRevision": 1,
+      "expectedEffectsVerified": true,
+      "negativeControlsVerified": true,
+      "changedResources": [
+        "client1"
+      ],
+      "applicationHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "overlayIdentity": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

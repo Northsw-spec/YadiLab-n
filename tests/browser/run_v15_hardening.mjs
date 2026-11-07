@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { createTroubleshootingCase, addTroubleshootingCaseNote, addTroubleshootingBookmark, attachCaseRun, resetTroubleshootingCase, replaceTroubleshootingCaseWorkingSource, exportTroubleshootingCase, verifyTroubleshootingCase } from "../../dist-browser-test/ui/src/browser/troubleshooting-case.js";
+import { compareSelectedRuns } from "../../dist-browser-test/ui/src/browser/multi-run.js";
+import { createSavedDiagnosticSession, exportSavedDiagnosticSession, importSavedDiagnosticSession } from "../../dist-browser-test/ui/src/browser/diagnostic-session.js";
+import { createReproductionRecipe, reproduceWithEngine } from "../../dist-browser-test/ui/src/browser/reproduction-recipe.js";
+const source = JSON.parse(await fs.readFile("tests/fixtures/valid/scenario-source.json", "utf8"));
+const evidence = (revision, outcome = "DROP") => ({ scenarioHash: "h".repeat(64), runtimeRevision: revision, flowId: "flow-1", outcome: { kind: outcome }, records: [{ eventId: `event-${revision}`, sequence: 1, runtimeRevision: revision, scenarioHash: "h".repeat(64), flowId: "flow-1", domain: "Outcome", eventType: "flow.outcome", sourceResourceId: "r1", truth: outcome, summary: outcome, provenance: "Engine", evidenceRefs: [] }] });
+const first = await createTroubleshootingCase({ source, title: "Collision" });
+const second = await createTroubleshootingCase({ source, title: "Collision" });
+assert.notEqual(first.caseId, second.caseId);
+assert.equal(first.caseIdentity, second.caseIdentity);
+let value = first;
+const baselineSource = JSON.stringify(value.startingSource);
+value = await addTroubleshootingCaseNote(value, "<script>throw new Error('x')</script>\nUnicode å & quotes \"", true);
+value = await addTroubleshootingBookmark(value, "EVIDENCE", "gone");
+for (let i = 1; i <= 100; i += 1) value = await attachCaseRun(value, evidence(i, i % 2 ? "DROP" : "SUCCESS"), i);
+assert.equal(value.runs.length, 100);
+const map = new Map(value.runs.map((run) => [run.runId, evidence(run.runtimeRevision, run.outcome)]));
+const runs = value.runs.map((run) => ({ run, evidence: map.get(run.runId) }));
+assert.equal(compareSelectedRuns(runs).rows.length, 100);
+for (let cycle = 0; cycle < 5; cycle += 1) { value = await replaceTroubleshootingCaseWorkingSource(value, { ...value.startingSource, metadata: { ...value.startingSource.metadata, title: `edit-${cycle}` } }); value = await resetTroubleshootingCase(value); assert.equal(JSON.stringify(value.workingSource), baselineSource); }
+let session = await createSavedDiagnosticSession({ sessionId: value.caseId, case: value, runs: runs.slice(0, 10) });
+for (let i = 0; i < 3; i += 1) { const imported = await importSavedDiagnosticSession(exportSavedDiagnosticSession(session)); assert.equal(imported.ok, true); session = imported.session; }
+const tamperedRun = JSON.parse(exportSavedDiagnosticSession(session)); tamperedRun.runs[0].run.outcome = "SUCCESS"; assert.equal((await importSavedDiagnosticSession(JSON.stringify(tamperedRun))).ok, false);
+const tamperedNote = JSON.parse(exportTroubleshootingCase(value)); tamperedNote.notes[0].text = "changed"; assert.equal((await verifyTroubleshootingCase(tamperedNote)).ok, false);
+const recipe = await createReproductionRecipe(value, "flow-1", 0, { runId: value.runs[0].runId, outcome: value.runs[0].outcome });
+const archivedTampered = { ...recipe, originalOutcome: "SUCCESS" };
+const reproduced = await reproduceWithEngine(archivedTampered, async () => evidence(777, "DROP"));
+assert.equal(reproduced.reproducedOutcome, "DROP");
+assert.equal(reproduced.status, "DIFFERENT OUTCOME");
+const payload = exportSavedDiagnosticSession(session);
+assert.ok(payload.length > 0 && payload.length < 8 * 1024 * 1024);
+console.log("PASS v1.5 hardening: Case truth isolation, ID collision, 100-run comparison, repeated reset/export-import, tamper, notes security and archived/current separation");

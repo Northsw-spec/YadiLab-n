@@ -1,0 +1,33 @@
+{
+  "formatId": "infrastructure-cyber-lab.save",
+  "schemaVersion": "0.1.0",
+  "scenarioHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "engineVersion": "0.1.0",
+  "stateRevision": 2,
+  "clock": {
+    "mode": "virtual",
+    "tick": 3
+  },
+  "resourceState": {
+    "firewall01": {
+      "properties": {
+        "rules": [
+          {
+            "action": "deny"
+          }
+        ]
+      }
+    }
+  },
+  "completedObjectives": [
+    "block_direct_rdp"
+  ],
+  "evidence": [
+    {
+      "sequence": 1,
+      "testId": "direct_rdp",
+      "outcome": "FALSE",
+      "summary": "TCP/3389 is blocked"
+    }
+  ]
+}

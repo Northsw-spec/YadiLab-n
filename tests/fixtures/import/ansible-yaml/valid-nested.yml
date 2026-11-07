@@ -1,0 +1,20 @@
+---
+all:
+  vars:
+    ansible_user: ops
+    ansible_connection: ssh
+  hosts:
+    control01:
+      ansible_host: 192.0.2.10
+  children:
+    routers:
+      hosts:
+        rtr01:
+          ansible_host: 192.0.2.1
+      vars:
+        ansible_network_os: cisco.ios.ios
+    servers:
+      hosts:
+        app01:
+          ansible_host: 198.51.100.20
+        app02:

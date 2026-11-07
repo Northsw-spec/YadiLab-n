@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="file:///usr/share/nmap/nmap.xsl" type="text/xsl"?>
+<nmaprun scanner="nmap" args="nmap -sT -oX - 198.51.100.50" start="1761660100" version="7.94" xmloutputversion="1.05">
+  <host>
+    <status state="up" reason="echo-reply"/>
+    <address addr="198.51.100.50" addrtype="ipv4"/>
+    <ports><port protocol="tcp" portid="80"><state state="open" reason="syn-ack"/><service name="http" method="table" conf="3"/></port></ports>
+  </host>
+  <runstats><finished time="1761660109" elapsed="9.0" exit="success"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

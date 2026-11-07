@@ -1,0 +1,4 @@
+YadiLab Foundation v0.46.0
+STATUS: PASS — candidate exact ZIP readback verified using all 104 Foundation test commands in two deterministic segments; executable permissions and archive hygiene PASS.
+Observed candidate external gates: executable browser toolchain=77/BLOCKED, dependency-resolved browser build=77/BLOCKED, browser release=77/BLOCKED, Parrot acceptance=77/BLOCKED.
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, not VERIFIED PRODUCT RELEASE.

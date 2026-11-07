@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap" version="7.94"><host><status state="up"/><address addr="192.0.2.16" addrtype="ipv4"/>
+</nmaprun>

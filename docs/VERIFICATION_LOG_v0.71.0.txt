@@ -1,0 +1,57 @@
+Foundation v0.71.0 — Phase 71 verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper terminology override
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE
+
+IMPLEMENTATION
+- Diagnostic / Observation Engine advances to foundation.observation@0.2.0.
+- Wave 1 remains: 7 modeled Windows + 7 modeled Linux read-only configuration observations.
+- Wave 2 adds 4 Windows + 4 Linux active modeled probes: ping, TCP-port test, DNS lookup, path trace.
+- Active connectivity delegates to deterministic Network Engine queryReachability.
+- Known off-link host probes apply fail-safe default-gateway/on-link validation when address/topology evidence is sufficient.
+- Host aclDefaultAction deny/block applies to active probes when no explicit ACL list exists.
+- DNS uses only declared source resolvers, network.dns_server resources, dns.enabled and modeled records.
+- All active probe transcripts remain NO_GUEST_COMMAND_EXECUTION / ACTIVE_MODELED_PROBE.
+- No packet/socket/DNS request/guest command is actually executed.
+
+FOCUSED VERIFICATION BEFORE WHOLE-FOUNDATION SEALING
+- Wave 1 Observation Engine functional: 88 assertions PASS
+- Wave 1 Observation Engine adversarial: 11/11 PASS
+- Wave 2 active probes functional: 104 assertions PASS
+- Wave 2 active probes adversarial: 21/21 PASS
+- Wave 1 Browser Observation UI functional: 6/6 PASS
+- Wave 1 Browser Observation UI adversarial: 6/6 PASS
+- Wave 2 Browser active probes functional: 7/7 PASS
+- Wave 2 Browser active probes adversarial: 7/7 PASS
+- Schema suite: 44/44 fixture expectations PASS; 16/16 Draft 2020-12 schemas PASS
+- Branding guard: PASS
+- Fault Engine functional/adversarial: 25 + 18 PASS
+- Deterministic multi-fault generator: 38 + 11 PASS
+- Fault Injection UI: 15/15 + 15/15 PASS
+- Generator UI: 6/6 + 6/6 PASS
+
+WHOLE-FOUNDATION SEALING
+- Exact test:foundation chain: 171 deterministic commands, IDs 0 through 170.
+- First complete whole-chain verification: 171/171 explicit exit 0.
+- Command records: 171; unique IDs: 171; missing IDs: 0.
+- Exit records: 171; unique IDs: 171; non-zero exits: 0.
+- Offline snapshot transport command 148: exit 0 with 44/44 assertions PASS.
+- Launcher smoke command 159: exit 0 / PASS.
+- Acceptance contract command 160: exit 0 / PASS.
+- Final Builder Asset Library adversarial command 170: exit 0 / PASS.
+- No orchestration timeout is interpreted as PASS.
+
+The identity-covered verification text is frozen after recording this evidence; a final full 171-command sealing run is then executed on exactly that final source state before source identity and release packaging are computed.
+
+EXTERNAL PRODUCT GATES
+Re-run separately with valid invocation shapes:
+- trusted snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED; no transport artifact produced.
+- dependency readiness: RC=77 / BLOCKED.
+- executable dependency-resolved browser toolchain: RC=77 / BLOCKED.
+- dependency-resolved browser build: RC=77 / BLOCKED.
+- Parrot OS x86-64 acceptance on current Debian GNU/Linux 13 x86-64 host: RC=77 / BLOCKED.
+
+These external gates are not reclassified as PASS and do not invalidate the development-checkpoint regression.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+Final source identity, archive hash/reproducibility/readback and Google Drive raw-byte readback belong in the external v0.71.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

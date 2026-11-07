@@ -1,0 +1,31 @@
+YadiLab Foundation v0.52.0 verification focus
+Date: 2026-10-01
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Phase 52 — exact source-checkout identity binding
+- snapshot schema: 1.1.0
+- canonical source path + bytes + Unix-mode aggregate identity
+- generated/local state excluded by explicit contract
+- source drift and source symlink fail closed
+
+Focused verification
+- source checkout identity functional: 6 PASS
+- source checkout identity adversarial: 6 PASS
+- offline dependency snapshot: 33 PASS
+- sealed snapshot transport: 42 PASS
+- producer platform: 8 + 21 adversarial PASS
+- consumer environment: 3 + 18 adversarial PASS
+- consumer installer ordering: 7 PASS
+
+Whole Foundation
+- 116 deterministic commands
+- 0–54 PASS
+- 55–91 PASS
+- 92–115 PASS
+- precise FAIL/ERROR regression-log scan PASS
+
+External gates
+- dependency readiness: 77/BLOCKED
+- executable browser toolchain: 77/BLOCKED
+- dependency-resolved browser build: 77/BLOCKED
+- Parrot OS x86-64 acceptance: 77/BLOCKED (current host Debian 13)

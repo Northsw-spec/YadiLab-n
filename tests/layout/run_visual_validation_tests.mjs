@@ -1,0 +1,10 @@
+import fs from "node:fs"; import path from "node:path"; import assert from "node:assert/strict"; import {fileURLToPath} from "node:url";
+import {validateVisualLayout} from "../../dist-layout-test/layout/src/index.js";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../.."); const scenario=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/scenario-normalized.json"),"utf8"));
+let c=0;const ok=(v,m)=>{assert.ok(v,m);c++};const eq=(a,b,m)=>{assert.deepEqual(a,b,m);c++};
+const makeLayout=(model=scenario)=>({formatId:"infrastructure-cyber-lab.layout",schemaVersion:"0.1.0",scenarioId:model.scenarioId,engine:"elk.layered",nodes:[...model.zones.map((z,i)=>({id:z.id,x:i*800,y:0,width:720,height:480,...(z.parent?{parent:z.parent}:{})})),...model.resources.map((r,i)=>({id:r.id,x:40+(i%2)*220,y:72+Math.floor(i/2)*130,width:180,height:96,...(r.zone?{parent:r.zone}:{})}))]});
+const layout=makeLayout();
+eq(validateVisualLayout(scenario,layout),[],"known-good layout has no visual diagnostics");
+eq(validateVisualLayout(scenario,layout,{canvas:{width:4000,height:1000}}),[],"explicit sufficient canvas accepts layout");
+ok(Object.isFrozen(validateVisualLayout(scenario,layout))===false,"validator returns ordinary immutable-by-convention diagnostics array");
+console.log(`PASS visual validation suite: ${c} assertions.`);

@@ -1,0 +1,21 @@
+YadiLab Foundation v0.31.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 31 PASS;
+- PackageIO functional/adversarial SVG safety gates PASS;
+- safe custom SVG write/read succeeds while active/remote SVG fails closed;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* and node_modules content excluded.
+
+Final candidate evidence:
+- clean system-unzip extraction preserved executable permissions and passed complete Foundation regression through Phase 31;
+- PackageIO safe-SVG roundtrip and active/remote-SVG adversarial gates passed on writer and reader paths;
+- browser dependency and non-Parrot target gates returned 77/BLOCKED as required;
+- candidate ZIP excluded transient dist-*/node_modules content and superseded Masterprompt references.

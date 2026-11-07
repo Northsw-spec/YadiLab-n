@@ -1,0 +1,25 @@
+YadiLab Foundation v0.13.0 — packaged-bytes verification
+
+STATUS: PASS — VERIFIED DEVELOPMENT CHECKPOINT
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+The final archive is accepted only if a clean extraction passes the complete Foundation regression suite and the Phase 13 fail-closed gates.
+
+Required packaged-byte gates:
+- all schema/compiler/Engine/regression/PackageIO/CLI/canvas/layout/Builder/Runtime/persistence/PWA tests PASS;
+- Phase 13 dependency-contract and adversarial tests PASS;
+- launcher security/loopback/static-ELF smoke PASS;
+- acceptance contract PASS;
+- browser build readiness returns BLOCKED/77 when a genuine package-lock/installed pinned dependency set is absent;
+- shell-only distribution explicitly reports browser build status shell-only and data-app-runtime=shell;
+- Parrot acceptance script requires browser build status ready plus data-app-runtime=ready before a target can PASS;
+- executable script permissions survive the archive;
+- no superseded Masterprompt reference remains in the checkpoint source or verification state.
+
+Current environment boundary:
+- the full dependency-resolved React/React Flow/ELK/Ajv/zip.js bundle is not built because npm registry DNS/network access is unavailable and no genuine transitive package lock is present;
+- current host is not Parrot OS;
+- those facts remain BLOCKED and are not relabelled PASS.
+
+This checkpoint advances the build and acceptance contract without claiming the blocked external runtime gates.

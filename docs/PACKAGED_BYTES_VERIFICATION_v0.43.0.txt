@@ -1,0 +1,5 @@
+YadiLab Foundation v0.43.0
+Candidate exact-byte readback: PASS; whole Foundation exit 0; acceptance workflow contract 27 assertions PASS; executable permissions/archive hygiene PASS.
+Candidate external gates: browser build=77/BLOCKED, browser release=77/BLOCKED, Parrot acceptance=77/BLOCKED; shell-only live workflow correctly returns 77/BLOCKED.
+Final exact-byte readback: independently rerun on final ZIP; see separately shipped YadiLab_Foundation_v0.43.0_VERIFICATION.txt for observed final result/SHA.
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, never product VERIFIED RELEASE.

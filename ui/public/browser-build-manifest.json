@@ -1,0 +1,6 @@
+{
+  "formatId": "infrastructure-cyber-lab.browser-build",
+  "schemaVersion": "1.0.0",
+  "status": "shell-only",
+  "reason": "dependency-resolved browser bundle not built"
+}

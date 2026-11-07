@@ -1,0 +1,69 @@
+{
+  "formatId": "infrastructure-cyber-lab.license-inventory-policy",
+  "schemaVersion": "1.0.0",
+  "entries": [
+    {
+      "name": "@xyflow/react",
+      "version": "12.11.6",
+      "scope": "runtime",
+      "license": "MIT",
+      "purpose": "Browser topology/canvas rendering layer."
+    },
+    {
+      "name": "@zip.js/zip.js",
+      "version": "2.18.2",
+      "scope": "runtime",
+      "license": "BSD-3-Clause",
+      "purpose": "ZIP-compatible PackageIO backend."
+    },
+    {
+      "name": "ajv",
+      "version": "8.17.1",
+      "scope": "runtime",
+      "license": "MIT",
+      "purpose": "Authoritative JSON Schema Draft 2020-12 runtime validation."
+    },
+    {
+      "name": "elkjs",
+      "version": "0.12.0",
+      "scope": "runtime",
+      "license": "EPL-2.0 OR GPL-3.0-or-later",
+      "purpose": "ELK layout engine JavaScript distribution; project consumption policy selects EPL-2.0."
+    },
+    {
+      "name": "react",
+      "version": "19.3.0",
+      "scope": "runtime",
+      "license": "MIT",
+      "purpose": "Browser UI runtime."
+    },
+    {
+      "name": "react-dom",
+      "version": "19.3.0",
+      "scope": "runtime",
+      "license": "MIT",
+      "purpose": "Browser DOM renderer."
+    },
+    {
+      "name": "esbuild",
+      "version": "0.28.2",
+      "scope": "development",
+      "license": "MIT",
+      "purpose": "Development-only browser bundler."
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.2",
+      "scope": "development",
+      "license": "Apache-2.0",
+      "purpose": "Development/typechecking toolchain."
+    },
+    {
+      "name": "yaml",
+      "version": "2.8.3",
+      "scope": "runtime",
+      "license": "ISC",
+      "purpose": "Local, no-code-execution YAML 1.2 AST parsing for bounded read-only static Ansible inventory inspection."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-reimport-diff",
+  "schemaVersion": "0.2.0",
+  "previousBaseline": {
+    "baselineId": "corp_lab",
+    "baselineIdentity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "nextBaseline": {
+    "baselineId": "corp_lab",
+    "baselineIdentity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "summary": {
+    "entitiesAdded": 0,
+    "entitiesRemoved": 0,
+    "entitiesChanged": 0,
+    "entitiesProvenanceOnly": 0,
+    "factsAdded": 0,
+    "factsRemoved": 0,
+    "factsChanged": 0,
+    "factsProvenanceOnly": 0,
+    "relationshipsAdded": 0,
+    "relationshipsRemoved": 0,
+    "relationshipsChanged": 0,
+    "relationshipsProvenanceOnly": 0
+  },
+  "entityChanges": [
+    {
+      "entityId": "pc01",
+      "kind": "MAYBE"
+    }
+  ],
+  "factChanges": [],
+  "relationshipChanges": []
+}

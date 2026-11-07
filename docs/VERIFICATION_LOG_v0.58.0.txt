@@ -1,0 +1,44 @@
+YadiLab Foundation v0.58.0 — source-tree verification
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED
+
+Input checkpoint: exact YadiLab_Foundation_v0.57.0.zip bytes
+Baseline SHA256: ec281c0ff67a5e266608a1b9cad83384b4140c89f9697da05500ad09f9e1a3b7
+
+Phase 58 — Normalized Enterprise Model foundation
+- New authoritative Draft 2020-12 enterprise-baseline schema.
+- Explicit knowledge states: KNOWN, UNKNOWN, NOT_APPLICABLE, CONFLICTING, INVALID, INFERRED.
+- Content-addressed enterprise import source IDs: src_<exact-source-sha256>.
+- Structured per-fact/per-relationship provenance references and locators.
+- Import contract records adapter version, mapping profile/version/hash, options and conflict resolutions.
+- Canonical baseline identity excludes display-only source filename while binding semantic/provenance/import state.
+- Identified collections and conflict candidates are canonicalized deterministically.
+- Semantic verifier checks duplicate/global IDs, source/hash binding, source/provenance/entity references, inference inputs, declared value types, conflict candidate uniqueness and baseline identity.
+- Masterprompt v1.3 VERIFIED + SHA sidecar are embedded under docs/architecture.
+
+Focused Phase 58 verification
+- Schema fixture expectations: 22/22 PASS.
+- Draft 2020-12 meta-validation: 7/7 schemas PASS.
+- Enterprise Model functional: 10/10 PASS.
+- Enterprise Model adversarial: 12/12 PASS.
+- Branding guard: PASS.
+
+Whole Foundation regression on frozen source tree before packaging
+- Exact test:foundation chain contains 133 deterministic commands.
+- Commands 0-60: PASS.
+- Commands 61-105: PASS.
+- Commands 106-119: PASS before harness timeout while command 120 was running.
+- Commands 120-121: PASS in deterministic rerun.
+- Harness timed out while command 122 was starting; that attempt was not counted.
+- Commands 122-132: PASS in deterministic rerun.
+- Therefore 133/133 deterministic commands PASS; no timed-out command is counted without explicit successful rerun.
+
+External gates observed on source tree
+- Snapshot producer without provisioned external signing key: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json/exact dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved browser build: 77/BLOCKED.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian 13.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+Archive/readback evidence is recorded in the external release verification sidecar after deterministic packaging.

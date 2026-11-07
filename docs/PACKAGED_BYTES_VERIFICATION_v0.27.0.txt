@@ -1,0 +1,25 @@
+YadiLab Foundation v0.27.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Final candidate evidence:
+- clean extraction passed the complete Foundation regression through Phase 27;
+- CLI package semantics and PackageIO suites passed;
+- executable mode bits were preserved;
+- no transient dist-*/node_modules content or superseded Masterprompt references were present in the ZIP;
+- browser dependency readiness returned 77/BLOCKED as required here;
+- Parrot acceptance returned 77/BLOCKED on this Debian host as required.
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 27 PASS;
+- CLI package semantics functional/adversarial PASS;
+- PackageIO functional/adversarial PASS;
+- no alternate ZIP implementation introduced;
+- actual zip.js dependency execution remains explicitly BLOCKED when unavailable;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* directories excluded.

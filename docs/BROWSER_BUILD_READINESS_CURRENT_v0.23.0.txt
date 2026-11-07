@@ -1,0 +1,4 @@
+YadiLab v0.23.0 browser dependency readiness
+STATUS: BLOCKED / exit 77
+Reason: package-lock.json and pinned local node_modules are unavailable in this sandbox.
+No dependency-resolved React/React Flow/Ajv/ELK/zip.js/esbuild browser bundle is claimed as verified.

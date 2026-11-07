@@ -1,0 +1,236 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario-source",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "metadata": {
+    "title": "Foundation acceptance",
+    "language": "sv",
+    "briefing": "Harden the exposed remote access path."
+  },
+  "requires": {
+    "capabilities": [
+      {
+        "id": "core.network",
+        "version": "^1.0.0"
+      },
+      {
+        "id": "core.windows",
+        "version": "1.x"
+      }
+    ],
+    "profiles": [
+      {
+        "id": "vendor.proxmox",
+        "version": "1.x"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "wan",
+      "label": "Internet",
+      "kind": "wan"
+    },
+    {
+      "id": "dmz",
+      "label": "DMZ",
+      "kind": "dmz"
+    },
+    {
+      "id": "server",
+      "label": "Server VLAN",
+      "kind": "server"
+    },
+    {
+      "id": "mgmt",
+      "label": "Management",
+      "kind": "management"
+    }
+  ],
+  "resources": [
+    {
+      "id": "attacker",
+      "type": "actor.attacker",
+      "label": "External attacker",
+      "zone": "wan",
+      "properties": {}
+    },
+    {
+      "id": "firewall01",
+      "type": "network.firewall",
+      "label": "Firewall",
+      "zone": "dmz",
+      "properties": {
+        "rules": [
+          {
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "port": 3389,
+            "action": "allow"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rds01",
+      "type": "windows.rds_host",
+      "label": "RDS01",
+      "zone": "server",
+      "properties": {
+        "rdp": {
+          "enabled": true,
+          "port": 3389
+        },
+        "nla": false
+      }
+    },
+    {
+      "id": "admin01",
+      "type": "windows.workstation",
+      "label": "Admin workstation",
+      "zone": "mgmt",
+      "properties": {},
+      "interfaces": []
+    }
+  ],
+  "connections": [
+    {
+      "id": "wan_fw",
+      "kind": "network",
+      "from": {
+        "resource": "attacker"
+      },
+      "to": {
+        "resource": "firewall01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "fw_rds",
+      "kind": "network",
+      "from": {
+        "resource": "firewall01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "admin_rds",
+      "kind": "management",
+      "from": {
+        "resource": "admin01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {}
+    }
+  ],
+  "tests": [
+    {
+      "id": "direct_rdp",
+      "type": "network.reachability",
+      "params": {
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "admin_rdp",
+      "type": "network.reachability",
+      "params": {
+        "from": "admin01",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    }
+  ],
+  "findings": [
+    {
+      "id": "rdp_exposed",
+      "title": "Direct RDP exposure",
+      "severity": "high",
+      "when": {
+        "op": "reachable",
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "evidenceTests": [
+        "direct_rdp"
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "block_direct_rdp",
+      "title": "Block direct Internet RDP",
+      "category": "perimeter",
+      "required": true,
+      "condition": {
+        "op": "not",
+        "rule": {
+          "op": "reachable",
+          "from": "attacker",
+          "to": "rds01",
+          "protocol": "tcp",
+          "port": 3389
+        }
+      }
+    }
+  ],
+  "completion": {
+    "op": "not",
+    "rule": {
+      "op": "reachable",
+      "from": "attacker",
+      "to": "rds01",
+      "protocol": "tcp",
+      "port": 3389
+    }
+  },
+  "canonicalSolution": {
+    "operations": [
+      {
+        "op": "set",
+        "target": "firewall01",
+        "path": "properties.rules.0.action",
+        "value": "deny"
+      }
+    ]
+  },
+  "layoutHints": [
+    {
+      "target": "firewall01",
+      "rank": 1
+    },
+    {
+      "target": "rds01",
+      "rank": 2
+    }
+  ],
+  "enterpriseOrigin": {
+    "baselineId": "customer_lab",
+    "baselineIdentity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "modelVersion": "0.1.0",
+    "projectionVersion": "0.1.0",
+    "sources": [
+      {
+        "sourceId": "src_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mediaType": "text/csv"
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+YadiLab Foundation v0.65.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.64.0.zip bytes
+Baseline SHA256: 6c3d3c125f8f4a05584d87a49815c1ac09062c978c66416b41bfd67361632f66
+
+Phase 65 — Fault Injection Engine Core
+- Adds deterministic, AI-free Fault Pack and Fault Overlay contracts.
+- Healthy/imported scenario state remains reusable; injection returns new Engine state and an immutable overlay rather than mutating the baseline/source.
+- Fault packs are exact-versioned and content-addressed with canonical SHA-256 identities.
+- Faults declare named target bindings, accepted resource types, preconditions, incompatibilities, mutations, expected effects, negative controls, symptoms/hidden truth, recovery mode, blast-radius bounds, visibility policy, explicit difficulty dimensions, tags and learning objectives.
+- Mutations resolve to ordinary Engine set/remove operations; seeded choice values are deterministic for the same uint32 seed + fault + mutation identity.
+- Preconditions must be TRUE before mutation; expected effects and negative controls must be TRUE after mutation.
+- Actual before/after Engine state is used to calculate changed-resource blast radius.
+- Exact inverse operations are captured per mutation and test-applied before a fault is accepted as reversible.
+- Latest-fault rollback fails closed if Runtime state changed after injection; existing Runtime history/checkpoints remain the safe recovery path in that case.
+- Fault overlays bind exact scenario hash, pack locks, instance application hashes, seeds, bindings, resolved/inverse operations, revisions and changed resources; semantic verification detects internally rehashed instance tampering.
+- SCENARIO_VARIANT overlays can materialize a new ordinary scenario-source without modifying the healthy source.
+- Persistent variants bind faultOrigin and captured recovery operations; compiler preserves faultOrigin into normalized scenarios.
+- Built-in starter pack: foundation.network.core@0.1.0 with routing.remove_default_gateway and firewall.force_default_deny.
+- Full user-facing Fault Injection panel, temporal scheduler and broad domain fault library are intentionally not claimed in Phase 65.
+
+Focused Phase 65 verification before full regression
+- Draft 2020-12 schema suite: 42/42 fixture expectations PASS; 15/15 schemas meta-valid.
+- Fault Engine functional: 25 assertions PASS.
+- Fault Engine adversarial: 17 assertions PASS.
+- Compiler including faultOrigin preservation: 65 assertions PASS.
+- Branding guard: PASS.
+- Generated TypeScript contracts: reproducible PASS.
+
+First whole-Foundation regression
+- Exact test:foundation chain contains 151 deterministic commands.
+- Commands 0–60: PASS.
+- Commands 61–110: PASS.
+- Commands 111–127: PASS.
+- Command 128 (offline dependency snapshot transport): detached completion exit 0 with 44/44 assertions PASS.
+- Commands 129–150: PASS.
+- Therefore 151/151 deterministic commands are covered by explicit successful runs; no timed-out command is counted without successful completion.
+
+External gates on the candidate source tree
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Actual dependency-resolved browser execution of future Fault Injection UI: BLOCKED until genuine signed dependencies and a dependency-resolved browser release exist.
+- Actual server-stopped Chromium React offline reload: BLOCKED until genuine signed dependencies and dependency-resolved browser release exist.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian GNU/Linux 13.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

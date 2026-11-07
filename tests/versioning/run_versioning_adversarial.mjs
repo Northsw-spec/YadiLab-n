@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { FOUNDATION_MIGRATION_REGISTRY, MigrationRegistry, NORMALIZED_FORMAT_ID, SOURCE_FORMAT_ID, checkCurrentSchemaVersion } from "../../dist-versioning-test/versioning/src/index.js";
+let checks=0; const ok=(v,m)=>{assert.ok(v,m);checks++}; const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++};
+let r=FOUNDATION_MIGRATION_REGISTRY.migrate({formatId:SOURCE_FORMAT_ID,schemaVersion:"0.0.9"}); eq(r.ok,false,"unknown historical version fails closed"); if(r.ok)process.exit(1); eq(r.diagnostics[0]?.code,"MIGRATION_PATH_UNAVAILABLE","missing path named");
+r=FOUNDATION_MIGRATION_REGISTRY.migrate({formatId:SOURCE_FORMAT_ID,schemaVersion:"99.0.0"}); eq(r.ok,false,"future schema fails closed rather than downgrade reinterpretation");
+r=FOUNDATION_MIGRATION_REGISTRY.migrate({formatId:"other",schemaVersion:"0.1.0"}); eq(r.ok,false,"unknown format rejected"); if(r.ok)process.exit(1); eq(r.diagnostics[0]?.code,"MIGRATION_FORMAT_UNSUPPORTED","format diagnostic named");
+r=FOUNDATION_MIGRATION_REGISTRY.migrate({formatId:SOURCE_FORMAT_ID,schemaVersion:"banana"}); eq(r.ok,false,"malformed version rejected");
+r=FOUNDATION_MIGRATION_REGISTRY.migrate({formatId:SOURCE_FORMAT_ID,schemaVersion:"0.1.0"},"0.2.0"); eq(r.ok,false,"unsupported target rejected"); if(r.ok)process.exit(1); eq(r.diagnostics[0]?.code,"MIGRATION_TARGET_UNSUPPORTED","unsupported target named");
+const bad=new MigrationRegistry({[SOURCE_FORMAT_ID]:"0.1.0",[NORMALIZED_FORMAT_ID]:"0.1.0"},[{formatId:SOURCE_FORMAT_ID,fromVersion:"0.0.1",toVersion:"0.1.0",migrate(d){return {...d,schemaVersion:"wrong"}}}]);
+r=bad.migrate({formatId:SOURCE_FORMAT_ID,schemaVersion:"0.0.1"}); eq(r.ok,false,"step output metadata checked"); if(r.ok)process.exit(1); eq(r.diagnostics[0]?.code,"MIGRATION_STEP_OUTPUT_INVALID","bad step output named");
+assert.throws(()=>new MigrationRegistry({[SOURCE_FORMAT_ID]:"0.1.0",[NORMALIZED_FORMAT_ID]:"0.1.0"},[{formatId:SOURCE_FORMAT_ID,fromVersion:"0.0.1",toVersion:"0.1.0",migrate:d=>({...d,schemaVersion:"0.1.0"})},{formatId:SOURCE_FORMAT_ID,fromVersion:"0.0.1",toVersion:"0.0.2",migrate:d=>({...d,schemaVersion:"0.0.2"})}]),/Duplicate migration origin/); checks++;
+const compat=checkCurrentSchemaVersion({formatId:SOURCE_FORMAT_ID,schemaVersion:"0.0.9"},SOURCE_FORMAT_ID); eq(compat?.code,"MIGRATION_PATH_UNAVAILABLE","compatibility gate never silently accepts legacy semver");
+console.log(`PASS versioning/migration adversarial suite: ${checks} assertions.`);

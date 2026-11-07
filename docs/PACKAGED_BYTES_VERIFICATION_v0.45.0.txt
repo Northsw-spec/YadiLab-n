@@ -1,0 +1,5 @@
+YadiLab Foundation v0.45.0
+Phase 45 adds deterministic sealed dependency snapshot transport, safe archive import, sidecar binding and direct ZIP consumption by the offline installer.
+Focused dependency verification: 31 dependency gate + 34 adversarial + 28 Phase44 snapshot + 42 Phase45 transport assertions PASS.
+Whole-worktree/candidate/final exact-byte regression results are recorded during checkpoint promotion.
+The genuine npm dependency snapshot/browser build and Parrot acceptance remain external BLOCKED gates until actually executed.

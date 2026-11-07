@@ -1,0 +1,2 @@
+BLOCKED Chromium DOM probe in current container (exit=124); not counted as launcher failure.
+chromium_probe_exit=77

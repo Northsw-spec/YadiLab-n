@@ -1,0 +1,23 @@
+YadiLab Foundation v0.28.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Final candidate evidence:
+- clean extraction passed the complete Foundation regression through Phase 28;
+- notices/inventory functional and adversarial suites passed;
+- loopback distribution shipped and checksum-verified notices/inventory;
+- executable bits were preserved and no transient dist-*/node_modules content was present;
+- browser dependency and non-Parrot target gates returned 77/BLOCKED as required.
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 28 PASS;
+- deterministic THIRD_PARTY_NOTICES/inventory functional/adversarial PASS;
+- loopback distribution ships notices/inventory and SHA-256 verifies them;
+- resolved-bundle notice path remains fail-closed if dependencies/licenses are unavailable;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* directories excluded.

@@ -1,0 +1,137 @@
+{
+  "formatId": "infrastructure-cyber-lab.curriculum",
+  "schemaVersion": "0.1.0",
+  "waveId": "guided_troubleshooting_wave1",
+  "title": "Guided troubleshooting · Wave 1",
+  "description": "Åtta deterministiska Windows/Linux-labb som använder observationer, aktiva probes, Evidence Notebook, guided workflow och typed remediation.",
+  "labs": [
+    {
+      "id": "guided_win_gateway",
+      "scenarioId": "guided_win_gateway",
+      "path": "curriculum/builtin/wave1/windows-gateway.json",
+      "title": "Windows · fel standard-gateway",
+      "platform": "windows",
+      "focus": "routing",
+      "summary": "Routing: lokalt fungerar, off-link fallerar.",
+      "sequence": 1,
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_win_dns",
+      "scenarioId": "guided_win_dns",
+      "path": "curriculum/builtin/wave1/windows-dns.json",
+      "title": "Windows · fel DNS-resolver",
+      "platform": "windows",
+      "focus": "dns",
+      "summary": "DNS: nätväg finns men resolverkonfigurationen är fel.",
+      "sequence": 2,
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_win_firewall",
+      "scenarioId": "guided_win_firewall",
+      "path": "curriculum/builtin/wave1/windows-firewall.json",
+      "title": "Windows · blockerande host-firewall",
+      "platform": "windows",
+      "focus": "firewall",
+      "summary": "Host firewall: korrekt väg men trafik stoppas lokalt.",
+      "sequence": 3,
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_win_rdp",
+      "scenarioId": "guided_win_rdp",
+      "path": "curriculum/builtin/wave1/windows-rdp.json",
+      "title": "Windows · RDP-tjänsten avstängd",
+      "platform": "windows",
+      "focus": "service",
+      "summary": "Service: nätet fungerar men RDP-listenern är avstängd.",
+      "sequence": 4,
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_linux_gateway",
+      "scenarioId": "guided_linux_gateway",
+      "path": "curriculum/builtin/wave1/linux-gateway.json",
+      "title": "Linux · fel standard-gateway",
+      "platform": "linux",
+      "focus": "routing",
+      "summary": "Routing: korrekt interface men fel next hop.",
+      "sequence": 5,
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_linux_dns",
+      "scenarioId": "guided_linux_dns",
+      "path": "curriculum/builtin/wave1/linux-dns.json",
+      "title": "Linux · fel DNS-resolver",
+      "platform": "linux",
+      "focus": "dns",
+      "summary": "DNS: routingen fungerar men resolveradressen pekar fel.",
+      "sequence": 6,
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_linux_firewall",
+      "scenarioId": "guided_linux_firewall",
+      "path": "curriculum/builtin/wave1/linux-firewall.json",
+      "title": "Linux · blockerande nftables-policy",
+      "platform": "linux",
+      "focus": "firewall",
+      "summary": "Host firewall: modeled nftables-default stoppar trafik.",
+      "sequence": 7,
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_linux_ssh",
+      "scenarioId": "guided_linux_ssh",
+      "path": "curriculum/builtin/wave1/linux-ssh.json",
+      "title": "Linux · SSH-tjänsten avstängd",
+      "platform": "linux",
+      "focus": "service",
+      "summary": "Service: nätet fungerar men SSH-listenern är avstängd.",
+      "sequence": 8,
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 1
+      }
+    }
+  ]
+}

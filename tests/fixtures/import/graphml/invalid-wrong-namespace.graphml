@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="urn:untrusted:graphml-imitation">
+  <graph id="bad_namespace" edgedefault="directed">
+    <node id="n1"/>
+  </graph>
+</graphml>

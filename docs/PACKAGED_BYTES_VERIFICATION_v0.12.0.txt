@@ -1,0 +1,21 @@
+YadiLab Foundation v0.12.0 packaged-bytes verification
+
+Verification method:
+- deterministic ZIP with fixed timestamps and preserved Unix executable bits;
+- extract into a clean directory;
+- execute npm run test:foundation from extracted bytes;
+- scan archive for obsolete pre-v1.2 Masterprompt references and transient dist-* directories;
+- verify ZIP integrity and launcher/harness executable permissions.
+
+Result: PASS
+
+Observed from clean extracted candidate:
+- complete Foundation v0.1-v0.12 regression: PASS;
+- acceptance contract fail-closed behavior: PASS;
+- ZIP integrity: PASS;
+- transient dist-* archive scan: PASS;
+- obsolete pre-v1.2 Masterprompt reference scan: PASS;
+- app-launcher executable bit preserved: PASS;
+- Parrot acceptance on current host: BLOCKED by target OS gate (current host is Debian, not Parrot).
+
+This confirms a VERIFIED DEVELOPMENT CHECKPOINT. It does not promote the candidate to a Parrot-verified release.

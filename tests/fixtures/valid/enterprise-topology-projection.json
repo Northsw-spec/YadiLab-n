@@ -1,0 +1,10 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-topology-projection",
+  "schemaVersion": "0.1.0",
+  "baselineId": "corp",
+  "baselineIdentity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scenarioId": "ent_corp_aaaaaaaa",
+  "status": "READY",
+  "stats": { "zones": 1, "resources": 2, "connections": 1, "preservedFacts": 4, "projectedFacts": 2, "skippedRelationships": 0 },
+  "diagnostics": []
+}

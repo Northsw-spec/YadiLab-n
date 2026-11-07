@@ -1,0 +1,21 @@
+YadiLab Foundation v0.30.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 30 PASS;
+- Visual Validation functional/adversarial PASS;
+- auto-layout and Scenario Certification visual gates PASS/fail closed as expected;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* and node_modules content excluded.
+
+Final candidate evidence:
+- clean system-unzip extraction preserved executable permissions and passed complete Foundation regression through Phase 30;
+- Visual Validation functional/adversarial and certification integration gates passed;
+- browser dependency and non-Parrot target gates returned 77/BLOCKED as required;
+- candidate ZIP excluded transient dist-*/node_modules content and superseded Masterprompt references.

@@ -1,0 +1,12 @@
+all:
+  children:
+    east:
+      hosts:
+        app01:
+          ansible_host: 192.0.2.20
+    west:
+      hosts:
+        app01:
+          ansible_host: 192.0.2.20
+        app02:
+          ansible_host: 192.0.2.21

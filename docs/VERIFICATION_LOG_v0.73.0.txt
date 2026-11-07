@@ -1,0 +1,50 @@
+Foundation v0.73.0 — Phase 73 verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper terminology override
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE
+
+IMPLEMENTATION
+- New local persistence contract: infrastructure-cyber-lab.troubleshooting-session@0.1.0.
+- Session binds exact scenarioId, scenarioHash, Runtime stateRevision, ordinary SaveState, notebookIdentity and complete TroubleshootingNotebook.
+- SessionIdentity is canonical SHA-256 over the full envelope excluding sessionIdentity itself.
+- Runtime notebook state is owned at application-session level so combined restore can reinstate both Runtime progress and notebook UI state.
+- Existing Autosave now action persists progress-only state for backward compatibility plus the combined troubleshooting session.
+- Combined restore validates session schema, SaveState schema, notebook schema, scenario/revision bindings, notebook canonical identity and session canonical identity before restore.
+- A present invalid combined session fails closed; progress-only fallback is permitted only when no combined session exists for the exact scenario hash.
+- Replay preserves canonical notebook sequence and exact entry revisions; it does not sort revision numbers into inferred chronology or causal order.
+- Continued notebook work after restore produces a new content-addressed session on the next autosave.
+- Combined local session does not persist hidden fault/generator truth, reference investigation order or canonical solution material.
+- Portable .yadiprogress and .yadinotebook formats remain unchanged.
+- No automatic diagnosis, grading, remediation, guest execution or AI/ML/LLM logic is introduced.
+
+FOCUSED VERIFICATION BEFORE WHOLE-FOUNDATION SEALING
+- Troubleshooting session persistence functional: 50 assertions PASS.
+- Troubleshooting session persistence adversarial: 14 assertions PASS.
+- Existing persistence functional/adversarial: 34 + 23 PASS.
+- Existing progress-session functional/adversarial: 36 + 28 PASS.
+- Phase-72 notebook core functional/adversarial: 48 + 18 PASS.
+- Phase-72 notebook Browser UI functional/adversarial: 7/7 + 5/5 PASS.
+- Schema suite: 48/48 fixture expectations PASS; 18/18 Draft 2020-12 schemas PASS.
+- Branding guard: PASS.
+
+FIRST WHOLE-FOUNDATION VERIFICATION
+- Exact test:foundation chain: 177 deterministic commands, IDs 0 through 176.
+- Explicit exit records: 177/177; unique exit IDs: 177; non-zero exits: 0; missing exit IDs: 0; duplicate exit IDs: 0.
+- The raw orchestration log contains one duplicate COMMAND-176 header because the outer tool timeout occurred after that header was written and before an exit record existed. Command 176 was then run separately and produced explicit exit 0. The timeout itself is not interpreted as PASS.
+- Offline snapshot transport command 154: exit 0 with 44/44 assertions PASS.
+- Launcher smoke command 165: exit 0 / PASS.
+- Acceptance contract command 166: exit 0 / PASS.
+- Final Builder Asset Library adversarial command 176: exit 0 / PASS.
+- No test FAIL/ERROR result is accepted as PASS.
+
+EXTERNAL PRODUCT GATES
+Re-run separately with valid invocation shapes:
+- trusted snapshot producer with required external output path but without YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED.
+- dependency readiness: RC=77 / BLOCKED; genuine package-lock.json and exact installed dependency closure are absent.
+- executable dependency-resolved browser toolchain: RC=77 / BLOCKED by dependency readiness.
+- dependency-resolved browser build: RC=77 / BLOCKED by dependency readiness.
+- Parrot OS x86-64 acceptance on current Debian GNU/Linux 13 x86-64 host: RC=77 / BLOCKED.
+
+These gates are not reclassified as PASS and do not invalidate the development-checkpoint regression.
+
+The identity-covered verification text is frozen after recording the evidence above. A final full 177-command sealing run is executed on exactly this final source state before source identity and release packaging are computed. Final source/archive/Drive evidence belongs in the external v0.73.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

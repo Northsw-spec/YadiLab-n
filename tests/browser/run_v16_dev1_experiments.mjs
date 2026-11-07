@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { createTroubleshootingCase, replaceTroubleshootingCaseWorkingSource } from "../../dist-browser-test/ui/src/browser/troubleshooting-case.js";
+import { createExperimentBranch, forkExperimentFromCase, replaceExperimentWorkingSource, resetExperimentBranch, verifyExperimentBranch, exportExperimentBranch, importExperimentBranch, attachExperimentRun, markExperimentTested, discardExperimentBranch } from "../../dist-browser-test/ui/src/browser/experiment-branch.js";
+
+const source = JSON.parse(await fs.readFile("tests/fixtures/valid/scenario-source.json", "utf8"));
+const evidence = (revision, outcome = "SUCCESS") => ({ scenarioHash: "b".repeat(64), runtimeRevision: revision, flowId: "flow-1", outcome: { kind: outcome }, records: [{ eventId: `experiment-event-${revision}`, sequence: 1, runtimeRevision: revision, scenarioHash: "b".repeat(64), flowId: "flow-1", domain: "Outcome", eventType: "flow.outcome", sourceResourceId: "r1", truth: outcome, summary: outcome, provenance: "Engine", evidenceRefs: [] }] });
+
+const parent = await createTroubleshootingCase({ source, title: "Experiment parent", selectedFlowIds: ["flow-1"] });
+const baseline = await forkExperimentFromCase({ value: parent, title: "Duplicate title", forkSource: "BASELINE" });
+const workingParent = await replaceTroubleshootingCaseWorkingSource(parent, { ...source, metadata: { ...source.metadata, title: "parent working copy" } });
+const working = await forkExperimentFromCase({ value: workingParent, title: "Duplicate title", forkSource: "CURRENT_WORKING_COPY" });
+assert.equal(baseline.forkSource, "BASELINE");
+assert.equal(working.forkSource, "CURRENT_WORKING_COPY");
+assert.notEqual(baseline.experimentId, working.experimentId);
+assert.equal(baseline.ancestorSourceIdentity === working.ancestorSourceIdentity, false);
+assert.equal(parent.workingSource.metadata.title, source.metadata.title);
+const parentBefore = JSON.stringify(parent);
+let variant = await replaceExperimentWorkingSource(baseline, { ...baseline.workingSource, metadata: { ...baseline.workingSource.metadata, title: "variant A route change" } });
+assert.equal(parentBefore, JSON.stringify(parent));
+assert.notEqual(variant.workingSourceIdentity, variant.ancestorSourceIdentity);
+assert.equal((await verifyExperimentBranch(variant)).ok, true);
+variant = await attachExperimentRun(variant, evidence(1), 1);
+variant = await markExperimentTested(variant);
+assert.equal(variant.status, "TESTED");
+assert.equal(variant.runs.length, 1);
+variant = await resetExperimentBranch(variant);
+assert.equal(variant.workingSourceIdentity, variant.ancestorSourceIdentity);
+assert.deepEqual(variant.workingSource, variant.ancestorSource);
+const exported = exportExperimentBranch(variant);
+assert.equal((await importExperimentBranch(exported)).ok, true);
+const tampered = JSON.parse(exported);
+tampered.ancestorSourceIdentity = "f".repeat(64);
+assert.equal((await importExperimentBranch(JSON.stringify(tampered))).ok, false);
+const discarded = await discardExperimentBranch(variant);
+assert.equal(discarded.status, "ARCHIVED");
+console.log("PASS v1.6 Dev1 experiments: baseline/working fork, ancestor isolation, normal run, reset, duplicate titles, export/import, tamper, discard");

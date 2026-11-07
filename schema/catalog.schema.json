@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:catalog:0.1.0",
+  "title": "Compiler Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "capabilities",
+    "profiles",
+    "assets"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.catalog"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/profile"
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "catalogId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resourceTypePrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "testTypePrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "connectionKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "ruleOps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "minimumEngineVersion"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/catalogId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "minimumEngineVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "claims": {
+          "$ref": "#/$defs/claims"
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mac": {
+          "type": "string"
+        }
+      }
+    },
+    "profileDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "minimumEngineVersion",
+        "appliesTo"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/catalogId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "minimumEngineVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "appliesTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "defaults": {
+          "$ref": "#/$defs/profileDefaults"
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "label",
+        "path",
+        "mime",
+        "appliesTo",
+        "width",
+        "height",
+        "trusted"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/catalogId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^assets/builtin/[a-z0-9_.-]+\\.(?:svg|png)$"
+        },
+        "mime": {
+          "type": "string",
+          "enum": [
+            "image/svg+xml",
+            "image/png"
+          ]
+        },
+        "appliesTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "trusted": {
+          "const": true
+        }
+      }
+    }
+  }
+}

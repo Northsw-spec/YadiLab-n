@@ -1,0 +1,217 @@
+{
+  "profileId": "ansible.inventory.static.ini.v1",
+  "stage": "PREP_ONLY_NO_PARSER_AND_NO_UI",
+  "semanticTrack": "CONFIG_DOCUMENTED",
+  "caseContractVersion": 1,
+  "limits": {
+    "bytes": 262144,
+    "hosts": 500,
+    "groups": 200,
+    "memberships": 2000,
+    "lines": 5000,
+    "lineLength": 4096,
+    "groupDepth": 10
+  },
+  "positives": [
+    {
+      "file": "valid-ungrouped.ini",
+      "hosts": [
+        "jump01",
+        "app01",
+        "app02",
+        "db01"
+      ],
+      "addresses": {
+        "jump01": "192.0.2.11",
+        "app01": "203.0.113.10",
+        "db01": "198.51.100.7"
+      },
+      "unknown": [
+        "app02"
+      ],
+      "directGroups": {
+        "jump01": [],
+        "app01": [
+          "web"
+        ],
+        "app02": [
+          "web"
+        ],
+        "db01": [
+          "database"
+        ]
+      },
+      "links": 0
+    },
+    {
+      "file": "valid-hierarchy.ini",
+      "hosts": [
+        "rtr01",
+        "app01",
+        "app02"
+      ],
+      "addresses": {
+        "rtr01": "192.0.2.1",
+        "app01": "192.0.2.20"
+      },
+      "unknown": [
+        "app02"
+      ],
+      "directGroups": {
+        "rtr01": [
+          "routers"
+        ],
+        "app01": [
+          "servers"
+        ],
+        "app02": [
+          "servers"
+        ]
+      },
+      "groupChildren": {
+        "site": [
+          "routers",
+          "servers"
+        ]
+      },
+      "links": 0
+    },
+    {
+      "file": "valid-multigroup.ini",
+      "hosts": [
+        "app01",
+        "app02"
+      ],
+      "addresses": {
+        "app01": "203.0.113.10"
+      },
+      "unknown": [
+        "app02"
+      ],
+      "directGroups": {
+        "app01": [
+          "east",
+          "west"
+        ],
+        "app02": [
+          "east"
+        ]
+      },
+      "links": 0
+    },
+    {
+      "file": "valid-sensitive-vars.ini",
+      "hosts": [
+        "app01"
+      ],
+      "addresses": {
+        "app01": "203.0.113.25"
+      },
+      "unknown": [],
+      "directGroups": {
+        "app01": [
+          "web"
+        ]
+      },
+      "forbiddenOutputSubstrings": [
+        "SECRET_INI_HOST_CANARY_DONT_EXPORT",
+        "SECRET_INI_GROUP_CANARY_DONT_EXPORT",
+        "SECRET_INI_BECOME_CANARY_DONT_EXPORT",
+        "private_key_canary"
+      ],
+      "links": 0
+    },
+    {
+      "file": "valid-group-vars-string.ini",
+      "hosts": [
+        "app01"
+      ],
+      "addresses": {
+        "app01": "192.0.2.60"
+      },
+      "unknown": [],
+      "directGroups": {
+        "app01": [
+          "web"
+        ]
+      },
+      "forbiddenOutputSubstrings": [
+        "active=False",
+        "port=1234"
+      ],
+      "links": 0
+    },
+    {
+      "file": "valid-comments.ini",
+      "hosts": [
+        "app01",
+        "app02"
+      ],
+      "addresses": {
+        "app01": "192.0.2.70"
+      },
+      "unknown": [
+        "app02"
+      ],
+      "directGroups": {
+        "app01": [
+          "web"
+        ],
+        "app02": [
+          "web"
+        ]
+      },
+      "links": 0
+    }
+  ],
+  "negatives": [
+    {
+      "file": "invalid-unsupported-modifier.ini",
+      "code": "ANSIBLE_INI_SECTION_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-cycle.ini",
+      "code": "ANSIBLE_INI_GROUP_CYCLE"
+    },
+    {
+      "file": "invalid-host-address-conflict.ini",
+      "code": "ANSIBLE_INI_HOST_CONFLICT"
+    },
+    {
+      "file": "invalid-host-range.ini",
+      "code": "ANSIBLE_INI_HOST_RANGE_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-unsafe-address.ini",
+      "code": "ANSIBLE_INI_ADDRESS_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-jinja-address.ini",
+      "code": "ANSIBLE_INI_VARIABLE_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-malformed-host-variable.ini",
+      "code": "ANSIBLE_INI_HOST_TOKEN_INVALID"
+    },
+    {
+      "file": "invalid-duplicate-section.ini",
+      "code": "ANSIBLE_INI_SECTION_DUPLICATE"
+    },
+    {
+      "file": "invalid-quoted-inline-variable.ini",
+      "code": "ANSIBLE_INI_VARIABLE_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-orphan-child.ini",
+      "code": "ANSIBLE_INI_CHILD_UNDECLARED"
+    },
+    {
+      "file": "invalid-empty-address.ini",
+      "code": "ANSIBLE_INI_ADDRESS_UNSUPPORTED"
+    },
+    {
+      "file": "invalid-ini-command.ini",
+      "code": "ANSIBLE_INI_HOST_TOKEN_INVALID"
+    }
+  ]
+}

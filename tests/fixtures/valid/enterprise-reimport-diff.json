@@ -1,0 +1,54 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-reimport-diff",
+  "schemaVersion": "0.2.0",
+  "previousBaseline": {
+    "baselineId": "corp_lab",
+    "baselineIdentity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "nextBaseline": {
+    "baselineId": "corp_lab",
+    "baselineIdentity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "summary": {
+    "entitiesAdded": 1,
+    "entitiesRemoved": 0,
+    "entitiesChanged": 1,
+    "entitiesProvenanceOnly": 0,
+    "factsAdded": 1,
+    "factsRemoved": 0,
+    "factsChanged": 1,
+    "factsProvenanceOnly": 0,
+    "relationshipsAdded": 0,
+    "relationshipsRemoved": 0,
+    "relationshipsChanged": 0,
+    "relationshipsProvenanceOnly": 0
+  },
+  "entityChanges": [
+    {
+      "entityId": "pc01",
+      "kind": "CHANGED",
+      "before": {
+        "label": "PC-01"
+      },
+      "after": {
+        "label": "PC-01A"
+      }
+    }
+  ],
+  "factChanges": [
+    {
+      "subjectRef": "pc01",
+      "path": "/network/defaultGateway",
+      "kind": "CHANGED",
+      "before": {
+        "state": "KNOWN",
+        "value": "10.0.0.1"
+      },
+      "after": {
+        "state": "KNOWN",
+        "value": "10.0.0.254"
+      }
+    }
+  ],
+  "relationshipChanges": []
+}

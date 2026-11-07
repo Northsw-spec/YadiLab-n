@@ -1,0 +1,12 @@
+YadiLab Foundation v0.11.0 packaged-byte verification
+
+Candidate archive was deterministically packaged from the exact v0.10.0-derived working tree, extracted into a clean directory, and npm run test:foundation passed from the extracted candidate bytes.
+
+The distribution launcher retained executable permissions after archive extraction. The final archive adds only this verification record and is independently re-extracted and retested after final packaging.
+
+Runtime-boundary notes:
+- full repository tsc remains blocked only by absent installed Ajv modules/types in this sandbox;
+- precompiled generic Linux x86-64 launcher behavior is verified locally;
+- Chromium headless probe is blocked by the container environment and recorded separately;
+- real Firefox/Chromium app acceptance and Parrot OS acceptance remain pending;
+- actual full React Builder/Runtime web bundle remains pending a dependency-resolved build environment.

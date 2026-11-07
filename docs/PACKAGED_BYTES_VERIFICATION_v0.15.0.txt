@@ -1,0 +1,16 @@
+YadiLab Foundation v0.15.0 — packaged-bytes verification
+
+STATUS: PASS — VERIFIED DEVELOPMENT CHECKPOINT
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 15 PASS;
+- package import/session and package export/self-verification suites PASS;
+- student/author solution separation remains enforced;
+- stale/orphan layout cannot be exported silently;
+- browser dependency readiness remains fail-closed when real dependencies/lock are absent;
+- launcher and acceptance-contract suites remain PASS;
+- no superseded Masterprompt reference exists in checkpoint source.
+
+External rendered-browser and Parrot target gates remain unclaimed.

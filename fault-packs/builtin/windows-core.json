@@ -1,0 +1,893 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-pack",
+  "schemaVersion": "0.1.0",
+  "packId": "foundation.os.windows",
+  "version": "0.1.0",
+  "domain": "windows",
+  "packIdentity": "c394e882cbadc16e29843af90a6264d32a171b068e6fac16bf34c8453948b861",
+  "faults": [
+    {
+      "faultId": "windows.routing.set_wrong_default_gateway",
+      "version": "0.1.0",
+      "title": "Windows: set wrong default gateway",
+      "domain": "windows.routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "192.0.2.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "198.51.100.1"
+        }
+      ],
+      "incompatibilities": [
+        "routing.remove_default_gateway",
+        "routing.set_wrong_default_gateway"
+      ],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_gateway",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.1",
+              "198.51.100.1"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "192.0.2.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "198.51.100.1"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The host may still reach its local subnet while traffic that depends on the default gateway fails."
+      ],
+      "hiddenTruth": "The Windows host has a modeled default gateway that does not match its healthy value.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "routing",
+        "gateway"
+      ],
+      "learningObjectives": [
+        "Use route print/ipconfig evidence before blaming DNS or applications."
+      ]
+    },
+    {
+      "faultId": "windows.dns.replace_resolvers",
+      "version": "0.1.0",
+      "title": "Windows: replace DNS resolvers",
+      "domain": "windows.dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dnsServers"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "incompatibilities": [
+        "dns.replace_resolvers",
+        "dns.remove_all_resolvers"
+      ],
+      "mutations": [
+        {
+          "mutationId": "replace_resolvers",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": {
+            "kind": "literal",
+            "value": [
+              "203.0.113.53"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "IP connectivity may remain while hostname-based access fails or resolves incorrectly."
+      ],
+      "hiddenTruth": "The Windows DNS client is configured to use a deterministic documentation-only resolver address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "dns",
+        "resolver"
+      ],
+      "learningObjectives": [
+        "Separate name-resolution evidence from routing and transport reachability."
+      ]
+    },
+    {
+      "faultId": "windows.dhcp.disable_client",
+      "version": "0.1.0",
+      "title": "Windows: disable DHCP client state",
+      "domain": "windows.dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.disable_client"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_dhcp",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Lease renewal and DHCP-derived network settings are no longer modeled as active for the host."
+      ],
+      "hiddenTruth": "The Windows host DHCP client state is disabled in the scenario model.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "dhcp",
+        "client"
+      ],
+      "learningObjectives": [
+        "Verify DHCP client state and distinguish it from server-side pool failures."
+      ]
+    },
+    {
+      "faultId": "windows.firewall.force_default_deny",
+      "version": "0.1.0",
+      "title": "Windows Firewall: force default deny",
+      "domain": "windows.firewall",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "allow"
+        }
+      ],
+      "incompatibilities": [
+        "firewall.force_default_deny"
+      ],
+      "mutations": [
+        {
+          "mutationId": "force_default_deny",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": {
+            "kind": "literal",
+            "value": "deny"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "deny"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Unmatched traffic through the Windows host policy is blocked while explicitly modeled allows may still work."
+      ],
+      "hiddenTruth": "The Windows host ACL default action has changed from allow to deny.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "firewall",
+        "policy"
+      ],
+      "learningObjectives": [
+        "Inspect host firewall policy before changing upstream network devices."
+      ]
+    },
+    {
+      "faultId": "windows.interface.set_apipa_address",
+      "version": "0.1.0",
+      "title": "Windows: replace primary address with APIPA",
+      "domain": "windows.interface",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "interfaces.0.addresses"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": [
+            "169.254.77.10/16"
+          ]
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_apipa",
+          "op": "set",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": {
+            "kind": "literal",
+            "value": [
+              "169.254.77.10/16"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": [
+            "169.254.77.10/16"
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The primary interface shows a 169.254/16 link-local address and normal routed connectivity may disappear."
+      ],
+      "hiddenTruth": "The Windows host primary interface has been deterministically moved to an APIPA-style address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "interface",
+        "apipa"
+      ],
+      "learningObjectives": [
+        "Recognize APIPA as evidence of failed address configuration rather than a DNS fault."
+      ]
+    },
+    {
+      "faultId": "windows.rdp.disable_service",
+      "version": "0.1.0",
+      "title": "Windows: stop RDP service",
+      "domain": "windows.rdp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.rdp.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_rdp",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.rdp.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.rdp.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "RDP TCP reachability can exist at the network layer while the endpoint no longer exposes an enabled RDP service."
+      ],
+      "hiddenTruth": "The modeled RDP service is disabled on the Windows host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "rdp",
+        "service"
+      ],
+      "learningObjectives": [
+        "Separate service/listener state from routing and firewall state."
+      ]
+    },
+    {
+      "faultId": "windows.rdp.change_listener_port",
+      "version": "0.1.0",
+      "title": "Windows: move RDP listener port",
+      "domain": "windows.rdp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.rdp.enabled",
+          "value": true
+        },
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.rdp.port"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.rdp.port",
+          "value": 3390
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.rdp.port",
+          "value": 3391
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "change_rdp_port",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.rdp.port",
+          "value": {
+            "kind": "choice",
+            "values": [
+              3390,
+              3391
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.rdp.port",
+              "value": 3390
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.rdp.port",
+              "value": 3391
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Connections to the expected TCP/3389 listener fail even though the RDP service itself remains enabled."
+      ],
+      "hiddenTruth": "The RDP service remains enabled but its modeled listener port has moved away from 3389.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "rdp",
+        "port"
+      ],
+      "learningObjectives": [
+        "Check the actual listener port instead of assuming the default port."
+      ]
+    },
+    {
+      "faultId": "windows.smb.disable_service",
+      "version": "0.1.0",
+      "title": "Windows: stop SMB service",
+      "domain": "windows.smb",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.smb.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_smb",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.smb.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.smb.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "SMB shares become unavailable at the service layer even if TCP routing remains healthy."
+      ],
+      "hiddenTruth": "The modeled SMB service is disabled on the Windows host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "smb",
+        "service"
+      ],
+      "learningObjectives": [
+        "Distinguish SMB service state from network path failure."
+      ]
+    },
+    {
+      "faultId": "windows.winrm.disable_service",
+      "version": "0.1.0",
+      "title": "Windows: stop WinRM service",
+      "domain": "windows.winrm",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.winrm.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_winrm",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.winrm.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.winrm.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "PowerShell remoting/WinRM access fails at the service layer while unrelated services can remain healthy."
+      ],
+      "hiddenTruth": "The modeled WinRM service is disabled on the Windows host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "winrm",
+        "service"
+      ],
+      "learningObjectives": [
+        "Use service/listener evidence to isolate remote-management failures."
+      ]
+    },
+    {
+      "faultId": "windows.network.set_public_profile",
+      "version": "0.1.0",
+      "title": "Windows: switch network profile to Public",
+      "domain": "windows.network_profile",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "windows.domain_controller",
+            "windows.rd_gateway",
+            "windows.rds_host",
+            "windows.server",
+            "windows.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.networkProfile"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.networkProfile",
+          "value": "public"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_public_profile",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.networkProfile",
+          "value": {
+            "kind": "literal",
+            "value": "public"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.networkProfile",
+          "value": "public"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The host is modeled on the Public network profile, which can explain stricter host-policy behavior when profile-aware rules are inspected."
+      ],
+      "hiddenTruth": "The Windows network profile has changed to Public.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "windows",
+        "network-profile",
+        "firewall"
+      ],
+      "learningObjectives": [
+        "Check the active Windows network profile when firewall behavior differs from expectation."
+      ]
+    }
+  ]
+}

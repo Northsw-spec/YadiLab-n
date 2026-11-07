@@ -1,0 +1,14 @@
+YadiLab Foundation v0.43.0 — checkpoint verification
+Input: exact YadiLab_Foundation_v0.42.0.zip, SHA256 b494ed74047b478d750274077c3b99125d009462916770c0d4615de8a0bea0ea
+Phase: 43 — acceptance-only live Chromium Builder/Runtime workflow gate
+Independent student-package ZIP verification: 5 synthetic fixture scenarios PASS
+Acceptance workflow fail-closed/static contract: 27 assertions PASS
+Worktree whole Foundation regression: PASS exit 0
+Candidate ZIP whole Foundation regression from clean extraction: PASS exit 0
+Candidate permissions/archive hygiene: PASS
+Candidate browser build gate: BLOCKED exit 77 (genuine npm closure absent)
+Candidate ready browser-release gate: BLOCKED exit 77 (ui/dist absent)
+Candidate Parrot target gate: BLOCKED exit 77 (current host Debian)
+Candidate shell-only live workflow: BLOCKED exit 77 as required; no false browser PASS
+Actual interactive Chromium workflow: NOT VERIFIED here. Current sandbox blocks browser loopback navigation and no dependency-resolved React bundle exists.
+Final exact-byte readback: see separately shipped YadiLab_Foundation_v0.43.0_VERIFICATION.txt.

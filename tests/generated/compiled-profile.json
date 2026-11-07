@@ -1,0 +1,93 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "profile_defaults",
+  "sourceHash": "815efbcc40902712ea21538f0beba8b3f35bd47f02b7b19ed7c2333ffda46da5",
+  "metadata": {
+    "title": "Profile defaults",
+    "description": "",
+    "language": "sv",
+    "authors": [],
+    "tags": [],
+    "briefing": ""
+  },
+  "minimumEngineVersion": "0.2.0",
+  "capabilityLocks": [
+    {
+      "id": "core.virtualization",
+      "version": "1.0.0"
+    }
+  ],
+  "profileLocks": [
+    {
+      "id": "vendor.proxmox",
+      "version": "1.0.0"
+    }
+  ],
+  "assetLocks": [
+    {
+      "id": "virtualization.proxmox",
+      "version": "1.0.0",
+      "path": "assets/builtin/virtualization.proxmox.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "mgmt",
+      "label": "Management",
+      "kind": "management"
+    }
+  ],
+  "resources": [
+    {
+      "id": "pve01",
+      "type": "virtualization.proxmox",
+      "label": "PVE01",
+      "zone": "mgmt",
+      "profile": "vendor.proxmox",
+      "vendor": "Proxmox",
+      "product": "Proxmox VE",
+      "interfaces": [],
+      "properties": {
+        "management": {
+          "protocol": "https",
+          "port": 8006,
+          "bind": "10.0.0.10"
+        }
+      },
+      "asset": {
+        "id": "virtualization.proxmox",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "connections": [],
+  "tests": [],
+  "findings": [],
+  "objectives": [
+    {
+      "id": "keep_mgmt",
+      "title": "Management exists",
+      "category": "management",
+      "required": true,
+      "condition": {
+        "op": "equals",
+        "target": "pve01",
+        "path": "properties.management.bind",
+        "value": "10.0.0.10"
+      }
+    }
+  ],
+  "completion": {
+    "op": "equals",
+    "target": "pve01",
+    "path": "properties.management.bind",
+    "value": "10.0.0.10"
+  },
+  "hints": [],
+  "notes": []
+}

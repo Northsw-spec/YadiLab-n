@@ -1,0 +1,12 @@
+YadiLab Parrot acceptance harness
+contract_version=1
+timestamp_utc=2026-09-29T19:56:39Z
+uname=Linux 6.18.44 x86_64 GNU/Linux
+os_id=debian
+os_name=Debian GNU/Linux 13 (trixie)
+os_version=13
+arch=x86_64
+BLOCKED target_os_not_parrot id=debian
+overall=BLOCKED
+
+harness_exit_code=77

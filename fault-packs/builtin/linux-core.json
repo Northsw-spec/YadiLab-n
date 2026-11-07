@@ -1,0 +1,868 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-pack",
+  "schemaVersion": "0.1.0",
+  "packId": "foundation.os.linux",
+  "version": "0.1.0",
+  "domain": "linux",
+  "packIdentity": "c16469fe95fe966735deac157ca4854e8e4ab3014e6afd0273864704e4278c2c",
+  "faults": [
+    {
+      "faultId": "linux.routing.set_wrong_default_gateway",
+      "version": "0.1.0",
+      "title": "Linux: set wrong default gateway",
+      "domain": "linux.routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "192.0.2.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "198.51.100.1"
+        }
+      ],
+      "incompatibilities": [
+        "routing.remove_default_gateway",
+        "routing.set_wrong_default_gateway"
+      ],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_gateway",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.1",
+              "198.51.100.1"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "192.0.2.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "198.51.100.1"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Local subnet communication may remain while off-subnet traffic fails."
+      ],
+      "hiddenTruth": "The Linux host modeled default gateway no longer matches the healthy configuration.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "routing",
+        "gateway"
+      ],
+      "learningObjectives": [
+        "Use ip route evidence to isolate default-route faults."
+      ]
+    },
+    {
+      "faultId": "linux.dns.replace_resolvers",
+      "version": "0.1.0",
+      "title": "Linux: replace DNS resolvers",
+      "domain": "linux.dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dnsServers"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "incompatibilities": [
+        "dns.replace_resolvers",
+        "dns.remove_all_resolvers"
+      ],
+      "mutations": [
+        {
+          "mutationId": "replace_resolvers",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": {
+            "kind": "literal",
+            "value": [
+              "203.0.113.53"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "IP reachability may remain while dig/nslookup-style name resolution fails."
+      ],
+      "hiddenTruth": "The Linux resolver list has been replaced by a deterministic documentation-only resolver address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "dns",
+        "resolver"
+      ],
+      "learningObjectives": [
+        "Distinguish resolver configuration from routing and application faults."
+      ]
+    },
+    {
+      "faultId": "linux.dhcp.disable_client",
+      "version": "0.1.0",
+      "title": "Linux: disable DHCP client state",
+      "domain": "linux.dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.disable_client"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_dhcp",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "DHCP-derived lease/configuration state is no longer modeled as active on the Linux host."
+      ],
+      "hiddenTruth": "The Linux host DHCP client state is disabled in the scenario model.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "dhcp",
+        "client"
+      ],
+      "learningObjectives": [
+        "Separate client-side DHCP state from server-side lease exhaustion."
+      ]
+    },
+    {
+      "faultId": "linux.firewall.force_default_deny",
+      "version": "0.1.0",
+      "title": "Linux firewall: force default deny",
+      "domain": "linux.firewall",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "allow"
+        }
+      ],
+      "incompatibilities": [
+        "firewall.force_default_deny"
+      ],
+      "mutations": [
+        {
+          "mutationId": "force_default_deny",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": {
+            "kind": "literal",
+            "value": "deny"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "deny"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Unmatched traffic through the Linux host policy is blocked while explicitly modeled allows may still work."
+      ],
+      "hiddenTruth": "The Linux host ACL default action has changed from allow to deny.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "firewall",
+        "nftables"
+      ],
+      "learningObjectives": [
+        "Inspect host firewall policy before changing upstream routing."
+      ]
+    },
+    {
+      "faultId": "linux.interface.set_link_local_address",
+      "version": "0.1.0",
+      "title": "Linux: replace primary address with link-local",
+      "domain": "linux.interface",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "interfaces.0.addresses"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": [
+            "169.254.77.20/16"
+          ]
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_link_local",
+          "op": "set",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": {
+            "kind": "literal",
+            "value": [
+              "169.254.77.20/16"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "interfaces.0.addresses",
+          "value": [
+            "169.254.77.20/16"
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The primary interface retains only an IPv4 link-local address and normal routed connectivity may disappear."
+      ],
+      "hiddenTruth": "The Linux host primary interface has been deterministically moved to a link-local IPv4 address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "interface",
+        "link-local"
+      ],
+      "learningObjectives": [
+        "Recognize link-local addressing as configuration evidence before troubleshooting DNS."
+      ]
+    },
+    {
+      "faultId": "linux.ssh.disable_service",
+      "version": "0.1.0",
+      "title": "Linux: stop SSH service",
+      "domain": "linux.ssh",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.ssh.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_ssh",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.ssh.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.ssh.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "SSH network reachability may exist while the destination no longer exposes an enabled SSH service."
+      ],
+      "hiddenTruth": "The modeled SSH service is disabled on the Linux host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "ssh",
+        "service"
+      ],
+      "learningObjectives": [
+        "Separate sshd/service state from routing and firewall state."
+      ]
+    },
+    {
+      "faultId": "linux.ssh.change_listener_port",
+      "version": "0.1.0",
+      "title": "Linux: move SSH listener port",
+      "domain": "linux.ssh",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.ssh.enabled",
+          "value": true
+        },
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.ssh.port"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.ssh.port",
+          "value": 2222
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.ssh.port",
+          "value": 22022
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "change_ssh_port",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.ssh.port",
+          "value": {
+            "kind": "choice",
+            "values": [
+              2222,
+              22022
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.ssh.port",
+              "value": 2222
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.ssh.port",
+              "value": 22022
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Connections to the expected TCP/22 listener fail even though SSH remains enabled."
+      ],
+      "hiddenTruth": "The SSH service remains enabled but its modeled listener has moved away from port 22.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "ssh",
+        "port"
+      ],
+      "learningObjectives": [
+        "Use ss/netstat-style listener evidence instead of assuming TCP/22."
+      ]
+    },
+    {
+      "faultId": "linux.http.disable_service",
+      "version": "0.1.0",
+      "title": "Linux: stop HTTP service",
+      "domain": "linux.http",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.http.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_http",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.http.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.http.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The web service is unavailable at the endpoint despite otherwise healthy network state."
+      ],
+      "hiddenTruth": "The modeled HTTP service is disabled on the Linux host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "http",
+        "service"
+      ],
+      "learningObjectives": [
+        "Use service status/listener evidence to distinguish application failure from packet-path failure."
+      ]
+    },
+    {
+      "faultId": "linux.networkmanager.disable_service",
+      "version": "0.1.0",
+      "title": "Linux: stop NetworkManager",
+      "domain": "linux.network_manager",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.networkManager.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_network_manager",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.networkManager.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.networkManager.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "NetworkManager-managed configuration is modeled as inactive; static modeled interface state is not silently deleted."
+      ],
+      "hiddenTruth": "The Linux NetworkManager service state is disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "networkmanager",
+        "service"
+      ],
+      "learningObjectives": [
+        "Check the active network-management service without assuming that disabling it automatically erases existing addresses."
+      ]
+    },
+    {
+      "faultId": "linux.systemd_resolved.disable_service",
+      "version": "0.1.0",
+      "title": "Linux: stop systemd-resolved",
+      "domain": "linux.resolver_service",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "linux.host",
+            "linux.server",
+            "linux.workstation"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.systemdResolved.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_systemd_resolved",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.systemdResolved.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.systemdResolved.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Resolver-service observations show systemd-resolved inactive; resolver configuration is left intact unless separately faulted."
+      ],
+      "hiddenTruth": "The modeled systemd-resolved service is disabled on the Linux host.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "linux",
+        "systemd-resolved",
+        "service"
+      ],
+      "learningObjectives": [
+        "Distinguish resolver-service state from the configured DNS server list."
+      ]
+    }
+  ]
+}

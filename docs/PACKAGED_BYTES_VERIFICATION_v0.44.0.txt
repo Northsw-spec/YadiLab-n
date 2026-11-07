@@ -1,0 +1,8 @@
+YadiLab Foundation v0.44.0
+Phase 44 adds a complete fail-closed transferred npm-cache snapshot inventory/source-binding gate before offline npm consumption.
+Whole worktree Foundation through Phase 44: PASS exit 0.
+Dependency gates: 31 functional + 34 adversarial + 28 offline-snapshot assertions PASS.
+Phase 43 independent ZIP selftest: 5 fixtures PASS; acceptance workflow contract: 27 assertions PASS.
+External dependency-resolved browser build, ready browser release, real Parrot OS x86-64 and real interactive Chromium Builder->Runtime remain BLOCKED/unclaimed in this sandbox.
+Candidate/final exact-byte readback results and final archive SHA-256 are shipped separately in YadiLab_Foundation_v0.44.0_VERIFICATION.txt.
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, not VERIFIED PRODUCT RELEASE.

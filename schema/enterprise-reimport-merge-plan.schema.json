@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-reimport-merge-plan:0.1.0",
+  "title": "Enterprise Re-import Merge Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "status",
+    "ancestorBaseline",
+    "currentBaseline",
+    "incomingBaseline",
+    "summary",
+    "entries",
+    "diagnostics"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.enterprise-reimport-merge-plan"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "ancestorBaseline": {
+      "$ref": "#/$defs/baselineRef"
+    },
+    "currentBaseline": {
+      "$ref": "#/$defs/baselineRef"
+    },
+    "incomingBaseline": {
+      "$ref": "#/$defs/baselineRef"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "baselineRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineId",
+        "baselineIdentity"
+      ],
+      "properties": {
+        "baselineId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "baselineIdentity": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "autoApplyIncoming",
+        "keepCurrent",
+        "alreadyConverged",
+        "reviewRequired"
+      ],
+      "properties": {
+        "autoApplyIncoming": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "keepCurrent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alreadyConverged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reviewRequired": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryKey",
+        "objectKind",
+        "decision",
+        "reason"
+      ],
+      "properties": {
+        "entryKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "objectKind": {
+          "type": "string",
+          "enum": [
+            "ENTITY",
+            "RELATIONSHIP",
+            "FACT"
+          ]
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "AUTO_APPLY_INCOMING",
+            "KEEP_CURRENT",
+            "ALREADY_CONVERGED",
+            "REVIEW_REQUIRED"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "UNCHANGED",
+            "CURRENT_UNCHANGED_INCOMING_CHANGED",
+            "CURRENT_CHANGED_INCOMING_UNCHANGED",
+            "BOTH_CHANGED_SAME",
+            "BOTH_CHANGED_DIFFERENT",
+            "INCOMING_PROVENANCE_REFRESH"
+          ]
+        },
+        "ancestor": {},
+        "current": {},
+        "incoming": {}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entryKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-topology-projection:0.1.0",
+  "title": "Enterprise Topology Projection Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatId", "schemaVersion", "baselineId", "baselineIdentity", "scenarioId", "status", "stats", "diagnostics"],
+  "properties": {
+    "formatId": { "const": "infrastructure-cyber-lab.enterprise-topology-projection" },
+    "schemaVersion": { "$ref": "#/$defs/semver" },
+    "baselineId": { "$ref": "#/$defs/id" },
+    "baselineIdentity": { "$ref": "#/$defs/sha256" },
+    "scenarioId": { "$ref": "#/$defs/id" },
+    "status": { "type": "string", "enum": ["READY", "BLOCKED"] },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zones", "resources", "connections", "preservedFacts", "projectedFacts", "skippedRelationships"],
+      "properties": {
+        "zones": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "integer", "minimum": 0 },
+        "connections": { "type": "integer", "minimum": 0 },
+        "preservedFacts": { "type": "integer", "minimum": 0 },
+        "projectedFacts": { "type": "integer", "minimum": 0 },
+        "skippedRelationships": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "semver": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "code", "message"],
+      "properties": {
+        "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$" },
+        "message": { "type": "string", "minLength": 1 },
+        "objectId": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}

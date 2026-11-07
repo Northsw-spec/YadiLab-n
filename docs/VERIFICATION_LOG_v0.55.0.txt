@@ -1,0 +1,46 @@
+YadiLab Foundation v0.55.0 verification focus
+Date: 2026-10-01
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Phase 55 — dependency-snapshot trust-anchor lifecycle
+- trust store schema: 1.1.0
+- release trust-store state: valid, intentionally 0 active/revoked production keys
+- trust lifecycle functional: 15 assertions PASS
+- trust lifecycle adversarial: 14 assertions PASS
+- trust CLI contract: 8 assertions PASS
+- signed provenance regression: 12 functional + 16 adversarial PASS
+- producer/sign/seal/install ordering regression: 12 assertions PASS
+- offline dependency snapshot regression: 33 assertions PASS
+- sealed snapshot transport regression: 44 assertions PASS
+
+Trust lifecycle behavior
+- onboarding requires external Ed25519 public key: PASS
+- onboarding requires separate explicit expected key fingerprint: PASS
+- derived fingerprint mismatch fails closed: PASS
+- private/non-Ed25519 onboarding material rejected: PASS
+- canonical exact-field trust store enforced: PASS
+- duplicate trust key IDs rejected: PASS
+- active -> revoked transition retained: PASS
+- revoked key cannot be reactivated through onboarding: PASS
+- revoked key cannot sign new snapshot provenance: PASS
+- existing snapshot checked against current revoked trust state reports SNAPSHOT_PROVENANCE_REVOKED_KEY: PASS
+- public-key symlink target is resolved before source-boundary check: PASS
+
+Whole Foundation regression before final documentation freeze
+- test:foundation command count: 125
+- commands 0-54: PASS
+- commands 55-96: PASS
+- commands 97-111: PASS before harness timeout during command 112 startup
+- interrupted command 112 attempt was NOT counted as PASS
+- deterministic rerun commands 112-124: PASS
+
+External gates observed
+- snapshot producer without provisioned external signing key: 77/BLOCKED
+- dependency readiness: 77/BLOCKED
+- executable browser toolchain: 77/BLOCKED
+- dependency-resolved browser build: 77/BLOCKED
+- Parrot OS x86-64 acceptance: 77/BLOCKED (host Debian 13)
+
+Final source-tree whole-Foundation rerun and archive/readback results are recorded in the checkpoint sidecar after packaging.
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT candidate, NOT VERIFIED PRODUCT RELEASE until final package/readback succeeds.

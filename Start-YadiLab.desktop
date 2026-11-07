@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=YadiLab v1.8.0-dev.4
+Comment=Starta YadiLab i Chrome/Chromium
+Icon=applications-system
+Terminal=false
+Exec=sh -c 'desktop=$1; root=$(dirname -- "$desktop"); exec mate-terminal -- bash "$root/start-yadilab.sh"' sh %k
+Path=
+Categories=Education;Development;
+StartupNotify=true

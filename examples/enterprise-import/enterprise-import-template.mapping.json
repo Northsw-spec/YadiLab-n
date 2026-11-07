@@ -1,0 +1,128 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-mapping-profile",
+  "schemaVersion": "0.1.0",
+  "profileId": "enterprise.devices.template",
+  "version": "1.0.0",
+  "tables": [
+    {
+      "tableId": "devices",
+      "sourceTable": "Devices",
+      "entity": {
+        "entityType": "endpoint.generic",
+        "id": {
+          "matches": [
+            {
+              "field": "Asset ID",
+              "class": "EXACT"
+            },
+            {
+              "field": "asset_id",
+              "class": "ALIAS"
+            }
+          ]
+        },
+        "label": {
+          "selector": {
+            "matches": [
+              {
+                "field": "Hostname",
+                "class": "EXACT"
+              },
+              {
+                "field": "Computer",
+                "class": "ALIAS"
+              }
+            ]
+          },
+          "fallbackToId": true
+        }
+      },
+      "facts": [
+        {
+          "mappingId": "hostname",
+          "selector": {
+            "matches": [
+              {
+                "field": "Hostname",
+                "class": "EXACT"
+              },
+              {
+                "field": "Computer",
+                "class": "ALIAS"
+              }
+            ]
+          },
+          "path": "/identity/hostname",
+          "valueType": "string",
+          "presence": "required",
+          "onMissing": "unknown"
+        },
+        {
+          "mappingId": "ipv4",
+          "selector": {
+            "matches": [
+              {
+                "field": "IPv4",
+                "class": "EXACT"
+              },
+              {
+                "field": "IP Address",
+                "class": "ALIAS"
+              },
+              {
+                "field": "IP",
+                "class": "ALIAS"
+              }
+            ]
+          },
+          "path": "/network/interfaces/primary/ipv4",
+          "valueType": "ipv4",
+          "presence": "required",
+          "onMissing": "unknown"
+        },
+        {
+          "mappingId": "gateway",
+          "selector": {
+            "matches": [
+              {
+                "field": "Default Gateway",
+                "class": "EXACT"
+              },
+              {
+                "field": "Default GW",
+                "class": "ALIAS"
+              },
+              {
+                "field": "Gateway",
+                "class": "ALIAS"
+              }
+            ]
+          },
+          "path": "/network/defaultGateway",
+          "valueType": "ipv4",
+          "presence": "optional",
+          "onMissing": "unknown"
+        },
+        {
+          "mappingId": "os",
+          "selector": {
+            "matches": [
+              {
+                "field": "OS",
+                "class": "EXACT"
+              },
+              {
+                "field": "Operating System",
+                "class": "ALIAS"
+              }
+            ]
+          },
+          "path": "/system/os",
+          "valueType": "string",
+          "presence": "optional",
+          "onMissing": "skip"
+        }
+      ]
+    }
+  ]
+}

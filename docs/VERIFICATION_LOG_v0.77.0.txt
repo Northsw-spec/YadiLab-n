@@ -1,0 +1,61 @@
+Foundation v0.77.0 — Phase 77 verification log
+Date: 2026-10-01
+Authority: YadiLab Masterprompt v1.3 VERIFIED / LOCKED + approved existing Foundation terminology overrides
+
+FOCUSED VERIFICATION
+- Guided Troubleshooting Workflow UI functional: 8/8 PASS
+- Guided Troubleshooting Workflow UI adversarial: 6/6 PASS
+- Typed Remediation UI regression: 6/6 functional + 4/4 adversarial PASS
+- Typed Remediation core regression: 41 functional + 30 adversarial PASS
+- Phase-75 Remediation regression: 28 functional + 16 adversarial PASS
+- Troubleshooting Notebook regression: 48 functional + 18 adversarial PASS
+- Evidence Review regression: 35 functional + 14 adversarial PASS
+- Evidence Notebook UI: 7/7 functional + 5/5 adversarial PASS
+- Evidence Review UI: 6/6 functional + 6/6 adversarial PASS
+- Troubleshooting session persistence: 50 functional + 14 adversarial PASS
+- Schema fixture expectations: 55/55 PASS
+- Draft 2020-12 schema meta-validation: 18/18 PASS
+- Branding guard: PASS
+- Browser/Observation TypeScript: PASS
+- ui/app/main.mjs syntax: PASS
+
+IMPLEMENTED BOUNDARY
+- engine identity: foundation.guided_troubleshooting@0.1.0
+- boundary: PROCESS_GUIDANCE_NO_DIAGNOSIS
+- deterministic phases only: COLLECT_EVIDENCE, REVIEW_EVIDENCE, FORM_HYPOTHESIS, REMEDIATE, COLLECT_AFTER_EVIDENCE, VERIFICATION_COMPLETE, CONTINUE_INVESTIGATION
+- process steps are derived only from learner-visible Runtime/notebook/review state
+- workflow never selects target, observation command, active probe, diagnosis, remediation action or remediation value
+- learner notes never satisfy evidence collection
+- non-matching post-remediation evidence cannot falsely complete the before/after verification loop
+- regression/no-improvement returns the learner to investigation without suggesting a fix
+- exact workflow state is content-addressed with SHA-256
+- tampered/mismatched notebook fails closed
+- no solution lookup, hidden score/grade, guest execution, live connector or AI/ML/LLM
+
+ACCEPTED FIRST WHOLE-FOUNDATION RUN
+The exact test:foundation chain contains 191 deterministic commands, IDs 0 through 190.
+- command records: 191/191
+- explicit exit records: 191/191
+- unique command IDs: 191
+- unique exit IDs: 191
+- missing command/exit IDs: 0
+- duplicate command/exit IDs: 0
+- non-zero exits: 0
+- explicit FAIL/ERROR markers: 0
+- command 168 offline dependency snapshot transport: exit 0, 44/44 assertions PASS
+- command 179 launcher smoke: exit 0 / PASS
+- command 180 acceptance contract: exit 0 / PASS
+- command 190 Builder Asset Library adversarial: exit 0 / PASS
+
+A preliminary whole-chain attempt was discarded because the Python ZIP extraction used to create the v0.77 working tree had not restored Unix executable mode bits from the verified v0.76 archive. Launcher smoke correctly failed with exit 126. Baseline Unix modes were then restored exactly from ZIP metadata, launcher smoke was rechecked, and the accepted whole-chain run above was restarted from command 0. No result from the mode-damaged run is counted as PASS.
+
+EXTERNAL PRODUCT GATES
+Re-run separately with valid invocation forms after the accepted first full chain:
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED
+- Dependency readiness: RC=77 / BLOCKED
+- Executable dependency-resolved browser toolchain: RC=77 / BLOCKED
+- Dependency-resolved React browser build: RC=77 / BLOCKED
+- Parrot OS x86-64 acceptance: RC=77 / BLOCKED on Debian GNU/Linux 13 x86-64
+
+FINAL SEALING CONTRACT
+The identity-covered verification text is now frozen. The complete 191-command Foundation chain is rerun on exactly this final source state before source identity and release packaging are computed. Final source/archive/Drive evidence belongs in the external v0.77.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

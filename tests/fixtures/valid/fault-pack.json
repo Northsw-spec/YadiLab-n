@@ -1,0 +1,151 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-pack",
+  "schemaVersion": "0.1.0",
+  "packId": "foundation.network.core",
+  "version": "0.1.0",
+  "domain": "network",
+  "packIdentity": "2f87ea5ff35822fc99f9d181ee82429c453fef26870e102bee354c5b2a38429d",
+  "faults": [
+    {
+      "faultId": "routing.remove_default_gateway",
+      "version": "0.1.0",
+      "title": "Remove default gateway",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "remove_gateway",
+          "op": "remove",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_absent",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Traffic that depends on the default route may lose external reachability while local state remains otherwise unchanged."
+      ],
+      "hiddenTruth": "The target resource's modeled default gateway has been removed.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "routing",
+        "gateway"
+      ],
+      "learningObjectives": [
+        "Verify default-route configuration before changing unrelated services."
+      ]
+    },
+    {
+      "faultId": "firewall.force_default_deny",
+      "version": "0.1.0",
+      "title": "Force default deny policy",
+      "domain": "firewall",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_default_deny",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": {
+            "kind": "literal",
+            "value": "deny"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "deny"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Flows not explicitly permitted by modeled ACL rules may be blocked."
+      ],
+      "hiddenTruth": "The target resource's default ACL action has been changed to deny.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "firewall",
+        "acl"
+      ],
+      "learningObjectives": [
+        "Distinguish policy-default behavior from explicit rule behavior."
+      ]
+    }
+  ]
+}

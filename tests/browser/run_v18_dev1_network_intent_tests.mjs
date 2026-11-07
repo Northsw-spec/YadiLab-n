@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { computeCanonicalSourceIdentity, createEndpointSet, createFlowProfile, createNetworkIntentContract, exportNetworkIntentContract, importNetworkIntentContract, previewNetworkIntent } from "../../dist-browser-test/ui/src/browser/index.js";
+
+const source = JSON.parse(fs.readFileSync("tests/fixtures/valid/scenario-normalized.json", "utf8"));
+const flow = source.tests.find((test) => test.type === "network.reachability");
+assert.ok(flow, "fixture must contain a network reachability flow");
+const params = flow.params;
+const sourceIdentity = await computeCanonicalSourceIdentity(source);
+const from = await createEndpointSet({ title: "Explicit source", nodeIds: [params.from], source });
+const to = await createEndpointSet({ title: "Explicit destination", nodeIds: [params.to], source });
+const profile = await createFlowProfile({ title: "RDP reachability", flowId: flow.id, protocol: params.protocol, port: params.port, source });
+const contract = await createNetworkIntentContract({ title: "RDP intent", description: "Dev1 explicit network intent contract", source, sourceIdentity, endpointSets: [from, to], flowProfiles: [profile], rules: [{ sourceSetId: from.setId, destinationSetId: to.setId, flowProfileId: profile.profileId, expectation: "MUST REACH", expected: "SUCCESS" }] });
+const preview = await previewNetworkIntent(contract, source);
+assert.equal(preview.counts.READY, 1);
+assert.equal(preview.counts["INVALID REFERENCE"], 0);
+assert.equal(preview.counts["NOT COMPARABLE"], 0);
+const roundTrip = await importNetworkIntentContract(exportNetworkIntentContract(contract), source);
+assert.equal(roundTrip.ok, true);
+const tampered = JSON.parse(exportNetworkIntentContract(contract));
+tampered.endpointSets[0].nodeIds = ["missing-node"];
+const tamperedResult = await importNetworkIntentContract(JSON.stringify(tampered), source);
+assert.equal(tamperedResult.ok, false);
+assert.ok(tamperedResult.diagnostics.includes("INTENT_CONTRACT_INVALID_NODE_REFERENCE"));
+await assert.rejects(createNetworkIntentContract({ title: "Invalid deny", source, sourceIdentity, endpointSets: [from, to], flowProfiles: [profile], rules: [{ sourceSetId: from.setId, destinationSetId: to.setId, flowProfileId: profile.profileId, expectation: "MUST NOT REACH", expected: "SUCCESS" }] }), /INTENT_CONTRACT_DENY_EXPECTATION_NOT_MODELED/);
+console.log("v18 dev1 network intent tests: PASS");

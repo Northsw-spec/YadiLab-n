@@ -1,0 +1,8 @@
+---
+all:
+  hosts:
+    host01:
+---
+all:
+  hosts:
+    host02:

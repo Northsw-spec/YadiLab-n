@@ -1,0 +1,6 @@
+{
+  "records": [
+    {"Asset ID":"pc01","Hostname":"PC-01","IP Address":"10.20.30.44","Default GW":"10.20.30.1","OS":"Windows 11"}
+  ],
+  "metadata": {"customer":"not automatically imported"}
+}

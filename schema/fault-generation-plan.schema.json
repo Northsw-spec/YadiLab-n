@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:fault-generation-plan:0.1.0",
+  "title": "Fault Generation Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "generatorId",
+    "generatorVersion",
+    "scenarioId",
+    "scenarioHash",
+    "seed",
+    "request",
+    "packLocks",
+    "selections",
+    "groundTruth",
+    "planIdentity"
+  ],
+  "properties": {
+    "formatId": { "const": "infrastructure-cyber-lab.fault-generation-plan" },
+    "schemaVersion": { "$ref": "#/$defs/semver" },
+    "generatorId": { "$ref": "#/$defs/dottedId" },
+    "generatorVersion": { "$ref": "#/$defs/semver" },
+    "scenarioId": { "$ref": "#/$defs/id" },
+    "scenarioHash": { "$ref": "#/$defs/sha256" },
+    "enterpriseBaselineIdentity": { "$ref": "#/$defs/sha256" },
+    "seed": { "$ref": "#/$defs/uint32" },
+    "request": { "$ref": "#/$defs/request" },
+    "packLocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/packLock" }
+    },
+    "selections": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/selection" }
+    },
+    "groundTruth": { "$ref": "#/$defs/groundTruth" },
+    "planIdentity": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "dottedId": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$" },
+    "semver": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uint32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "difficulty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layers", "dependencyDepth", "evidenceVisibility", "remediationConstraints"],
+      "properties": {
+        "layers": { "type": "integer", "minimum": 1 },
+        "dependencyDepth": { "type": "integer", "minimum": 0 },
+        "evidenceVisibility": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "remediationConstraints": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": { "type": "integer", "minimum": 0 },
+        "max": { "type": "integer", "minimum": 0 }
+      },
+      "minProperties": 1
+    },
+    "difficultyBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layers": { "$ref": "#/$defs/range" },
+        "dependencyDepth": { "$ref": "#/$defs/range" },
+        "evidenceVisibility": { "$ref": "#/$defs/range" },
+        "remediationConstraints": { "$ref": "#/$defs/range" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["faultCount", "requireDistinctFaultDefinitions"],
+      "properties": {
+        "faultCount": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "requireDistinctFaultDefinitions": { "type": "boolean" },
+        "allowedDomains": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dottedId" }
+        },
+        "allowedTargetTypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^(\\*|[a-z][a-z0-9_.-]{0,127})$" }
+        },
+        "allowedFaultIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dottedId" }
+        },
+        "excludedFaultIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dottedId" }
+        },
+        "maxTotalChangedResources": { "type": "integer", "minimum": 1 },
+        "difficulty": { "$ref": "#/$defs/difficultyBounds" }
+      }
+    },
+    "packLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packId", "version", "packIdentity"],
+      "properties": {
+        "packId": { "$ref": "#/$defs/dottedId" },
+        "version": { "$ref": "#/$defs/semver" },
+        "packIdentity": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "target", "path", "value"],
+          "properties": {
+            "op": { "const": "set" },
+            "target": { "$ref": "#/$defs/id" },
+            "path": { "type": "string", "minLength": 1 },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "target", "path"],
+          "properties": {
+            "op": { "const": "remove" },
+            "target": { "$ref": "#/$defs/id" },
+            "path": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal", "instanceId", "packId", "packVersion", "packIdentity",
+        "faultId", "faultVersion", "seed", "bindings", "changedResources",
+        "expectedSymptoms", "hiddenTruth", "learningObjectives", "difficulty",
+        "beforeStateRevision", "afterStateRevision", "preconditionsHeldOnBaseline"
+      ],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "instanceId": { "$ref": "#/$defs/id" },
+        "packId": { "$ref": "#/$defs/dottedId" },
+        "packVersion": { "$ref": "#/$defs/semver" },
+        "packIdentity": { "$ref": "#/$defs/sha256" },
+        "faultId": { "$ref": "#/$defs/dottedId" },
+        "faultVersion": { "$ref": "#/$defs/semver" },
+        "seed": { "$ref": "#/$defs/uint32" },
+        "bindings": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/id" }
+        },
+        "changedResources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "expectedSymptoms": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "hiddenTruth": { "type": "string", "minLength": 1 },
+        "learningObjectives": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "difficulty": { "$ref": "#/$defs/difficulty" },
+        "beforeStateRevision": { "type": "integer", "minimum": 0 },
+        "afterStateRevision": { "type": "integer", "minimum": 1 },
+        "preconditionsHeldOnBaseline": { "type": "boolean" }
+      }
+    },
+    "investigationStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "instanceId", "faultId", "rationale", "expectedSymptoms", "learningObjectives"],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "instanceId": { "$ref": "#/$defs/id" },
+        "faultId": { "$ref": "#/$defs/dottedId" },
+        "rationale": { "type": "string", "enum": ["INDEPENDENT_STABLE_ORDER", "PRECONDITION_DEPENDENCY"] },
+        "expectedSymptoms": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "learningObjectives": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "groundTruth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overlayIdentity", "faultCount", "changedResources", "expectedSymptoms",
+        "referenceInvestigationOrder", "recoveryOrder", "canonicalRecovery",
+        "finalStateRevision", "solvabilityVerified"
+      ],
+      "properties": {
+        "overlayIdentity": { "$ref": "#/$defs/sha256" },
+        "faultCount": { "type": "integer", "minimum": 1 },
+        "changedResources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "expectedSymptoms": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "referenceInvestigationOrder": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/investigationStep" }
+        },
+        "recoveryOrder": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "canonicalRecovery": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/operation" }
+        },
+        "finalStateRevision": { "type": "integer", "minimum": 1 },
+        "solvabilityVerified": { "const": true }
+      }
+    }
+  }
+}

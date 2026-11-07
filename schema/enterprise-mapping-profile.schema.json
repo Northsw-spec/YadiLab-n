@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-mapping-profile:0.1.0",
+  "title": "Enterprise Import Mapping Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "profileId",
+    "version",
+    "tables"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.enterprise-mapping-profile"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "profileId": {
+      "$ref": "#/$defs/profileId"
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "tables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/tableMapping"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "profileId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "mappingClass": {
+      "type": "string",
+      "enum": [
+        "EXACT",
+        "ALIAS",
+        "USER_MAPPED"
+      ]
+    },
+    "valueType": {
+      "type": "string",
+      "enum": [
+        "boolean",
+        "integer",
+        "number",
+        "string",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "mac",
+        "port",
+        "protocol",
+        "reference",
+        "list",
+        "map"
+      ]
+    },
+    "fieldMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "class"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "class": {
+          "$ref": "#/$defs/mappingClass"
+        }
+      }
+    },
+    "fieldSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "matches"
+      ],
+      "properties": {
+        "matches": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/fieldMatch"
+          }
+        }
+      }
+    },
+    "factMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mappingId",
+        "selector",
+        "path",
+        "valueType",
+        "presence",
+        "onMissing"
+      ],
+      "properties": {
+        "mappingId": {
+          "$ref": "#/$defs/id"
+        },
+        "selector": {
+          "$ref": "#/$defs/fieldSelector"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "valueType": {
+          "$ref": "#/$defs/valueType"
+        },
+        "presence": {
+          "type": "string",
+          "enum": [
+            "required",
+            "optional"
+          ]
+        },
+        "onMissing": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "skip"
+          ]
+        }
+      }
+    },
+    "entityMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entityType",
+        "id",
+        "label"
+      ],
+      "properties": {
+        "entityType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "id": {
+          "$ref": "#/$defs/fieldSelector"
+        },
+        "label": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "selector",
+            "fallbackToId"
+          ],
+          "properties": {
+            "selector": {
+              "$ref": "#/$defs/fieldSelector"
+            },
+            "fallbackToId": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "tableMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableId",
+        "sourceTable",
+        "entity",
+        "facts"
+      ],
+      "properties": {
+        "tableId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceTable": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "entity": {
+          "$ref": "#/$defs/entityMapping"
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/factMapping"
+          }
+        }
+      }
+    }
+  }
+}

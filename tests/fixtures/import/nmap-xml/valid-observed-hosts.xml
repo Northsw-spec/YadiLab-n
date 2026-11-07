@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" args="nmap -sT -p 22,443 -oX synthetic.xml 192.0.2.0/24" start="1761660000" version="7.94" xmloutputversion="1.05">
+  <scaninfo type="connect" protocol="tcp" numservices="2" services="22,443"/>
+  <host starttime="1761660001" endtime="1761660011">
+    <status state="up" reason="syn-ack"/>
+    <address addr="192.0.2.10" addrtype="ipv4"/>
+    <hostnames><hostname name="training-host.invalid" type="user"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" method="table" conf="3"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="closed" reason="conn-refused"/>
+      </port>
+    </ports>
+    <times srtt="1234" rttvar="512" to="100000"/>
+  </host>
+  <host>
+    <status state="down" reason="no-response"/>
+    <address addr="192.0.2.11" addrtype="ipv4"/>
+  </host>
+  <runstats><finished time="1761660020" timestr="Synthetic time" elapsed="20.0" summary="Synthetic training scan" exit="success"/><hosts up="1" down="1" total="2"/></runstats>
+</nmaprun>

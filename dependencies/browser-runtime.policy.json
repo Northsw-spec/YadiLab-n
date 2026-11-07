@@ -1,0 +1,34 @@
+{
+  "formatId": "infrastructure-cyber-lab.browser-dependency-policy",
+  "schemaVersion": "1.0.0",
+  "runtimeDependencies": {
+    "@xyflow/react": "12.11.6",
+    "@zip.js/zip.js": "2.18.2",
+    "ajv": "8.17.1",
+    "elkjs": "0.12.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "yaml": "2.8.3"
+  },
+  "developmentDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "5.9.2"
+  },
+  "rules": {
+    "exactVersionsOnly": true,
+    "packageLockRequiredForBrowserBuild": true,
+    "localRuntimeAssetsOnly": true,
+    "remoteRuntimeImportsForbidden": true,
+    "endUserNodeRuntimeForbidden": true,
+    "browserBundleMustBeHashManifested": true
+  },
+  "targetOptionalDependencies": {
+    "linux-x86_64": [
+      {
+        "from": "esbuild",
+        "package": "@esbuild/linux-x64",
+        "version": "0.28.2"
+      }
+    ]
+  }
+}

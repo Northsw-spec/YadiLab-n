@@ -1,0 +1,283 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "metadata": {
+    "title": "Foundation acceptance",
+    "description": "",
+    "language": "sv",
+    "authors": [],
+    "tags": [],
+    "briefing": "Harden the exposed remote access path."
+  },
+  "minimumEngineVersion": "0.2.0",
+  "capabilityLocks": [
+    {
+      "id": "core.network",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.windows",
+      "version": "1.0.0"
+    }
+  ],
+  "profileLocks": [
+    {
+      "id": "vendor.proxmox",
+      "version": "1.0.0"
+    }
+  ],
+  "zones": [
+    {
+      "id": "wan",
+      "label": "Internet",
+      "kind": "wan"
+    },
+    {
+      "id": "dmz",
+      "label": "DMZ",
+      "kind": "dmz"
+    },
+    {
+      "id": "server",
+      "label": "Server VLAN",
+      "kind": "server"
+    },
+    {
+      "id": "mgmt",
+      "label": "Management",
+      "kind": "management"
+    }
+  ],
+  "resources": [
+    {
+      "id": "attacker",
+      "type": "actor.attacker",
+      "label": "External attacker",
+      "zone": "wan",
+      "properties": {},
+      "interfaces": [],
+      "asset": {
+        "id": "actor.attacker",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "firewall01",
+      "type": "network.firewall",
+      "label": "Firewall",
+      "zone": "dmz",
+      "properties": {
+        "rules": [
+          {
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "port": 3389,
+            "action": "allow"
+          }
+        ]
+      },
+      "interfaces": [],
+      "asset": {
+        "id": "network.firewall",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "rds01",
+      "type": "windows.rds_host",
+      "label": "RDS01",
+      "zone": "server",
+      "properties": {
+        "rdp": {
+          "enabled": true,
+          "port": 3389
+        },
+        "nla": false
+      },
+      "interfaces": [],
+      "asset": {
+        "id": "windows.rds_host",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "admin01",
+      "type": "windows.workstation",
+      "label": "Admin workstation",
+      "zone": "mgmt",
+      "properties": {},
+      "interfaces": [],
+      "asset": {
+        "id": "endpoint.windows",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "wan_fw",
+      "kind": "network",
+      "from": {
+        "resource": "attacker"
+      },
+      "to": {
+        "resource": "firewall01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "fw_rds",
+      "kind": "network",
+      "from": {
+        "resource": "firewall01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "admin_rds",
+      "kind": "management",
+      "from": {
+        "resource": "admin01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {}
+    }
+  ],
+  "tests": [
+    {
+      "id": "direct_rdp",
+      "type": "network.reachability",
+      "params": {
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "label": "direct_rdp",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "admin_rdp",
+      "type": "network.reachability",
+      "params": {
+        "from": "admin01",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE",
+      "label": "admin_rdp"
+    }
+  ],
+  "findings": [
+    {
+      "id": "rdp_exposed",
+      "title": "Direct RDP exposure",
+      "severity": "high",
+      "when": {
+        "op": "reachable",
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "evidenceTests": [
+        "direct_rdp"
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "block_direct_rdp",
+      "title": "Block direct Internet RDP",
+      "category": "perimeter",
+      "required": true,
+      "condition": {
+        "op": "not",
+        "rule": {
+          "op": "reachable",
+          "from": "attacker",
+          "to": "rds01",
+          "protocol": "tcp",
+          "port": 3389
+        }
+      }
+    }
+  ],
+  "completion": {
+    "op": "not",
+    "rule": {
+      "op": "reachable",
+      "from": "attacker",
+      "to": "rds01",
+      "protocol": "tcp",
+      "port": 3389
+    }
+  },
+  "canonicalSolution": {
+    "operations": [
+      {
+        "op": "set",
+        "target": "firewall01",
+        "path": "properties.rules.0.action",
+        "value": "deny"
+      }
+    ]
+  },
+  "hints": [],
+  "notes": [
+    {
+      "id": "note_intro",
+      "text": "Review RDS",
+      "target": "rds01"
+    }
+  ],
+  "assetLocks": [
+    {
+      "id": "actor.attacker",
+      "version": "1.0.0",
+      "path": "assets/builtin/actor.attacker.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "endpoint.windows",
+      "version": "1.0.0",
+      "path": "assets/builtin/endpoint.windows.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "network.firewall",
+      "version": "1.0.0",
+      "path": "assets/builtin/network.firewall.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.rds_host",
+      "version": "1.0.0",
+      "path": "assets/builtin/windows.rds_host.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    }
+  ]
+}

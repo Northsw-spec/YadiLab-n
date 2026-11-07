@@ -1,0 +1,33 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-import-report",
+  "schemaVersion": "0.1.0",
+  "status": "READY",
+  "adapter": {
+    "id": "builtin.csv",
+    "version": "1.0.0"
+  },
+  "source": {
+    "sourceId": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mediaType": "text/csv",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": 42,
+    "displayName": "devices.csv"
+  },
+  "mapping": {
+    "profileId": "enterprise.devices.basic",
+    "version": "1.0.0",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "baselineIdentity": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "stats": {
+    "tables": 1,
+    "records": 2,
+    "entities": 2,
+    "facts": 7,
+    "unknownFacts": 1,
+    "invalidFacts": 0
+  },
+  "diagnostics": [],
+  "unmappedFields": [],
+  "conflicts": []
+}

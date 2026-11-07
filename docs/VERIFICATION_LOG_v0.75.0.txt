@@ -1,0 +1,56 @@
+Foundation v0.75.0 — Phase 75 verification log
+Date: 2026-10-01
+Authority: YadiLab Masterprompt v1.3 VERIFIED / LOCKED + approved existing Foundation terminology overrides
+
+FOCUSED VERIFICATION
+- Troubleshooting Remediation core functional: 28 assertions PASS
+- Troubleshooting Remediation core adversarial: 16 assertions PASS
+- Troubleshooting Remediation Browser UI functional: 6/6 PASS
+- Troubleshooting Remediation Browser UI adversarial: 4/4 PASS
+- Troubleshooting Notebook regression: 48 functional + 18 adversarial PASS
+- Evidence Review regression: 35 functional + 14 adversarial PASS
+- Evidence Notebook UI: 7/7 + 5/5 PASS
+- Evidence Review UI: 6/6 + 6/6 PASS
+- Troubleshooting session persistence: 50 functional + 14 adversarial PASS
+- Schema fixture expectations: 53/53 PASS
+- Draft 2020-12 schema meta-validation: 18/18 PASS
+- Branding guard: PASS
+- Browser/Observation TypeScript: PASS
+- ui/app/main.mjs syntax: PASS
+
+IMPLEMENTED BOUNDARY
+- learner supplies the exact modeled set/remove operation
+- no canonicalSolution/faultOrigin/hidden truth lookup
+- only properties.* and modeled interface address/MAC paths are remediable
+- current-revision saved evidence is mandatory before preview/commit
+- preview token binds scenario hash + state revision + notebook identity + operation
+- commit is one normal Runtime history step
+- Notebook schema 0.2.0 adds remediation_action; legacy 0.1.0 remains accepted
+- remediation review compares exact before/after evidence at the bound revisions
+- no score, grade, root-cause inference, guest execution, live connector or AI/ML/LLM
+
+ACCEPTED FIRST WHOLE-FOUNDATION RUN
+The exact test:foundation chain contains 185 deterministic commands, IDs 0 through 184.
+- command records: 185/185
+- explicit exit records: 185/185
+- unique command IDs: 185
+- unique exit IDs: 185
+- missing command/exit IDs: 0
+- duplicate command/exit IDs: 0
+- non-zero exits: 0
+- explicit FAIL/ERROR markers: 0
+- command 162 offline dependency snapshot transport: exit 0, 44/44 assertions PASS
+- command 173 launcher smoke: exit 0 / PASS
+- command 174 acceptance contract: exit 0 / PASS
+- command 184 Builder Asset Library adversarial: exit 0 / PASS
+
+EXTERNAL PRODUCT GATES
+Re-run separately with valid invocation forms after the accepted first full chain:
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED
+- Dependency readiness: RC=77 / BLOCKED
+- Executable dependency-resolved browser toolchain: RC=77 / BLOCKED
+- Dependency-resolved React browser build: RC=77 / BLOCKED
+- Parrot OS x86-64 acceptance: RC=77 / BLOCKED on Debian GNU/Linux 13 x86-64
+
+FINAL SEALING CONTRACT
+The identity-covered verification text is now frozen. The complete 185-command Foundation chain is rerun on exactly this final source state before source identity and release packaging are computed. Final source/archive/Drive evidence belongs in the external v0.75.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

@@ -1,0 +1,29 @@
+{
+  "formatId": "infrastructure-cyber-lab.layout",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "engine": "elk.layered",
+  "nodes": [
+    {
+      "id": "attacker",
+      "x": 0,
+      "y": 0,
+      "width": 160,
+      "height": 80
+    },
+    {
+      "id": "firewall01",
+      "x": 220,
+      "y": 0,
+      "width": 160,
+      "height": 80
+    },
+    {
+      "id": "rds01",
+      "x": 440,
+      "y": 0,
+      "width": 160,
+      "height": 80
+    }
+  ]
+}

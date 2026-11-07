@@ -1,0 +1,37 @@
+{
+  "formatId": "infrastructure-cyber-lab.package",
+  "packageVersion": "0.1.0",
+  "distribution": "student",
+  "scenarioId": "foundation_acceptance",
+  "scenarioHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "schemaVersion": "0.1.0",
+  "minimumEngineVersion": "0.1.0",
+  "entrypoint": "scenario.json",
+  "integrityAlgorithm": "sha256",
+  "capabilityLocks": [
+    {
+      "id": "core.network",
+      "version": "1.0.0"
+    }
+  ],
+  "profileLocks": [
+    {
+      "id": "vendor.proxmox",
+      "version": "1.0.0"
+    }
+  ],
+  "files": [
+    {
+      "path": "scenario.json",
+      "size": 1234,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mime": "application/json"
+    }
+  ],
+  "assetLocks": [
+    {
+      "id": "network.firewall",
+      "version": "1.0.0"
+    }
+  ]
+}

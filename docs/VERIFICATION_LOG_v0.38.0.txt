@@ -1,0 +1,17 @@
+YadiLab Foundation v0.38.0 — local verification evidence
+Architecture: Masterprompt v1.2 VERIFIED / LOCKED.
+Exact baseline v0.37.0 ZIP SHA-256: ea3fa237ca26f13e9e3fb0a657ff2d9c01a3725d8d9ca131e8ac1a31f10775af
+
+Worktree `npm run test:foundation`: PASS / exit 0.
+Phase 38 package media: 25 functional + 28 adversarial assertions PASS.
+`tsc -p tests/tsconfig.browser.json --noEmit`: PASS.
+Go launcher CSP tests and rebuilt live launcher smoke: PASS.
+All earlier Foundation compiler/Engine/PackageIO/CLI/layout/browser/persistence/dependency suites remain PASS.
+Worktree full-regression log SHA-256: caeca4bfcb5a4dcf92f76809e9969d9efd64205664ab324560d5dc0c21637575
+
+`node scripts/check_browser_build_readiness.mjs`: 77/BLOCKED, real package-lock/node_modules absent; npm registry DNS EAI_AGAIN.
+`node scripts/verify_package_lock.mjs`: 77/BLOCKED; project lock missing.
+`bash scripts/run_parrot_acceptance.sh`: 77/BLOCKED on Debian non-Parrot host.
+The real React/React Flow/ELK/Ajv/zip.js bundle, actual browser DOM acceptance, actual ZIP adapter execution, and real Parrot acceptance are NOT VERIFIED.
+
+Status: VERIFIED DEVELOPMENT CHECKPOINT with candidate packaged-byte readback PASS; final ZIP independently audited at delivery; NOT VERIFIED RELEASE.

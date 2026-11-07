@@ -1,0 +1,54 @@
+YadiLab Foundation v0.63.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.62.0.zip bytes
+Baseline SHA256: a8af668ccaaea99f70c4d89e95089434baa0a76e19d142ae045109db5050651e
+
+Phase 63 — Import Helper UI
+- Adds the first browser Import Helper over the existing deterministic enterprise import stack.
+- Supports local XLSX/ODS/CSV/TSV/JSON source selection.
+- Supported filename extensions are fail-closed when present; a misleading browser MIME type cannot override an unsupported extension.
+- Extensionless files may be accepted only with an explicitly supported MIME type.
+- Bundled example mapping profile may be used; a user-supplied mapping-profile JSON may be loaded and exported.
+- Mapping review displays discovered tables/fields plus RESOLVED/MISSING/AMBIGUOUS states.
+- Explicit table/field decisions create a new mapping-profile version and flow through as USER_MAPPED provenance.
+- Import report displays records/entities/facts, unknown/invalid counts, unmapped fields, diagnostics and baseline identity.
+- Duplicate entity-ID conflicts expose exact source-record candidates and retry through recorded conflict resolutions.
+- Current enterprise baseline view surfaces UNKNOWN/CONFLICTING/INVALID fact states.
+- Re-import displays deterministic entity/relationship/fact diff.
+- Three-way merge plan displays REVIEW_REQUIRED entries and collects CURRENT/INCOMING/DELETE resolutions.
+- React/UI code does not implement parallel import semantics; it calls the same Phase 59–62 adapter/review/import/diff/merge modules.
+- The approved user-facing term is Import Helper UI / Import Helper.
+- The byte-locked Masterprompt v1.3 file remains unchanged; a separate terminology override records the nomenclature correction without invalidating the historical Masterprompt SHA-256.
+- Baseline-to-scenario/topology projection is intentionally not claimed in Phase 63.
+
+Focused Phase 63 verification before full regression
+- Import Helper functional: 9/9 PASS.
+- Import Helper adversarial: 12/12 PASS.
+- Enterprise Import regression including XLSX/ODS: 30/30 functional + 28/28 adversarial PASS.
+- Mapping Review/Re-import Diff: 10/10 functional + 12/12 adversarial PASS.
+- Re-import Merge: 9/9 functional + 9/9 adversarial PASS.
+- Branding guard: PASS.
+- Generated TypeScript contract reproducibility: byte-identical PASS.
+- ui/app/main.mjs syntax check: PASS.
+
+First whole-Foundation regression
+- Exact test:foundation chain contains 143 deterministic commands.
+- Commands 0–60: PASS.
+- Commands 61–110: PASS, including Import Helper 9/9 functional + 12/12 adversarial.
+- Commands 111–119: PASS before execution-harness timeout while command 120 was running; command 120 was not counted.
+- Commands 120–124: PASS in deterministic continuation; harness timed out while command 125 was starting, so command 125 was not counted.
+- Command 125: PASS in separate deterministic rerun.
+- Commands 126–142: PASS.
+- Therefore 143/143 commands are covered by explicit successful runs; no timed-out command is counted without a successful rerun.
+
+External gates on the candidate source tree
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Actual server-stopped Chromium React offline reload: BLOCKED until genuine signed dependencies and dependency-resolved browser release exist.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian GNU/Linux 13.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<!DOCTYPE nmaprun SYSTEM "https://untrusted.invalid/nmap.dtd">
+<nmaprun scanner="nmap" start="1761660200" version="7.94" xmloutputversion="1.05">
+  <host><status state="up"/><address addr="192.0.2.12" addrtype="ipv4"/></host>
+</nmaprun>

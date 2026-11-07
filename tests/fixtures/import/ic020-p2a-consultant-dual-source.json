@@ -1,0 +1,114 @@
+{
+  "Devices": [
+    {
+      "Asset ID": "rtr01",
+      "Hostname": "Edge Router",
+      "Device Type": "Router",
+      "IP Address": "10.10.10.1",
+      "Connected To": "",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "fw01",
+      "Hostname": "Firewall",
+      "Device Type": "Firewall",
+      "IP Address": "10.10.10.2",
+      "Connected To": "rtr01",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "sw01",
+      "Hostname": "Distribution Switch",
+      "Device Type": "Switch",
+      "IP Address": "10.10.10.3",
+      "Connected To": "fw01",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "sw02",
+      "Hostname": "Access Switch",
+      "Device Type": "Switch",
+      "IP Address": "10.10.20.3",
+      "Connected To": "sw01",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "win01",
+      "Hostname": "Reception Windows",
+      "Device Type": "Windows",
+      "IP Address": "10.10.20.21",
+      "Connected To": "sw01",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "lin01",
+      "Hostname": "Linux Support",
+      "Device Type": "Linux",
+      "IP Address": "10.10.20.22",
+      "Connected To": "sw02",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "win02",
+      "Hostname": "Finance Windows",
+      "Device Type": "Windows",
+      "IP Address": "10.10.20.23",
+      "Connected To": "sw01",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    },
+    {
+      "Asset ID": "lin02",
+      "Hostname": "Linux App Server",
+      "Device Type": "Linux",
+      "IP Address": "10.10.30.10",
+      "Connected To": "sw02",
+      "Default Gateway": "10.10.10.1",
+      "Confidential Notes": "SECRET_IC020_P2A_CANARY_NOT_REAL"
+    }
+  ],
+  "Links": [
+    {
+      "Link ID": "a1",
+      "From": "fw01",
+      "To": "rtr01",
+      "Link Type": "network"
+    },
+    {
+      "Link ID": "a2",
+      "From": "sw01",
+      "To": "fw01",
+      "Link Type": "network"
+    },
+    {
+      "Link ID": "a3",
+      "From": "sw02",
+      "To": "fw01",
+      "Link Type": "network"
+    },
+    {
+      "Link ID": "a4",
+      "From": "win01",
+      "To": "sw01",
+      "Link Type": "network"
+    },
+    {
+      "Link ID": "a5",
+      "From": "lin01",
+      "To": "sw02",
+      "Link Type": "network"
+    },
+    {
+      "Link ID": "a6",
+      "From": "win02",
+      "To": "sw01",
+      "Link Type": "network"
+    }
+  ]
+}

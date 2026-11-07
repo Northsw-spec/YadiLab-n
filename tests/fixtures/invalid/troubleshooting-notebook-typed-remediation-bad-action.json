@@ -1,0 +1,49 @@
+{
+  "formatId": "infrastructure-cyber-lab.troubleshooting-notebook",
+  "schemaVersion": "0.3.0",
+  "scenarioId": "foundation_acceptance",
+  "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "notebookIdentity": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "entryId": "entry-0001",
+      "sequence": 1,
+      "kind": "learner_note",
+      "stateRevision": 0,
+      "noteKind": "hypothesis",
+      "text": "Check whether the failure is before or after the default gateway."
+    },
+    {
+      "entryId": "entry-0002",
+      "sequence": 2,
+      "kind": "remediation_action",
+      "stateRevision": 1,
+      "beforeStateRevision": 0,
+      "afterStateRevision": 1,
+      "boundary": "LEARNER_OPERATION_NO_SOLUTION",
+      "operation": {
+        "op": "set",
+        "target": "client1",
+        "path": "properties.defaultGateway",
+        "value": "10.0.0.1"
+      },
+      "operationIdentity": "1111111111111111111111111111111111111111111111111111111111111111",
+      "beforeValueState": "KNOWN",
+      "beforeValue": "10.0.0.254",
+      "afterValueState": "KNOWN",
+      "afterValue": "10.0.0.1",
+      "learnerNote": "Restore modeled gateway.",
+      "typedAction": {
+        "engineId": "foundation.typed_remediation",
+        "engineVersion": "0.1.0",
+        "boundary": "LEARNER_ACTION_NO_SOLUTION",
+        "actionId": "invent_solution",
+        "label": "Change default gateway",
+        "targetId": "client1",
+        "parameters": {
+          "gateway": "10.0.0.1"
+        }
+      }
+    }
+  ]
+}

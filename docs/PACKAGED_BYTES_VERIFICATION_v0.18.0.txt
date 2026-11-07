@@ -1,0 +1,18 @@
+YadiLab Foundation v0.18.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Exact-byte gates verified:
+- complete Foundation regression through Phase 18 PASS;
+- Runtime explainability functional/adversarial suites PASS;
+- presenter is read-only and state/explanations derive from Engine evaluation;
+- TRUE/FALSE/UNKNOWN presentation remains explicit;
+- browser dependency readiness remains fail-closed when real dependencies/lock are absent;
+- launcher and acceptance-contract suites remain PASS;
+- executable permissions retained for launcher/acceptance scripts;
+- no superseded Masterprompt reference exists in checkpoint source;
+- transient dist-* build directories excluded from release ZIP.
+
+External dependency-resolved rendered-browser and real Parrot target gates remain unclaimed.

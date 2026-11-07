@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { evaluateMtuAtEgress, derivePathMtu } from "../../dist-engine-test/engine/src/index.js";
+const base={scenarioId:"mtu_adv",resources:[{id:"r1",type:"network.router",label:"R1",interfaces:[{id:"out",addresses:[],mtu:1500}],properties:{}},{id:"r2",type:"linux.server",label:"R2",interfaces:[{id:"in",addresses:[],mtu:1500}],properties:{}}],connections:[{id:"l",kind:"network",from:{resource:"r1",port:"out"},to:{resource:"r2",port:"in"},properties:{}}]};
+const state=(s)=>({scenarioId:s.scenarioId,scenarioHash:"a".repeat(64),stateRevision:0,resources:Object.fromEntries(s.resources.map(r=>[r.id,r]))});
+let checks=0; const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};
+const bad=structuredClone(base); bad.resources[0].interfaces[0].mtu=0; eq(evaluateMtuAtEgress(bad,state(bad),{resourceId:"r1",egressInterface:"out",packetSize:100}).truth,"UNKNOWN","MTU <= 0 fails closed");
+const malformed=structuredClone(base); malformed.resources[0].interfaces[0].mtu="1500"; eq(evaluateMtuAtEgress(malformed,state(malformed),{resourceId:"r1",egressInterface:"out",packetSize:100}).truth,"UNKNOWN","malformed MTU fails closed");
+eq(evaluateMtuAtEgress(base,state(base),{resourceId:"r1",egressInterface:"missing",packetSize:100}).truth,"UNKNOWN","unknown egress fails closed");
+eq(evaluateMtuAtEgress(base,state(base),{resourceId:"r1",egressInterface:"out",packetSize:0}).truth,"UNKNOWN","impossible packet size fails closed");
+const unsupported=structuredClone(base); unsupported.connections[0].properties.mtu=0; eq(evaluateMtuAtEgress(unsupported,state(unsupported),{resourceId:"r1",egressInterface:"out",packetSize:100}).truth,"UNKNOWN","invalid link MTU fails closed");
+eq(derivePathMtu(base,state(base),["r1","missing"]).truth,"UNKNOWN","unknown path node fails closed");
+eq(evaluateMtuAtEgress(base,state(base),{resourceId:"r1",egressInterface:"out",packetSize:1600,ipVersion:"IPv6"}).fragmentation,"NOT_MODELED","IPv6 router fragmentation is never fabricated");
+console.log(`PASS Dev31 MTU/PMTUD Engine adversarial: ${checks} assertions.`);

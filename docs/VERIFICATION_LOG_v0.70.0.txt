@@ -1,0 +1,57 @@
+YadiLab Foundation v0.70.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.69.0.zip bytes
+Baseline ZIP SHA256: e359d1c2fad6fb53bf1e760e66cb4202d7404fcf4356b24851f3aa8e1d3eda08
+Baseline source-checkout identity: 0afd89a2a400bbdefc4661ff528c7b076edeb733354040287a44cd81221f9d5a
+
+Phase 70 — Diagnostic / Observation Engine, Wave 1
+- Added foundation.observation@0.1.0 as a deterministic read-only Runtime observation layer.
+- Added 7 Windows and 7 Linux modeled command surfaces.
+- Every transcript explicitly states NO_GUEST_COMMAND_EXECUTION and binds scenario ID/hash, state revision, target and command.
+- Direct evidence paths are returned with every observation.
+- Missing values remain explicit <not modeled>; malformed values are surfaced with warnings instead of guessed.
+- Observation output does not access faultOrigin, hiddenTruth, canonicalSolution or generator author-only ground truth.
+- Browser Runtime adds target/command selection and a modeled transcript/evidence panel.
+- Builder execution, unsupported targets, unknown commands and cross-OS commands fail closed.
+- Existing generator reference order is no longer described as waiting for an Observation Engine; Wave 1 provides evidence but still does not fabricate automatic causal diagnosis.
+- No VM/guest, PowerShell, shell, systemctl, ip, nft, ss, journalctl or kernel command is actually executed.
+
+Focused verification before whole-Foundation regression
+- Schema suite: 44/44 fixture expectations PASS; 16/16 schemas Draft 2020-12 meta-valid.
+- Branding guard: PASS.
+- Diagnostic / Observation Engine Wave 1: 88 functional assertions PASS.
+- Diagnostic / Observation Engine Wave 1 adversarial: 11/11 PASS.
+- Diagnostic / Observation UI Wave 1: 6/6 functional + 6/6 adversarial PASS.
+- Existing Fault Engine: 25 functional + 18 adversarial PASS.
+- Phase 67 network Fault Pack: 318 functional + 10 adversarial PASS.
+- Windows + Linux Fault Packs: 228 functional + 7 adversarial PASS.
+- Deterministic multi-fault generator: 38 functional + 11 adversarial PASS.
+- Fault Injection UI: 15/15 functional + 15/15 adversarial PASS.
+- Generator UI: 6/6 functional + 6/6 adversarial PASS.
+- Compiler: 65 functional + 51 adversarial PASS.
+- Browser main-module syntax check: PASS.
+
+Whole-Foundation final sealing regression
+- Exact test:foundation chain contains 167 deterministic commands, IDs 0 through 166.
+- Final source-state rerun is required to contain exactly one explicit EXIT 0 for every command ID 0–166.
+- No timeout occurrence is interpreted as PASS; an interrupted command is rerun from its exact ID before it is counted.
+- Expected audited result after the final source-state rerun: 167/167 explicit exits at 0, no missing IDs, no non-zero exits, and no FAIL/ERROR markers.
+- Offline snapshot transport command 144 must report 44 assertions PASS and explicit exit 0.
+- Launcher smoke command 155 must exit 0.
+- Acceptance contract command 156 must exit 0.
+- Final Builder Asset Library adversarial command 166 must exit 0.
+
+External product-release gates re-run separately with valid invocation shapes
+- trusted snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED; no transport artifact produced.
+- dependency readiness: RC=77 / BLOCKED.
+- executable dependency-resolved browser toolchain: RC=77 / BLOCKED.
+- dependency-resolved browser build: RC=77 / BLOCKED.
+- Parrot OS x86-64 acceptance on current Debian GNU/Linux 13 x86-64 host: RC=77 / BLOCKED.
+
+These external gates are not reclassified as PASS and do not invalidate the development-checkpoint regression.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+
+Final source identity, archive hash/reproducibility/readback and Google Drive raw-byte readback belong in the external v0.70.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

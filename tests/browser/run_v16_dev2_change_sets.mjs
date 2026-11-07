@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { applyChangeSet, generateChangeSet, importChangeSet, markChangeSetStatus, verifyChangeSet } from "../../dist-browser-test/ui/src/browser/change-set.js";
+import { createVerificationSuite, exportVerificationSuite, importVerificationSuite, runVerificationSuite, verifyVerificationSuite } from "../../dist-browser-test/ui/src/browser/verification-suite.js";
+
+const source = JSON.parse(await fs.readFile("tests/fixtures/valid/scenario-source.json", "utf8"));
+const moved = { ...source, metadata: { ...source.metadata, description: "layout experiment" }, layoutHints: [{ id: "rds01", x: 20, y: 30 }] };
+const changed = { ...source, metadata: { ...source.metadata, description: "service experiment" }, resources: source.resources.map((r) => r.id === "rds01" ? { ...r, properties: { ...r.properties, rdp: { enabled: false, port: 3389 } } } : r) };
+
+const c1 = await generateChangeSet({ baseSource: source, targetSource: moved, baseRevision: 0, targetRevision: 1 });
+assert.equal(c1.baseSourceIdentity.length, 64);
+assert.equal(c1.targetSourceIdentity.length, 64);
+assert.ok(c1.sourceDiff.some((row) => row.domain === "METADATA"));
+assert.equal((await markChangeSetStatus(c1, changed)).status, "STALE");
+assert.equal((await markChangeSetStatus(c1, moved)).status, "CURRENT");
+assert.equal((await applyChangeSet(c1, changed)).ok, false);
+const applied = await applyChangeSet(c1, source);
+assert.equal(applied.ok, true);
+if (applied.ok) assert.deepEqual(applied.source, moved);
+const importedChangeSet = await importChangeSet(JSON.stringify(c1));
+assert.equal(importedChangeSet.ok, true);
+if (importedChangeSet.ok) assert.equal((await verifyChangeSet(importedChangeSet.value)).ok, true);
+const tampered = JSON.parse(JSON.stringify(c1)); tampered.sourceDiff[0].kind = "BOGUS";
+assert.equal((await verifyChangeSet(tampered)).ok, false);
+
+const suite = await createVerificationSuite({ title: "Outcome checks", selectedFlowIds: source.tests.map((t) => t.id), assertions: source.tests.map((t) => ({ assertionId: `assert-${t.id}`, flowId: t.id, type: "ENGINE_TEST_OUTCOME", expected: "SUCCESS" })) });
+const runner = { run: async (_source, flowId, sourceRevision) => ({ runId: `run-${flowId}-${sourceRevision}`, sourceIdentity: "a".repeat(64), sourceRevision, flowId, evaluation: { tests: [{ id: flowId, outcome: "TRUE" }], testResults: {}, findings: [], objectives: [], completion: { truth: "TRUE", explanation: [] }, evidence: [] } }) };
+const run = await runVerificationSuite(suite, source, 1, runner);
+assert.equal(run.results.length, source.tests.length);
+assert.equal(run.results.every((r) => r.result === "PASS"), true);
+assert.equal(run.summary.PASS, source.tests.length);
+const invalid = await runVerificationSuite(suite, { ...source, tests: source.tests.slice(0, 1) }, 2, runner);
+assert.equal(invalid.results.some((r) => r.result === "NOT RUN"), true);
+const unmodeledSuite = await createVerificationSuite({ title: "Boundary", selectedFlowIds: [source.tests[0].id], assertions: [{ assertionId: "unmodeled", flowId: source.tests[0].id, type: "DESTINATION", expected: "rds01" }] });
+const unmodeled = await runVerificationSuite(unmodeledSuite, source, 1, runner);
+assert.equal(unmodeled.results[0].result, "UNMODELED");
+const exported = exportVerificationSuite(suite);
+assert.equal((await importVerificationSuite(exported)).ok, true);
+const bad = JSON.parse(exported); bad.assertions[0].type = "ROOT_CAUSE";
+assert.equal((await verifyVerificationSuite(bad)).ok, false);
+console.log("PASS v1.6 Dev2 change sets: canonical diff, identity binding, stale detection, wrong-base block, exact apply, tamper protection");
+console.log("PASS v1.6 Dev2 verification suites: ordered multi-flow assertions, Engine truth separation, PASS, NOT RUN, UNMODELED, export/import, fail-closed tamper");

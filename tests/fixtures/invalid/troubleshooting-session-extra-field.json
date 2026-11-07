@@ -1,0 +1,12 @@
+{
+  "formatId": "infrastructure-cyber-lab.troubleshooting-session",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "stateRevision": 0,
+  "notebookIdentity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sessionIdentity": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "progress": { "formatId": "infrastructure-cyber-lab.save", "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "stateRevision": 0 },
+  "notebook": { "formatId": "infrastructure-cyber-lab.troubleshooting-notebook", "scenarioId": "foundation_acceptance", "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "notebookIdentity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "entries": [] },
+  "hiddenTruth": { "rootCause": "must-not-persist" }
+}

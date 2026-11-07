@@ -1,0 +1,50 @@
+YadiLab Foundation v0.78.0 verification log
+Date: 2026-10-01
+Phase 78 — Guided Lab / Scenario Curriculum Wave 1
+Classification: VERIFIED DEVELOPMENT CHECKPOINT candidate; product-release gates remain separate.
+Authority: YadiLab Masterprompt v1.3 VERIFIED / LOCKED + approved existing Foundation terminology overrides.
+
+FOCUSED VERIFICATION
+====================
+- eight curriculum source JSON documents: scenario-source schema PASS
+- built-in Wave-1 scenario count: exactly 8 PASS
+- branding guard: PASS
+- browser/Observation TypeScript: PASS
+- ui/app/main.mjs syntax: PASS
+- Guided Lab Curriculum Wave 1 functional: 179 assertions PASS
+- Guided Lab Curriculum Wave 1 adversarial: 10/10 PASS
+
+FIRST WHOLE-FOUNDATION RUN
+==========================
+The final test:foundation chain contains 193 deterministic commands, IDs 0 through 192.
+Accepted first whole-Foundation run on the documented v0.78 source state:
+- command records: 193/193
+- unique command IDs: 193
+- exit records: 193/193
+- unique exit IDs: 193
+- missing command/exit IDs: 0
+- duplicate command/exit IDs: 0
+- non-zero command exits: 0
+- explicit FAIL/ERROR markers: 0
+
+Notable confirmations:
+- command 97 Guided Lab Curriculum functional: exit 0 / 179 assertions PASS
+- command 98 Guided Lab Curriculum adversarial: exit 0 / 10/10 PASS
+- command 170 offline dependency snapshot transport: exit 0 / 44/44 assertions PASS
+- command 181 launcher smoke: exit 0 / PASS
+- command 182 acceptance contract: exit 0 / PASS
+- command 192 Builder Asset Library adversarial: exit 0 / PASS
+
+EXTERNAL / PRODUCT-RELEASE GATES
+================================
+The five product-release gates were run separately with valid invocation forms after the accepted first full run. They remain fail-closed and are NOT reclassified as PASS:
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED
+- Dependency readiness: RC=77 / BLOCKED
+  - genuine package-lock.json / exact installed dependency closure is absent in this environment
+- Executable dependency-resolved browser toolchain: RC=77 / BLOCKED
+- Dependency-resolved React browser build: RC=77 / BLOCKED
+- Parrot OS x86-64 acceptance: RC=77 / BLOCKED because verification host is Debian GNU/Linux 13 x86-64, not Parrot OS
+
+FINAL SEALING BOUNDARY
+======================
+This identity-covered log is frozen before the final whole-Foundation sealing run. The final run is executed again from command 0 on this exact source state. Its machine-audited result, final source identity, release ZIP invariants and Google Drive raw-byte readback are recorded in the external final release verification report so this source checkout is not mutated after sealing.

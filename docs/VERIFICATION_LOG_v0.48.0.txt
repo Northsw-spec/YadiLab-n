@@ -1,0 +1,34 @@
+YadiLab Foundation v0.48.0 — worktree verification
+source: exact Google Drive YadiLab_Foundation_v0.47.0.zip
+source SHA256: efba060eeffc6b26c44a65a53e36f94d110df806d3b56b68993dd5f4a2f34a37
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Audit correction:
+- exact packaged v0.47.0 source did not actually load app-shell.js from production full-build index generation despite the v0.47 verification claim
+- Phase 48 is the first packaged checkpoint binding production build generation to the tested browser-index renderer
+
+Phase 48 browser index template: 10 assertions PASS
+Phase 48 browser index template adversarial: 6 assertions PASS
+Browser release promotion/integrity: 38 assertions PASS
+Dependency/browser-build gate: 31 assertions PASS
+Dependency/browser-build adversarial: 34 assertions PASS
+Offline dependency snapshot: 28 assertions PASS
+Offline snapshot transport: 42 assertions PASS
+Browser toolchain functional: 12 assertions PASS
+Browser toolchain adversarial: 20 assertions PASS
+Browser workflow fail-closed contract: 32 assertions PASS
+Acceptance contract: PASS
+
+Whole Foundation regression:
+- exact test:foundation chain contains 106 deterministic commands
+- commands 0-54: PASS
+- commands 55-82: PASS in fail-fast rerun after updating the Phase 41 cache-lifecycle assertion to follow the extracted renderer
+- commands 83-105: PASS
+
+External gates:
+- dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact node_modules closure absent
+- dependency-resolved browser build: 77/BLOCKED
+- real server-stopped Chromium React offline reload: BLOCKED until a real dependency-resolved release exists
+- Parrot OS x86-64 acceptance: BLOCKED on Debian host
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

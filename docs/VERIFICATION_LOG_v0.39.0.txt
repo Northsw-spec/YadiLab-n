@@ -1,0 +1,19 @@
+YadiLab Foundation v0.39.0 — local verification evidence
+Architecture: Masterprompt v1.2 VERIFIED / LOCKED.
+Exact baseline v0.38.0 ZIP SHA-256: 1952b029f89df91c87f2577878d68b2fd244e31554f170ea405cedc95a5e0e1a
+
+Worktree full `npm run test:foundation`: PASS / exit 0.
+Existing PackageIO: 25 functional + 59 adversarial assertions PASS.
+New raster preflight: 10 functional + 21 adversarial assertions PASS.
+Browser package media: 28 functional + 34 adversarial assertions PASS.
+All other prior Foundation suites (schema/compiler/Engine 0.8/CLI/layout/certification/browser/persistence/dependencies/Go launcher/acceptance contract) PASS.
+Structural validation is NOT full JPEG/WebP entropy or PNG DEFLATE decoding; renderability belongs to browser native decoder.
+
+Candidate ZIP independently extracted full test: PASS.
+Candidate readback full log SHA-256: 0801d5402bfe8b9d76bf278c07b508a0942c7f830f0487986446da19b5a014d5
+Candidate browser/lock/Parrot external gates: 77/BLOCKED (expected).
+Final ZIP independently extracted test: PENDING.
+Browser dependency gate: 77/BLOCKED (missing real npm lock/tree; no internet registry access).
+Parrot target gate: 77/BLOCKED on Debian, not Parrot.
+Worktree full regression log SHA-256: 6b12b67b1d6095e65e673e185188969e5200d6de2dc1c156351fad45a4fbeafb
+Status: VERIFIED DEVELOPMENT CHECKPOINT after candidate readback; final archive requires external exact-byte audit before upload; NOT VERIFIED RELEASE.

@@ -1,0 +1,13 @@
+YadiLab Foundation v0.41.0 — phase verification record
+Base ZIP v0.40.0 SHA-256: fddf99d9fbf75b9490492dd1ef371b71b3afd7217b0de1d50c3c03dfda5d5471
+Phase 41 PWA WebCrypto/CacheStorage: 23 functional + 43 adversarial PASS
+PWA static contract: 17 PASS
+Actual generated shell release hashes: 29 PASS
+Real Go loopback-launcher smoke (including generated sw.js): PASS
+Full Foundation regression from worktree: PASS
+Candidate exact-byte clean-unzip regression: PASS (including shell SHA-256 readback, launcher)
+Final exact-byte clean-unzip regression: recorded in external sibling report after final ZIP verification
+Full npm dependency resolution/browser: BLOCKED (registry DNS / missing real lock/node_modules)
+Real Parrot OS x86-64 acceptance: BLOCKED (host is not Parrot)
+Actual browser SW lifecycle in Chromium/Firefox: NOT VERIFIED
+Status: VERIFIED DEVELOPMENT CHECKPOINT candidate; no full product release.

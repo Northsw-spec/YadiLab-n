@@ -1,0 +1,52 @@
+
+> visual-infrastructure-lab-app@0.10.0 test:foundation
+> python3 tests/run_schema_checks.py && node scripts/check-branding.mjs && rm -rf dist-compiler-test && tsc -p tests/tsconfig.compiler.json && node tests/compiler/run_compiler_tests.mjs && node tests/compiler/run_compiler_adversarial.mjs && python3 tests/validate_compiler_outputs.py && rm -rf dist-engine-test && tsc -p tests/tsconfig.engine.json && node tests/engine/run_engine_tests.mjs && node tests/engine/run_engine_adversarial.mjs && node tests/regression/run_regression_tests.mjs && node tests/regression/run_regression_adversarial.mjs && rm -rf dist-packageio-test && tsc -p tests/tsconfig.packageio.json && node tests/package-io/run_package_io_tests.mjs && node tests/package-io/run_package_io_adversarial.mjs && rm -rf dist-cli-test && tsc -p tests/tsconfig.cli.json && node tests/cli/run_cli_tests.mjs && node tests/cli/run_cli_adversarial.mjs && rm -rf dist-canvas-test && tsc -p tests/tsconfig.canvas.json && node tests/canvas/run_canvas_tests.mjs && node tests/canvas/run_canvas_adversarial.mjs && rm -rf dist-layout-test && tsc -p tests/tsconfig.layout.json && node tests/layout/run_layout_tests.mjs && node tests/layout/run_layout_adversarial.mjs && rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_browser_tests.mjs && node tests/browser/run_browser_adversarial.mjs && node scripts/generate_pwa_manifest.mjs && rm -rf dist-persistence-test && tsc -p tests/tsconfig.persistence.json && node tests/persistence/run_persistence_tests.mjs && node tests/persistence/run_persistence_adversarial.mjs && node tests/persistence/run_pwa_checks.mjs && python3 tests/validate_persistence_outputs.py
+
+PASS meta-schema: scenario-source.schema.json
+PASS meta-schema: scenario-normalized.schema.json
+PASS meta-schema: layout.schema.json
+PASS meta-schema: package-manifest.schema.json
+PASS meta-schema: save-state.schema.json
+PASS meta-schema: catalog.schema.json
+PASS catalog/builtin-catalog.json
+PASS valid/scenario-source.json: expected=valid actual=valid
+PASS valid/scenario-source-profile.json: expected=valid actual=valid
+PASS valid/scenario-normalized.json: expected=valid actual=valid
+PASS valid/layout.json: expected=valid actual=valid
+PASS valid/package-manifest.json: expected=valid actual=valid
+PASS valid/save-state.json: expected=valid actual=valid
+PASS invalid/source-unknown-field.json: expected=invalid actual=invalid
+PASS invalid/source-bad-id.json: expected=invalid actual=invalid
+PASS invalid/manifest-traversal.json: expected=invalid actual=invalid
+PASS invalid/save-bad-truth.json: expected=invalid actual=invalid
+PASS invalid/compiler-missing-capability.json: expected=valid actual=valid
+PASS invalid/compiler-unknown-resource.json: expected=valid actual=valid
+PASS invalid/compiler-profile-mismatch.json: expected=valid actual=valid
+PASS invalid/compiler-version-unavailable.json: expected=valid actual=valid
+PASS invalid/compiler-zone-cycle.json: expected=valid actual=valid
+PASS invalid/compiler-duplicate-global-id.json: expected=valid actual=valid
+PASS schema suite: 16/16 fixture expectations met; 6/6 schemas pass Draft 2020-12 meta-validation.
+PASS branding guard: no hardcoded display brand in protected source paths.
+PASS compiler suite: 41 assertions; generated outputs written for independent schema validation.
+PASS compiler adversarial suite: 30 assertions.
+PASS compiled-foundation.json: normalized schema valid
+PASS compiled-profile.json: normalized schema valid
+PASS compiler output schema validation: 2/2
+PASS engine suite: 76 assertions.
+PASS engine adversarial suite: 38 assertions.
+PASS regression suite: 24 assertions.
+PASS regression adversarial suite: 22 assertions.
+PASS PackageIO suite: 23 assertions.
+PASS PackageIO adversarial suite: 42 assertions.
+PASS CLI suite: 37 assertions.
+PASS CLI adversarial suite: 14 assertions.
+PASS canvas projection suite: 19 assertions.
+PASS canvas projection adversarial suite: 10 assertions.
+PASS layout suite: 16 assertions.
+PASS layout adversarial suite: 14 assertions.
+PASS browser foundation suite: 102 assertions.
+PASS browser adversarial suite: 42 assertions.
+PASS persistence suite: 34 assertions.
+PASS persistence adversarial suite: 23 assertions.
+PASS PWA static contract: 11 assertions.
+PASS runtime-save.json: save-state schema valid

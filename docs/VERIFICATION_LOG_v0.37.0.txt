@@ -1,0 +1,18 @@
+YadiLab Foundation v0.37.0 — local verification evidence
+Authoritative architecture: Masterprompt v1.2 VERIFIED / LOCKED.
+Exact baseline v0.36.0 ZIP SHA-256: a5d280bf4fdaa2291392fd589b5befe095f1cc037a698397d106bc0d6990d0f0
+
+Full `npm run test:foundation` from worktree: PASS / exit 0.
+Schema 19/19, compiler 61+51, Engine 110+60, integrated Phase 36 53 assertions.
+Dependency supply-chain readiness: 28 functional + 34 adversarial assertions PASS.
+Positive fixture: complete direct lock and physical installed metadata PASS.
+Positive fixture: required transitive package closure PASS.
+Negative fixtures: missing lock entry/integrity, unsafe registry origin, absent transitive, missing installed npm lock, mismatched SRI, undeclared installed module, forged installed metadata all FAIL-CLOSED.
+Full regression logfile SHA-256: b56c49d56586382b0a6703119407f75f484c912f602c543b4a08512e0f242125
+
+`node scripts/check_browser_build_readiness.mjs`: 77/BLOCKED (npm registry DNS EAI_AGAIN, real package-lock and installed dependency set unavailable).
+`node scripts/verify_package_lock.mjs`: 77/BLOCKED (real package-lock absent).
+`bash scripts/run_parrot_acceptance.sh`: 77/BLOCKED (Debian, not Parrot OS).
+Developer-only offline npm-cache handoff scripts syntax checked and missing-cache behavior verified; actual cache preparation and offline install NOT executed and NOT claimed PASS.
+Scope: Verified development checkpoint, not verified production browser or Parrot release.
+Packaged-byte verification recorded separately.

@@ -1,0 +1,45 @@
+YadiLab Foundation v0.57.0 — development checkpoint verification
+Date: 2026-10-01
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Input checkpoint: exact YadiLab_Foundation_v0.56.0.zip bytes
+Baseline SHA256: 1e3c83c4b7f1705500c24936ccee10274054831fee486b6efb2386cf7354e4ff
+
+Phase 57 — operator key-material ceremony
+- Adds an external Ed25519 dependency-snapshot producer-key bundle generator/verifier.
+- Bundle generation is restricted to a path resolving outside the application source checkout.
+- Existing target paths are never overwritten.
+- Generation uses a temporary sibling directory and promotes only after full self-verification.
+- Private key is PKCS#8 Ed25519 with exact mode 0600.
+- Public key, fingerprint and public ceremony record use exact mode 0644.
+- Bundle contains exactly four expected regular non-symlink files.
+- Private/public key pair, SPKI-derived key ID, exact fingerprint file and canonical public ceremony metadata are verified.
+- Ceremony metadata binds the source-checkout identity from which the key ceremony was initiated.
+- Source/symlink path escapes, insecure private-key permissions, extra files, mismatched key pairs, fingerprint manipulation, ceremony-record manipulation and source-identity mismatch fail closed.
+- Release trust store remains intentionally empty; no production private key or public trust anchor is embedded.
+
+Focused Phase 57 verification
+- Operator key ceremony functional: 14 assertions PASS
+- Operator key ceremony adversarial: 13 assertions PASS
+- Operator key CLI contract: 8 assertions PASS
+- Branding guard: PASS
+- Node syntax checks for new scripts: PASS
+
+Whole Foundation regression before final documentation freeze
+- Exact test:foundation chain contains 129 deterministic commands.
+- Commands 0-54: PASS.
+- Commands 55-99: PASS.
+- Commands 100-117: PASS before execution-harness timeout while command 118 was starting.
+- Commands 118-128: PASS in deterministic fail-fast continuation.
+- Therefore 129/129 commands were explicitly observed PASS; no timed-out command was counted without a successful rerun.
+
+External gates observed
+- Snapshot producer without provisioned external signing key: 77/BLOCKED as required.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian 13.
+- Real server-stopped Chromium React offline reload remains BLOCKED until genuine trusted producer material and a dependency-resolved browser release exist.
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT candidate, NOT VERIFIED PRODUCT RELEASE.
+Final clean-candidate/archive/readback/Drive SHA values are recorded in the adjacent release verification sidecar after packaging.

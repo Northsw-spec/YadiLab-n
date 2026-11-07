@@ -1,0 +1,20 @@
+YadiLab Foundation v0.16.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Exact-byte gates verified:
+- complete Foundation regression through Phase 16 PASS;
+- browser progress-session functional/adversarial suites PASS;
+- portable .yadiprogress and autosave use the existing Engine SaveState contract;
+- imported/stored saves are schema-validated before Engine restore;
+- scenario hash/schema/Engine incompatibility remains fail-closed and atomic;
+- browser dependency readiness remains fail-closed when real dependencies/lock are absent;
+- launcher and acceptance-contract suites remain PASS;
+- Linux x86-64 launcher exists at distribution/linux-x86_64/app-launcher and retains executable mode;
+- Parrot acceptance/build shell scripts retain executable mode;
+- no superseded Masterprompt reference exists in checkpoint source;
+- transient dist-* build directories are excluded from the release ZIP.
+
+External dependency-resolved rendered-browser and real Parrot target gates remain unclaimed.

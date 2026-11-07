@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:enterprise-reimport-diff:0.2.0",
+  "title": "Enterprise Re-import Diff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "previousBaseline",
+    "nextBaseline",
+    "summary",
+    "entityChanges",
+    "relationshipChanges",
+    "factChanges"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.enterprise-reimport-diff"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "previousBaseline": {
+      "$ref": "#/$defs/baselineRef"
+    },
+    "nextBaseline": {
+      "$ref": "#/$defs/baselineRef"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "entityChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entityChange"
+      }
+    },
+    "factChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/factChange"
+      }
+    },
+    "relationshipChanges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationshipChange"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "baselineRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineId",
+        "baselineIdentity"
+      ],
+      "properties": {
+        "baselineId": {
+          "$ref": "#/$defs/id"
+        },
+        "baselineIdentity": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entitiesAdded",
+        "entitiesRemoved",
+        "entitiesChanged",
+        "entitiesProvenanceOnly",
+        "relationshipsAdded",
+        "relationshipsRemoved",
+        "relationshipsChanged",
+        "relationshipsProvenanceOnly",
+        "factsAdded",
+        "factsRemoved",
+        "factsChanged",
+        "factsProvenanceOnly"
+      ],
+      "properties": {
+        "entitiesAdded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entitiesRemoved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entitiesChanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entitiesProvenanceOnly": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "factsAdded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "factsRemoved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "factsChanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "factsProvenanceOnly": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationshipsAdded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationshipsRemoved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationshipsChanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationshipsProvenanceOnly": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "entityChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entityId",
+        "kind"
+      ],
+      "properties": {
+        "entityId": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ADDED",
+            "REMOVED",
+            "CHANGED",
+            "PROVENANCE_ONLY"
+          ]
+        },
+        "before": {
+          "type": "object"
+        },
+        "after": {
+          "type": "object"
+        }
+      }
+    },
+    "factChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectRef",
+        "path",
+        "kind"
+      ],
+      "properties": {
+        "subjectRef": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ADDED",
+            "REMOVED",
+            "CHANGED",
+            "PROVENANCE_ONLY"
+          ]
+        },
+        "before": {
+          "type": "object"
+        },
+        "after": {
+          "type": "object"
+        }
+      }
+    },
+    "relationshipChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relationshipId",
+        "kind"
+      ],
+      "properties": {
+        "relationshipId": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ADDED",
+            "REMOVED",
+            "CHANGED",
+            "PROVENANCE_ONLY"
+          ]
+        },
+        "before": {
+          "type": "object"
+        },
+        "after": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

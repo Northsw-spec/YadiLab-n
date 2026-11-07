@@ -1,0 +1,42 @@
+YadiLab Foundation v0.62.0 — frozen-source verification record
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED
+
+Phase 62 — three-way re-import merge and baseline preservation
+- schema-defined deterministic merge plan over ancestor/current/incoming baselines
+- entity, relationship and semantic-fact merge coverage
+- AUTO_APPLY_INCOMING / KEEP_CURRENT / ALREADY_CONVERGED / REVIEW_REQUIRED decisions
+- explicit CURRENT / INCOMING / DELETE review resolutions
+- stale/tampered plan rejection
+- fail-closed missing/duplicate/stale/impossible resolution handling
+- post-merge Enterprise Model verification
+- baseline lineage binds ancestor/current/incoming identities, merge-plan SHA-256 and explicit resolutions
+- exact no-op re-import preserves baseline identity
+- relationship-aware re-import diff
+- independent scenario/fault overlays are not modified by baseline merge
+
+Focused verification before freeze
+- Draft 2020-12 schema suite: 32/32 fixture expectations PASS; 12/12 schemas meta-valid.
+- Enterprise Model: 10/10 functional + 15/15 adversarial PASS.
+- Enterprise Import including XLSX/ODS: 30/30 functional + 28/28 adversarial PASS.
+- Mapping Review/Re-import Diff: 10/10 functional + 12/12 adversarial PASS.
+- Re-import Merge: 9/9 functional + 9/9 adversarial PASS.
+- Branding guard: PASS.
+- Generated TypeScript contracts: PASS.
+
+First whole-Foundation regression before this log was frozen
+- Exact test:foundation chain contains 141 deterministic commands.
+- Commands 0-60: PASS.
+- Commands 61-110: PASS.
+- Commands 111-125: PASS.
+- Commands 126-140: PASS.
+- Therefore 141/141 deterministic commands PASS.
+
+External promotion gates observed before freeze
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: exit 77 / BLOCKED.
+- Dependency readiness: exit 77 / BLOCKED; genuine npm package-lock/dependency closure absent.
+- Executable browser toolchain: exit 77 / BLOCKED.
+- Dependency-resolved React browser build: exit 77 / BLOCKED.
+- Parrot OS x86-64 acceptance: exit 77 / BLOCKED because current host is Debian 13.
+
+The exact source tree containing this file must be rerun after freeze before packaging. Final archive/readback/Drive evidence belongs to the external release verification sidecar and does not mutate this frozen source record.

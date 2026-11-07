@@ -1,0 +1,5 @@
+all:
+  hosts:
+    sample01: &host
+      ansible_host: 192.0.2.15
+    sample02: *host

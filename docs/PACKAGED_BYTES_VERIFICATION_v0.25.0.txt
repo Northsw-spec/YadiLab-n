@@ -1,0 +1,24 @@
+YadiLab Foundation v0.25.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Final candidate evidence:
+- clean extraction passed the complete Foundation regression through Phase 25;
+- versioning/migration and CLI migrate gates passed;
+- executable mode bits were preserved;
+- no transient dist-*/node_modules content or superseded Masterprompt references were present;
+- browser dependency readiness returned 77/BLOCKED as required here;
+- Parrot acceptance returned 77/BLOCKED on this Debian host as required.
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 25 PASS;
+- versioning/migration functional/adversarial PASS;
+- compiler, CLI test, and browser Runtime reject unsupported schema versions;
+- `app migrate` current-version no-op and no-path failure behavior PASS;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* directories excluded.

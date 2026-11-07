@@ -1,0 +1,7 @@
+YadiLab Foundation v0.51.0 verification focus
+Phase 51: sealed-snapshot consumer environment coherence
+- exact producer/consumer Node identity required
+- exact producer/consumer npm identity required
+- Linux x86-64 consumer required
+- gate runs before npm cache consumption and npm ci --offline
+- mismatches are fail-closed 77/BLOCKED

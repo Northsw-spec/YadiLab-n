@@ -1,0 +1,58 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-mapping-review",
+  "schemaVersion": "0.1.0",
+  "status": "READY",
+  "adapter": {
+    "id": "builtin.csv",
+    "version": "1.0.0"
+  },
+  "source": {
+    "sourceId": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mediaType": "text/csv",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": 42,
+    "displayName": "devices.csv"
+  },
+  "mapping": {
+    "profileId": "enterprise.devices.basic",
+    "version": "1.0.0",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "tables": [
+    {
+      "tableId": "devices",
+      "sourceTable": "records",
+      "availableFields": [
+        {
+          "field": "Asset ID",
+          "occurrences": 2
+        },
+        {
+          "field": "Hostname",
+          "occurrences": 2
+        }
+      ],
+      "mappings": [
+        {
+          "mappingId": "devices_entity_id",
+          "role": "entity.id",
+          "required": true,
+          "status": "RESOLVED",
+          "selectedField": "Asset ID",
+          "selectedClass": "EXACT",
+          "candidates": [
+            {
+              "field": "Asset ID",
+              "class": "EXACT"
+            }
+          ]
+        }
+      ],
+      "sourceTablePresent": true
+    }
+  ],
+  "diagnostics": [],
+  "availableTables": [
+    "records"
+  ]
+}

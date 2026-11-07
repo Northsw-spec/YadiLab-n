@@ -1,0 +1,10 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+import { compileScenario } from "../../dist-compiler-test/compiler/src/index.js";
+const source=JSON.parse(fs.readFileSync("tests/fixtures/valid/scenario-source.json","utf8"));
+source.resources.find((r)=>r.id==="admin01").interfaces=[{id:"eth0",addresses:["10.0.0.2/24"],mtu:1400}];
+const catalogFile=JSON.parse(fs.readFileSync("catalog/builtin-catalog.json","utf8"));
+const result=await compileScenario(source,{validateSource:()=>({valid:true,diagnostics:[]}),validateNormalized:()=>({valid:true,diagnostics:[]}),catalog:{capabilities:catalogFile.capabilities,profiles:catalogFile.profiles,assets:catalogFile.assets},engineBaselineVersion:"0.2.0"});
+assert.equal(result.ok,true,JSON.stringify(result.diagnostics));
+assert.equal(result.model.resources.find((r)=>r.id==="admin01").interfaces[0].mtu,1400);
+console.log("PASS Dev31 MTU import/compile roundtrip: 2 assertions.");

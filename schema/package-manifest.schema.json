@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:package-manifest:0.1.0",
+  "title": "Scenario Package Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "packageVersion",
+    "distribution",
+    "scenarioId",
+    "scenarioHash",
+    "schemaVersion",
+    "minimumEngineVersion",
+    "entrypoint",
+    "integrityAlgorithm",
+    "capabilityLocks",
+    "profileLocks",
+    "assetLocks",
+    "files"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.package"
+    },
+    "packageVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "distribution": {
+      "type": "string",
+      "enum": [
+        "author",
+        "student"
+      ]
+    },
+    "scenarioId": {
+      "$ref": "#/$defs/id"
+    },
+    "scenarioHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "minimumEngineVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "entrypoint": {
+      "const": "scenario.json"
+    },
+    "integrityAlgorithm": {
+      "const": "sha256"
+    },
+    "capabilityLocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exactLock"
+      }
+    },
+    "profileLocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exactLock"
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/fileEntry"
+      }
+    },
+    "assetLocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exactLock"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "truth": {
+      "type": "string",
+      "enum": [
+        "TRUE",
+        "FALSE",
+        "UNKNOWN"
+      ]
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource"
+      ],
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/id"
+        },
+        "port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        }
+      }
+    },
+    "rule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "rules"
+          ],
+          "properties": {
+            "op": {
+              "const": "all"
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/rule"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "rules"
+          ],
+          "properties": {
+            "op": {
+              "const": "any"
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/rule"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "rule"
+          ],
+          "properties": {
+            "op": {
+              "const": "not"
+            },
+            "rule": {
+              "$ref": "#/$defs/rule"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "target",
+            "path",
+            "value"
+          ],
+          "properties": {
+            "op": {
+              "const": "equals"
+            },
+            "target": {
+              "$ref": "#/$defs/id"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "op": {
+              "const": "reachable"
+            },
+            "from": {
+              "$ref": "#/$defs/id"
+            },
+            "to": {
+              "$ref": "#/$defs/id"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "tcp",
+                "udp",
+                "icmp",
+                "any"
+              ]
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "subject",
+            "group"
+          ],
+          "properties": {
+            "op": {
+              "const": "member_of"
+            },
+            "subject": {
+              "$ref": "#/$defs/id"
+            },
+            "group": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "subject",
+            "resource",
+            "permission"
+          ],
+          "properties": {
+            "op": {
+              "const": "has_permission"
+            },
+            "subject": {
+              "$ref": "#/$defs/id"
+            },
+            "resource": {
+              "$ref": "#/$defs/id"
+            },
+            "permission": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "target",
+            "service"
+          ],
+          "properties": {
+            "op": {
+              "const": "service_enabled"
+            },
+            "target": {
+              "$ref": "#/$defs/id"
+            },
+            "service": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "test",
+            "expected"
+          ],
+          "properties": {
+            "op": {
+              "const": "test_result"
+            },
+            "test": {
+              "$ref": "#/$defs/id"
+            },
+            "expected": {
+              "$ref": "#/$defs/truth"
+            }
+          }
+        }
+      ]
+    },
+    "exactLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        }
+      }
+    },
+    "fileEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size",
+        "sha256",
+        "mime"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mime": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

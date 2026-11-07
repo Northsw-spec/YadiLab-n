@@ -1,0 +1,52 @@
+YadiLab Foundation v0.67.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.66.0.zip bytes
+Baseline SHA256: 643efd1a130605aa58e1b23a5613a9a5c3ea6534abcde010f84ec4d297a41b58
+Baseline source-checkout identity: 883354973f4db69f9d731732a3867d9c3d064c463e0fc3b309b98c2f2e1a7f42
+
+Phase 67 — Fault Pack Expansion, Wave 1
+- Built-in foundation.network.core upgraded from 0.1.0 to 0.2.0.
+- Pack contains 25 faults: exactly 5 routing, 5 VLAN/L2, 5 DNS, 5 DHCP and 5 firewall/NAT.
+- Two pre-existing fault IDs remain present for backward compatibility.
+- Each fault uses explicit target bindings, preconditions, deterministic mutations, expected effects, negative controls/blast radius where applicable, observable symptoms, canonical restore-pre-injection recovery and the existing four difficulty dimensions.
+- Same-layer incompatible faults are declared explicitly.
+- Routing/VLAN/firewall/DNAT representative faults are verified against actual Network Engine semantics.
+- DNS/DHCP faults remain explicit resource-state faults; Phase 67 does not claim a DNS resolver or DHCP protocol simulator that does not exist.
+- No scalar difficulty score, probabilistic mutation, AI/ML/LLM logic or generated multi-fault curriculum was added.
+- Built-in pack identity: a67a18975d78db22f9fed76c4edd0ca0902d2b46e0302025d2f1ffeaf394362a
+
+Focused Phase 67 verification
+- Existing Fault Engine functional: 25 assertions PASS.
+- Existing Fault Engine adversarial: 17 assertions PASS.
+- Wave-1 Fault Pack functional: 318 assertions PASS.
+- Wave-1 Fault Pack adversarial: 10 assertions PASS.
+- Fault Injection UI functional: 12/12 PASS, including 25-fault catalog exposure.
+- Fault Injection UI adversarial: 14/14 PASS.
+- Draft 2020-12 schema suite: 42/42 fixture expectations PASS; 15/15 schemas meta-valid; actual built-in network-core Fault Pack schema validation PASS.
+- Offline dependency snapshot transport: 44/44 assertions PASS after harness startup batching; mutation semantics/assertions unchanged.
+
+Whole-Foundation regression
+- Exact test:foundation chain contains 155 deterministic commands.
+- Commands 0–75: explicit exit 0.
+- Commands 76–131: explicit exit 0 in deterministic continuation.
+- Command 132 (offline dependency snapshot transport): 44/44 assertions PASS and explicit exit 0 after interpreter-startup batching.
+- Commands 133–142: explicit exit 0.
+- Command 143 (launcher smoke): explicit exit 0 on dedicated rerun.
+- Commands 144–154: explicit exit 0.
+- Automated log audit confirms every command ID 0–154 has at least one explicit EXIT 0 result: 155/155 PASS.
+- Harness timeout occurrences were not counted as PASS; affected commands were rerun to explicit completion.
+
+External gates on the candidate source tree
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED for the same dependency-readiness boundary.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Actual dependency-resolved live Fault Injection UI/browser execution remains BLOCKED until genuine signed dependencies and a dependency-resolved browser release exist.
+- Actual server-stopped Chromium React offline reload remains BLOCKED until the same external dependency/browser gate is satisfied.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host is Debian GNU/Linux 13 (x86_64), not Parrot OS.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+
+Final archive SHA-256, exact source-checkout identity, deterministic dual-build comparison, ZIP byte/mode readback and Google Drive raw-byte readback are recorded in the external v0.67.0 verification report because embedding the final archive hash inside the archive would be self-referential.

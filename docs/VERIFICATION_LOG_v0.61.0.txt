@@ -1,0 +1,48 @@
+YadiLab Foundation v0.61.0 — frozen source verification
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED
+
+Input checkpoint: exact YadiLab_Foundation_v0.60.0.zip bytes
+Baseline SHA256: 0cbde74fbfe57acf809103a2fcb8fb926e0cc7972ffeb89e20e25e7b4dad6129
+
+Phase 61 — deterministic mapping review, explicit conflict resolution and re-import diff
+- Adds enterprise-mapping-review.schema.json + generated contract.
+- Adds enterprise-reimport-diff.schema.json + generated contract.
+- Mapping review parses through the same trusted adapter as real import.
+- Review exposes discovered tables, source-field occurrence counts and mapping states RESOLVED/MISSING/AMBIGUOUS.
+- EXACT and USER_MAPPED selectors bind exact headers; ALIAS uses only deterministic Unicode/whitespace/case normalization.
+- No fuzzy matching, AI inference or hidden confidence score may select a source field.
+- Required missing/ambiguous mappings produce REVIEW_REQUIRED rather than guessed values.
+- Explicit user table/field decisions require a new semantic mapping-profile version.
+- Confirmed field choices are persisted as USER_MAPPED and survive into per-value provenance.
+- Duplicate entity-ID collisions remain blocking unless an explicit resolution selects one exact source table + record index participating in the collision.
+- Invalid and stale collision resolutions remain blocking.
+- Applied conflict resolutions are retained in importContract and therefore baseline identity.
+- compareEnterpriseBaselines requires matching baselineId, keys entities by entityId, facts by (subjectRef,path), sorts output deterministically and distinguishes ADDED/REMOVED/CHANGED/PROVENANCE_ONLY.
+- Automatic merge remains intentionally deferred.
+
+Focused verification before final freeze
+- Draft 2020-12 schemas: 11/11 meta-valid.
+- Schema fixtures: 30/30 expectations PASS.
+- Enterprise Model: 10/10 functional + 13/13 adversarial PASS.
+- Enterprise Import including XLSX/ODS: 30/30 functional + 28/28 adversarial PASS.
+- Mapping Review/Re-import: 9/9 functional + 11/11 adversarial PASS.
+- Branding guard: PASS.
+- Type generation: PASS.
+
+First whole-Foundation pass before this frozen log
+- Exact test:foundation chain contains 139 deterministic commands.
+- Commands 0-60: PASS.
+- Commands 61-110: PASS.
+- Commands 111-125: PASS.
+- Commands 126-138: PASS.
+- Therefore 139/139 deterministic commands PASS with no harness timeout.
+
+External gates observed before final freeze
+- Snapshot producer with required output path but without YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — package-lock.json and genuine installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian 13.
+
+Final frozen-source regression is executed after this file is written. No source file may change afterward before packaging.

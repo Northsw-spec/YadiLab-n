@@ -1,0 +1,56 @@
+Foundation v0.72.0 — Phase 72 verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper terminology override
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE
+
+IMPLEMENTATION
+- Troubleshooting notebook contract: infrastructure-cyber-lab.troubleshooting-notebook@0.1.0.
+- Portable extension: .yadinotebook.
+- Evidence capture is learner-controlled and accepts only explicitly modeled NO_GUEST_COMMAND_EXECUTION transcripts.
+- Observation/probe entries preserve exact Runtime revision, learner-visible transcript/evidence and transcript SHA-256 identity.
+- Learner hypothesis/next-step/conclusion entries are explicit manual notes, never inferred.
+- Notebook identity is canonical SHA-256 over the complete notebook excluding notebookIdentity itself.
+- Exact duplicate transcript capture in the same Runtime revision fails closed.
+- Stale transcript capture after Runtime revision drift fails closed.
+- Portable import validates schema, scenario identity, canonical sequence and notebook identity.
+- Notebook state remains separate from Engine state, Runtime history, checkpoints, fault overlays and scenario source.
+- Hidden fault truth, generator ground truth, reference investigation order and canonical solution material are not imported.
+- No automatic diagnosis, scoring, remediation, guest command execution or AI/ML/LLM logic is introduced.
+
+FOCUSED VERIFICATION BEFORE WHOLE-FOUNDATION SEALING
+- Troubleshooting notebook core functional: 48 assertions PASS.
+- Troubleshooting notebook core adversarial: 18 assertions PASS.
+- Troubleshooting notebook Browser UI functional: 7/7 PASS.
+- Troubleshooting notebook Browser UI adversarial: 5/5 PASS.
+- Wave 1 Observation Engine functional/adversarial: 88 + 11 PASS.
+- Wave 2 active probes functional/adversarial: 104 + 21 PASS.
+- Wave 1 Browser Observation UI functional/adversarial: 6/6 + 6/6 PASS.
+- Wave 2 Browser active probes functional/adversarial: 7/7 + 7/7 PASS.
+- Schema suite: 46/46 fixture expectations PASS; 17/17 Draft 2020-12 schemas PASS.
+- Branding guard: PASS.
+
+FIRST WHOLE-FOUNDATION VERIFICATION
+- Exact test:foundation chain: 175 deterministic commands, IDs 0 through 174.
+- Command records: 175; unique IDs: 175; missing IDs: 0; duplicate IDs: 0.
+- Exit records: 175; unique IDs: 175; non-zero exits: 0; duplicate exit IDs: 0.
+- Offline snapshot transport command 152: exit 0 with 44/44 assertions PASS.
+- Launcher smoke command 163: exit 0 / PASS.
+- Acceptance contract command 164: exit 0 / PASS.
+- Final Builder Asset Library adversarial command 174: exit 0 / PASS.
+- Explicit FAIL/ERROR markers in the command log: 0.
+- No orchestration timeout is interpreted as PASS.
+
+The identity-covered verification text is frozen after recording this evidence and the external gate results below. A final full 175-command sealing run is then executed on exactly that final source state before source identity and release packaging are computed.
+
+EXTERNAL PRODUCT GATES
+Re-run separately with valid invocation shapes:
+- trusted snapshot producer with required external output path but without YADILAB_SNAPSHOT_SIGNING_KEY: RC=77 / BLOCKED; no transport artifact produced.
+- dependency readiness: RC=77 / BLOCKED; package-lock.json and the exact installed dependency closure are absent.
+- executable dependency-resolved browser toolchain: RC=77 / BLOCKED by dependency readiness.
+- dependency-resolved browser build: RC=77 / BLOCKED by dependency readiness.
+- Parrot OS x86-64 acceptance on current Debian GNU/Linux 13 x86-64 host: RC=77 / BLOCKED.
+
+These external gates are not reclassified as PASS and do not invalidate the development-checkpoint regression.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.
+Final sealing command evidence, source identity, archive hash/reproducibility/readback and Google Drive raw-byte readback belong in the external v0.72.0 verification report to avoid self-referential artifact hashes inside identity-covered source.

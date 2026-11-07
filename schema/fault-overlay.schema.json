@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:fault-overlay:0.1.0",
+  "title": "Fault Overlay",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "overlayId",
+    "scenarioId",
+    "scenarioHash",
+    "mode",
+    "packLocks",
+    "instances",
+    "overlayIdentity"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.fault-overlay"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "overlayId": {
+      "$ref": "#/$defs/id"
+    },
+    "scenarioId": {
+      "$ref": "#/$defs/id"
+    },
+    "scenarioHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "enterpriseBaselineIdentity": {
+      "$ref": "#/$defs/sha256"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "RUNTIME_INJECTION",
+        "SCENARIO_VARIANT"
+      ]
+    },
+    "packLocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/packLock"
+      }
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/instance"
+      }
+    },
+    "overlayIdentity": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "dottedId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "packLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packId",
+        "version",
+        "packIdentity"
+      ],
+      "properties": {
+        "packId": {
+          "$ref": "#/$defs/dottedId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "packIdentity": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "target",
+            "path",
+            "value"
+          ],
+          "properties": {
+            "op": {
+              "const": "set"
+            },
+            "target": {
+              "$ref": "#/$defs/id"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "target",
+            "path"
+          ],
+          "properties": {
+            "op": {
+              "const": "remove"
+            },
+            "target": {
+              "$ref": "#/$defs/id"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instanceId",
+        "packId",
+        "packVersion",
+        "packIdentity",
+        "faultId",
+        "faultVersion",
+        "seed",
+        "bindings",
+        "operations",
+        "inverseOperations",
+        "beforeStateRevision",
+        "afterStateRevision",
+        "expectedEffectsVerified",
+        "negativeControlsVerified",
+        "changedResources",
+        "applicationHash"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/id"
+        },
+        "packId": {
+          "$ref": "#/$defs/dottedId"
+        },
+        "packVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "packIdentity": {
+          "$ref": "#/$defs/sha256"
+        },
+        "faultId": {
+          "$ref": "#/$defs/dottedId"
+        },
+        "faultVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "bindings": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/operation"
+          }
+        },
+        "inverseOperations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/operation"
+          }
+        },
+        "beforeStateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "afterStateRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedEffectsVerified": {
+          "const": true
+        },
+        "negativeControlsVerified": {
+          "const": true
+        },
+        "changedResources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "applicationHash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100" role="img" aria-label="Hypervisor">
+  <rect x="4" y="4" width="152" height="92" rx="16" fill="#162033" stroke="#94a3b8" stroke-width="4"/>
+  <circle cx="42" cy="50" r="24" fill="#24324a" stroke="#cbd5e1" stroke-width="3"/>
+  <path d="M70 34h66M70 50h52M70 66h58" fill="none" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round"/>
+  <text x="42" y="57" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#f8fafc">H</text>
+</svg>

@@ -1,0 +1,183 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-baseline",
+  "schemaVersion": "0.2.0",
+  "modelVersion": "0.1.0",
+  "baselineId": "customer_lab",
+  "baselineIdentity": "057ca5e448e272eceb2c2b991d887d9c7d4e7e3af15dd1acab83ff77854be698",
+  "importContract": {
+    "adapter": {
+      "id": "fixture.multi-table",
+      "version": "1.0.0"
+    },
+    "mapping": {
+      "profileId": "enterprise.default",
+      "version": "1.0.0",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "options": {
+      "trimWhitespace": true,
+      "locale": "sv-SE"
+    },
+    "conflictResolutions": []
+  },
+  "sources": [
+    {
+      "sourceId": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "byteSize": 1234,
+      "displayName": "customer.xlsx"
+    },
+    {
+      "sourceId": "src_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mediaType": "application/json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "byteSize": 456,
+      "displayName": "supplement.json"
+    }
+  ],
+  "provenance": [
+    {
+      "provenanceId": "prov_host",
+      "sourceRef": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "locator": {
+        "kind": "table-cell",
+        "sheet": "Devices",
+        "row": 2,
+        "column": "Hostname"
+      },
+      "field": "hostname"
+    },
+    {
+      "provenanceId": "prov_ip",
+      "sourceRef": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "locator": {
+        "kind": "table-cell",
+        "sheet": "Interfaces",
+        "row": 2,
+        "column": "IPv4"
+      },
+      "field": "ipv4"
+    },
+    {
+      "provenanceId": "prov_gw1",
+      "sourceRef": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "locator": {
+        "kind": "table-cell",
+        "sheet": "Interfaces",
+        "row": 2,
+        "column": "Gateway"
+      },
+      "field": "gateway"
+    },
+    {
+      "provenanceId": "prov_gw2",
+      "sourceRef": "src_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "locator": {
+        "kind": "json-pointer",
+        "pointer": "/devices/pc01/defaultGateway"
+      },
+      "field": "defaultGateway"
+    }
+  ],
+  "entities": [
+    {
+      "entityId": "pc01",
+      "entityType": "endpoint.windows",
+      "label": "PC-01",
+      "siteRef": "site_hq",
+      "zoneRef": "users_vlan"
+    },
+    {
+      "entityId": "site_hq",
+      "entityType": "location.site",
+      "label": "HQ"
+    },
+    {
+      "entityId": "users_vlan",
+      "entityType": "network.zone",
+      "label": "Users VLAN"
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipId": "rel_pc_zone",
+      "relationshipType": "network.member_of",
+      "fromRef": "pc01",
+      "toRef": "users_vlan",
+      "state": "KNOWN",
+      "provenanceRefs": [
+        "prov_host"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "factId": "fact_hostname",
+      "subjectRef": "pc01",
+      "path": "/identity/hostname",
+      "valueType": "string",
+      "state": "KNOWN",
+      "value": "PC-01",
+      "provenanceRefs": [
+        "prov_host"
+      ]
+    },
+    {
+      "factId": "fact_ip",
+      "subjectRef": "pc01",
+      "path": "/network/interfaces/eth0/ipv4",
+      "valueType": "ipv4",
+      "state": "KNOWN",
+      "value": "10.20.30.44",
+      "provenanceRefs": [
+        "prov_ip"
+      ]
+    },
+    {
+      "factId": "fact_network",
+      "subjectRef": "pc01",
+      "path": "/network/interfaces/eth0/network",
+      "valueType": "cidr",
+      "state": "INFERRED",
+      "value": "10.20.30.0/24",
+      "inference": {
+        "ruleId": "network.ipv4_network_from_interface",
+        "ruleVersion": "1.0.0",
+        "inputFactRefs": [
+          "fact_ip"
+        ]
+      }
+    },
+    {
+      "factId": "fact_dns",
+      "subjectRef": "pc01",
+      "path": "/network/dns/resolver",
+      "valueType": "ipv4",
+      "state": "UNKNOWN",
+      "reasonCode": "SOURCE_MISSING"
+    },
+    {
+      "factId": "fact_gateway",
+      "subjectRef": "pc01",
+      "path": "/network/defaultGateway",
+      "valueType": "ipv4",
+      "state": "CONFLICTING",
+      "reasonCode": "SOURCE_CONFLICT",
+      "candidates": [
+        {
+          "value": "10.20.30.1",
+          "provenanceRefs": [
+            "prov_gw1"
+          ]
+        },
+        {
+          "value": "10.20.30.254",
+          "provenanceRefs": [
+            "prov_gw2"
+          ]
+        }
+      ]
+    }
+  ]
+}

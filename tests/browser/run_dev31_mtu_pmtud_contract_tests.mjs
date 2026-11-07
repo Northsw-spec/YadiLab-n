@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const journey=fs.readFileSync("ui/src/browser/visual-journey.ts","utf8"); const engine=fs.readFileSync("engine/src/types.ts","utf8"); const main=fs.readFileSync("ui/app/main.mjs","utf8");
+let checks=0; const ok=(v,m)=>{assert.ok(v,m);checks++;};
+for(const value of ["mtu.evaluation","mtuEvaluation"]) ok(journey.includes(value),`${value} is present in Engine-to-Journey contract`);
+ok(engine.includes("ENGINE_MTU_EVALUATION"),"ENGINE_MTU_EVALUATION is present in Engine contract"); ok(engine.includes("MtuEvaluationTrace"),"MtuEvaluationTrace is typed");
+for(const value of ["data-mtu-xray","Packet:","Egress MTU:","Path MTU:","Fragmentation:","ICMP/PTB:"]) ok(main.includes(value),`${value} is rendered by MTU X-Ray`);
+ok(journey.includes("buildMtuVisualJourneyEvent"),"MTU event adapter is explicit");
+ok(main.includes("does not infer fragmentation"),"UI does not fabricate fragmentation/PTB/PMTUD");
+console.log(`PASS dev31 MTU/PMTUD living visualization contract: ${checks} assertions.`);

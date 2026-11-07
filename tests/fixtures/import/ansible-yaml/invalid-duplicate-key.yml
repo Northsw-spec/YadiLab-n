@@ -1,0 +1,6 @@
+all:
+  hosts:
+    duplicate01:
+      ansible_host: 192.0.2.11
+    duplicate01:
+      ansible_host: 192.0.2.12

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <graph id="bad_endpoint" edgedefault="undirected">
+    <node id="n1"/>
+    <edge id="e1" source="n1" target="missing_node"/>
+  </graph>
+</graphml>

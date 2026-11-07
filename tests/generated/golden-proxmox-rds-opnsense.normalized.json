@@ -1,0 +1,830 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "golden_proxmox_rds_opnsense_01",
+  "sourceHash": "af6d23cde36a0ddb82556a67fad0b2908e5670cb8ce9549b9a2ef5ddb52e4fdf",
+  "metadata": {
+    "title": "Proxmox, OPNsense, AD/RDS: säker segmentering och återställning",
+    "description": "Deterministiskt integrerat Foundation-labb, inte riktig infrastruktur.",
+    "language": "sv",
+    "authors": [
+      "Foundation Acceptance"
+    ],
+    "tags": [
+      "proxmox",
+      "opnsense",
+      "windows",
+      "identity",
+      "backup",
+      "golden"
+    ],
+    "briefing": "Åtgärda WAN-RDP, MFA, loggning och deklarerat backuptest. Behåll managementåtkomst."
+  },
+  "minimumEngineVersion": "0.8.0",
+  "capabilityLocks": [
+    {
+      "id": "core.backup",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.identity",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.logging",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.network",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.virtualization",
+      "version": "1.0.0"
+    },
+    {
+      "id": "core.windows",
+      "version": "1.0.0"
+    }
+  ],
+  "profileLocks": [
+    {
+      "id": "vendor.opnsense",
+      "version": "1.0.0"
+    },
+    {
+      "id": "vendor.proxmox",
+      "version": "1.0.0"
+    }
+  ],
+  "assetLocks": [
+    {
+      "id": "actor.attacker",
+      "version": "1.0.0",
+      "path": "assets/builtin/actor.attacker.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "endpoint.windows",
+      "version": "1.0.0",
+      "path": "assets/builtin/endpoint.windows.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "network.firewall",
+      "version": "1.0.0",
+      "path": "assets/builtin/network.firewall.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "resource.generic",
+      "version": "1.0.0",
+      "path": "assets/builtin/resource.generic.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "security.backup",
+      "version": "1.0.0",
+      "path": "assets/builtin/security.backup.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "virtualization.proxmox",
+      "version": "1.0.0",
+      "path": "assets/builtin/virtualization.proxmox.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.domain_controller",
+      "version": "1.0.0",
+      "path": "assets/builtin/windows.domain_controller.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.rds_host",
+      "version": "1.0.0",
+      "path": "assets/builtin/windows.rds_host.svg",
+      "mime": "image/svg+xml",
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "wan",
+      "label": "Internet",
+      "kind": "wan"
+    },
+    {
+      "id": "dmz",
+      "label": "DMZ",
+      "kind": "dmz"
+    },
+    {
+      "id": "server",
+      "label": "Server VLAN",
+      "kind": "server"
+    },
+    {
+      "id": "mgmt",
+      "label": "Management",
+      "kind": "management"
+    }
+  ],
+  "resources": [
+    {
+      "id": "attacker",
+      "type": "actor.attacker",
+      "label": "External attacker",
+      "zone": "wan",
+      "interfaces": [],
+      "properties": {
+        "vlans": [
+          100
+        ]
+      },
+      "asset": {
+        "id": "actor.attacker",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "firewall01",
+      "type": "network.firewall",
+      "label": "Firewall",
+      "zone": "dmz",
+      "profile": "vendor.opnsense",
+      "vendor": "Deciso",
+      "product": "OPNsense",
+      "interfaces": [],
+      "properties": {
+        "vlans": [
+          100,
+          200,
+          300
+        ],
+        "rules": [
+          {
+            "id": "wan_rdp",
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "port": 3389,
+            "action": "allow"
+          }
+        ],
+        "defaultAction": "deny",
+        "routes": [
+          {
+            "id": "rds_route",
+            "destination": "rds01",
+            "via": "rds01",
+            "action": "forward"
+          },
+          {
+            "id": "pve_route",
+            "destination": "pve01",
+            "via": "pve01",
+            "action": "forward"
+          }
+        ],
+        "acls": [
+          {
+            "id": "wan_rds",
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "port": 3389,
+            "action": "allow"
+          },
+          {
+            "id": "wan_pve",
+            "source": "wan",
+            "destination": "pve01",
+            "protocol": "tcp",
+            "port": 8006,
+            "action": "deny"
+          }
+        ],
+        "aclDefaultAction": "deny",
+        "natPolicy": "required",
+        "natRules": [
+          {
+            "id": "rdp_forward",
+            "type": "dnat",
+            "source": "wan",
+            "destination": "rds01",
+            "protocol": "tcp",
+            "externalPort": 3389,
+            "translatedPort": 3389,
+            "action": "translate"
+          }
+        ]
+      },
+      "asset": {
+        "id": "network.firewall",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "rds01",
+      "type": "windows.rds_host",
+      "label": "RDS01",
+      "zone": "server",
+      "interfaces": [],
+      "properties": {
+        "vlans": [
+          200
+        ],
+        "rdp": {
+          "enabled": true,
+          "port": 3389
+        },
+        "nla": true
+      },
+      "asset": {
+        "id": "windows.rds_host",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "admin01",
+      "type": "windows.workstation",
+      "label": "Admin workstation",
+      "zone": "mgmt",
+      "interfaces": [],
+      "properties": {
+        "vlans": [
+          200,
+          300
+        ]
+      },
+      "asset": {
+        "id": "endpoint.windows",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "pve01",
+      "type": "virtualization.proxmox",
+      "label": "Proxmox VE",
+      "zone": "mgmt",
+      "profile": "vendor.proxmox",
+      "vendor": "Proxmox",
+      "product": "Proxmox VE",
+      "interfaces": [],
+      "properties": {
+        "management": {
+          "protocol": "https",
+          "port": 8006,
+          "enabled": true
+        },
+        "vlans": [
+          300
+        ]
+      },
+      "asset": {
+        "id": "virtualization.proxmox",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "ad01",
+      "type": "windows.domain_controller",
+      "label": "AD01",
+      "zone": "server",
+      "interfaces": [],
+      "properties": {
+        "authentication": {
+          "enabled": true,
+          "allowedGroups": [
+            "admins"
+          ],
+          "mfaRequired": true
+        }
+      },
+      "asset": {
+        "id": "windows.domain_controller",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "alice",
+      "type": "identity.user",
+      "label": "Admin Alice",
+      "zone": "mgmt",
+      "interfaces": [],
+      "properties": {
+        "memberOf": [
+          "admins"
+        ],
+        "mfaEnabled": false,
+        "passwordPolicy": {
+          "compliant": true
+        }
+      },
+      "asset": {
+        "id": "resource.generic",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "admins",
+      "type": "identity.group",
+      "label": "Admins",
+      "zone": "mgmt",
+      "interfaces": [],
+      "properties": {
+        "memberOf": [],
+        "members": [
+          "alice"
+        ]
+      },
+      "asset": {
+        "id": "resource.generic",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "log01",
+      "type": "logging.collector",
+      "label": "Logginsamling",
+      "zone": "mgmt",
+      "interfaces": [],
+      "properties": {
+        "logging": {
+          "visible": false,
+          "alerting": false
+        }
+      },
+      "asset": {
+        "id": "resource.generic",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "id": "backup01",
+      "type": "backup.server",
+      "label": "Backup01",
+      "zone": "server",
+      "interfaces": [],
+      "properties": {
+        "backup": {
+          "restoreTested": false
+        }
+      },
+      "asset": {
+        "id": "security.backup",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "wan_fw",
+      "kind": "network",
+      "from": {
+        "resource": "attacker"
+      },
+      "to": {
+        "resource": "firewall01"
+      },
+      "properties": {
+        "vlan": 100,
+        "direction": "forward"
+      }
+    },
+    {
+      "id": "fw_rds",
+      "kind": "network",
+      "from": {
+        "resource": "firewall01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {
+        "vlan": 200,
+        "direction": "forward"
+      }
+    },
+    {
+      "id": "admin_rds",
+      "kind": "management",
+      "from": {
+        "resource": "admin01"
+      },
+      "to": {
+        "resource": "rds01"
+      },
+      "properties": {
+        "vlan": 200,
+        "direction": "forward"
+      }
+    },
+    {
+      "id": "link_admin_pve",
+      "kind": "management",
+      "from": {
+        "resource": "admin01"
+      },
+      "to": {
+        "resource": "pve01"
+      },
+      "properties": {
+        "vlan": 300,
+        "direction": "forward"
+      }
+    },
+    {
+      "id": "fw_pve",
+      "kind": "network",
+      "from": {
+        "resource": "firewall01"
+      },
+      "to": {
+        "resource": "pve01"
+      },
+      "properties": {
+        "vlan": 300,
+        "direction": "forward"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "id": "wan_rdp",
+      "type": "network.reachability",
+      "label": "wan_rdp",
+      "params": {
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "admin_rdp",
+      "type": "network.reachability",
+      "label": "admin_rdp",
+      "params": {
+        "from": "admin01",
+        "to": "rds01",
+        "protocol": "tcp",
+        "port": 3389
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "rdp_scan",
+      "type": "network.port_scan",
+      "label": "rdp_scan",
+      "params": {
+        "from": "attacker",
+        "to": "rds01",
+        "protocol": "tcp",
+        "ports": [
+          22,
+          3389
+        ]
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "admin_pve",
+      "type": "virtualization.management_exposure",
+      "label": "admin_pve",
+      "params": {
+        "from": "admin01",
+        "to": "pve01",
+        "protocol": "tcp",
+        "port": 8006
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "wan_pve",
+      "type": "virtualization.management_exposure",
+      "label": "wan_pve",
+      "params": {
+        "from": "attacker",
+        "to": "pve01",
+        "protocol": "tcp",
+        "port": 8006
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "ad_auth",
+      "type": "identity.authentication_test",
+      "label": "ad_auth",
+      "params": {
+        "subject": "alice",
+        "target": "ad01"
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "password_policy",
+      "type": "identity.password_audit",
+      "label": "password_policy",
+      "params": {
+        "target": "alice"
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "log_visibility",
+      "type": "logging.visibility_test",
+      "label": "log_visibility",
+      "params": {
+        "target": "log01"
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "log_alert",
+      "type": "logging.alert_test",
+      "label": "log_alert",
+      "params": {
+        "target": "log01"
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "backup_restore",
+      "type": "backup.restore_test",
+      "label": "backup_restore",
+      "params": {
+        "target": "backup01"
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "TRUE"
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding_wan_rdp",
+      "title": "Direkt WAN-RDP",
+      "severity": "high",
+      "when": {
+        "op": "test_result",
+        "test": "wan_rdp",
+        "expected": "TRUE"
+      },
+      "evidenceTests": [
+        "wan_rdp",
+        "rdp_scan"
+      ]
+    },
+    {
+      "id": "finding_mfa",
+      "title": "MFA saknas",
+      "severity": "high",
+      "when": {
+        "op": "not",
+        "rule": {
+          "op": "test_result",
+          "test": "ad_auth",
+          "expected": "TRUE"
+        }
+      },
+      "evidenceTests": [
+        "ad_auth"
+      ]
+    },
+    {
+      "id": "finding_backup",
+      "title": "Återställning ej testad",
+      "severity": "medium",
+      "when": {
+        "op": "not",
+        "rule": {
+          "op": "test_result",
+          "test": "backup_restore",
+          "expected": "TRUE"
+        }
+      },
+      "evidenceTests": [
+        "backup_restore"
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "stop_wan_rdp",
+      "title": "stop_wan_rdp",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "wan_rdp",
+        "expected": "FALSE"
+      }
+    },
+    {
+      "id": "keep_admin_rdp",
+      "title": "keep_admin_rdp",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "admin_rdp",
+        "expected": "TRUE"
+      }
+    },
+    {
+      "id": "keep_admin_pve",
+      "title": "keep_admin_pve",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "admin_pve",
+        "expected": "TRUE"
+      }
+    },
+    {
+      "id": "stop_wan_pve",
+      "title": "stop_wan_pve",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "wan_pve",
+        "expected": "FALSE"
+      }
+    },
+    {
+      "id": "fix_mfa",
+      "title": "fix_mfa",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "ad_auth",
+        "expected": "TRUE"
+      }
+    },
+    {
+      "id": "visible_logs",
+      "title": "visible_logs",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "log_visibility",
+        "expected": "TRUE"
+      }
+    },
+    {
+      "id": "working_alert",
+      "title": "working_alert",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "log_alert",
+        "expected": "TRUE"
+      }
+    },
+    {
+      "id": "restore_tested",
+      "title": "restore_tested",
+      "category": "security",
+      "required": true,
+      "condition": {
+        "op": "test_result",
+        "test": "backup_restore",
+        "expected": "TRUE"
+      }
+    }
+  ],
+  "completion": {
+    "op": "all",
+    "rules": [
+      {
+        "op": "test_result",
+        "test": "wan_rdp",
+        "expected": "FALSE"
+      },
+      {
+        "op": "test_result",
+        "test": "admin_rdp",
+        "expected": "TRUE"
+      },
+      {
+        "op": "test_result",
+        "test": "admin_pve",
+        "expected": "TRUE"
+      },
+      {
+        "op": "test_result",
+        "test": "wan_pve",
+        "expected": "FALSE"
+      },
+      {
+        "op": "test_result",
+        "test": "ad_auth",
+        "expected": "TRUE"
+      },
+      {
+        "op": "test_result",
+        "test": "log_visibility",
+        "expected": "TRUE"
+      },
+      {
+        "op": "test_result",
+        "test": "log_alert",
+        "expected": "TRUE"
+      },
+      {
+        "op": "test_result",
+        "test": "backup_restore",
+        "expected": "TRUE"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "level": 1,
+      "text": "Kontrollera RDP-vägen från WAN och jämför administrationsvägar."
+    },
+    {
+      "level": 2,
+      "text": "Granska OPNsense-regeln, MFA, loggning och backupstatus."
+    }
+  ],
+  "notes": [
+    {
+      "id": "simulation_boundary",
+      "text": "All konfiguration och evidens i detta labb är deklarerad och simulerad; inga riktiga system eller backuper påverkas."
+    }
+  ],
+  "canonicalSolution": {
+    "operations": [
+      {
+        "op": "set",
+        "target": "firewall01",
+        "path": "properties.rules.0.action",
+        "value": "deny"
+      },
+      {
+        "op": "set",
+        "target": "alice",
+        "path": "properties.mfaEnabled",
+        "value": true
+      },
+      {
+        "op": "set",
+        "target": "log01",
+        "path": "properties.logging.visible",
+        "value": true
+      },
+      {
+        "op": "set",
+        "target": "log01",
+        "path": "properties.logging.alerting",
+        "value": true
+      },
+      {
+        "op": "set",
+        "target": "backup01",
+        "path": "properties.backup.restoreTested",
+        "value": true
+      }
+    ]
+  }
+}

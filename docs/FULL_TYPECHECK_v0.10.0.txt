@@ -1,0 +1,4 @@
+validator/src/compiler-adapter.ts(1,34): error TS2307: Cannot find module 'ajv' or its corresponding type declarations.
+validator/src/index.ts(1,43): error TS2307: Cannot find module 'ajv/dist/2020.js' or its corresponding type declarations.
+
+exit_code=2

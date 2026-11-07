@@ -1,0 +1,18 @@
+YadiLab v0.36.0 — local regression evidence
+Authoritative architecture: Masterprompt v1.2 VERIFIED / LOCKED.
+Baseline v0.35.0 ZIP SHA-256: b78336e45eecaf34bc25b8e06b7512e2ad0f111337d68bce8fdaef259d06348f
+
+Full Foundation `npm run test:foundation`: PASS / exit 0.
+Schema: 19/19 fixture expectations, 6/6 meta-validation.
+Compiler: 61 functional / 51 adversarial assertions.
+Engine: 110 functional / 60 adversarial assertions.
+Phase 36 integrated Golden Scenario: 53 assertions PASS.
+Golden independent Draft 2020-12 validations: 3/3 PASS.
+Prior PackageIO/CLI/canvas/layout/Builder/Runtime/PWA/dependency/launcher/acceptance contract suites: PASS.
+Log SHA-256: c4b39381be885461c0f86ef434cf2f33ad1fc968129d4afa7341d8be2bdf9a84
+
+`npm run check:browser-readiness`: exit 77 / BLOCKED, no real resolved browser deps.
+`bash scripts/run_parrot_acceptance.sh`: exit 77 / BLOCKED, host Debian not Parrot.
+This does not establish browser/Parrot acceptance or real zip.js/ELK execution.
+
+Packaged-bytes regression status is recorded separately in PACKAGED_BYTES_VERIFICATION_v0.36.0.txt.

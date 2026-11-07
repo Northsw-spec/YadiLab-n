@@ -1,0 +1,17 @@
+{
+  "formatId": "infrastructure-cyber-lab.troubleshooting-notebook",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "notebookIdentity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "entries": [
+    {
+      "entryId": "entry-0001",
+      "sequence": 1,
+      "kind": "learner_note",
+      "stateRevision": 0,
+      "noteKind": "hypothesis",
+      "text": "Check whether the failure is before or after the default gateway."
+    }
+  ]
+}

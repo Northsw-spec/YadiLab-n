@@ -1,0 +1,29 @@
+YadiLab Foundation v0.45.0 — checkpoint verification
+Date: 2026-09-30
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+Baseline: exact YadiLab_Foundation_v0.44.0.zip
+Baseline SHA-256: a89202d862cefbdced8105041b37f7bf30afc64971d121f37d1a1f4188ac0da4
+
+Phase 45: sealed offline dependency snapshot transport
+- canonical deterministic ZIP_STORED packer: implemented
+- safe fail-closed extractor: implemented
+- basename-bound SHA-256 sidecar parser: implemented
+- one-command trusted-online snapshot producer: implemented
+- offline installer direct ZIP consumption: implemented
+- dependency/browser-build gate: 31 assertions PASS
+- dependency adversarial: 34 assertions PASS
+- Phase 44 offline snapshot: 28 assertions PASS
+- Phase 45 transport: 42 assertions PASS
+- shell syntax checks: PASS
+- Python compile checks: PASS
+
+Whole Foundation regression through v0.45.0: PASS / exit 0.
+Tail acceptance/launcher/Builder suites independently re-run: PASS.
+
+External gates remain intentionally unclaimed in this Debian sandbox:
+- genuine npm dependency snapshot: BLOCKED (registry/cache unavailable)
+- dependency-resolved browser ui/dist: BLOCKED
+- real Parrot OS x86-64 acceptance: BLOCKED
+- real Phase 43 interactive Chromium Builder -> Runtime workflow: BLOCKED until dependency-resolved browser assets and Parrot target are available
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "outDir": "../dist-browser-test",
+    "rootDir": "..",
+    "resolveJsonModule": true
+  },
+  "include": [
+    "../core-model/src/generated/contracts.ts",
+    "../versioning/src/**/*.ts",
+    "../asset-library/src/**/*.ts",
+    "../capability-packs/src/**/*.ts",
+    "../compiler/src/**/*.ts",
+    "../engine/src/**/*.ts",
+    "../layout/src/types.ts",
+    "../layout/src/elk-backend.ts",
+    "../certification/src/**/*.ts",
+    "../ui/src/canvas/**/*.ts",
+    "../ui/src/browser/**/*.ts",
+    "../package-io/src/**/*.ts",
+    "../enterprise-model/src/**/*.ts",
+    "../enterprise-import/src/**/*.ts",
+    "../enterprise-projection/src/**/*.ts",
+    "../fault-engine/src/**/*.ts",
+    "../observation-engine/src/**/*.ts"
+  ]
+}

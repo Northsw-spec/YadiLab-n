@@ -1,0 +1,4 @@
+all:
+  hosts:
+    bad01: !vault |
+      SOMETHING_MUST_NOT_BE_RESOLVED

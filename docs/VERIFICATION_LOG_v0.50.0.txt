@@ -1,0 +1,30 @@
+YadiLab Foundation v0.50.0 — worktree verification
+Date: 2026-10-01
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+Baseline: exact v0.49.0 checkpoint SHA256 5f2c943635551f9f279eec625ad5df2463365ccb844f5af39d2592871c480651
+
+Phase 50 snapshot producer coherence and offline replay:
+- producer metadata semantic validation implemented;
+- manifest target/preparedWith derived from development-platform.json;
+- manifest verification cross-checks producer metadata identity;
+- producer performs strict offline npm cache replay before sealing;
+- snapshot producer platform functional suite: 8 PASS;
+- snapshot producer platform adversarial suite: 21 PASS;
+- dependency snapshot producer contract suite: 12 PASS;
+- legacy offline snapshot suite: 28 PASS;
+- legacy offline transport suite: 42 PASS.
+
+Full Foundation regression and final packaging results are recorded in the release verification sidecar.
+
+Whole Foundation regression:
+- exact test:foundation chain: 111 deterministic commands;
+- commands 0-54 PASS;
+- commands 55-84 PASS;
+- commands 85-110 PASS;
+- precise regression-log failure scan PASS.
+
+External gates observed on worktree:
+- dependency readiness: 77/BLOCKED (genuine package-lock/dependency closure absent);
+- executable browser toolchain: 77/BLOCKED;
+- dependency-resolved React browser build: 77/BLOCKED;
+- Parrot OS x86-64 acceptance: 77/BLOCKED (current host Debian 13).

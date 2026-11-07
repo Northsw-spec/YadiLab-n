@@ -1,0 +1,34 @@
+YadiLab Foundation v0.49.0 — worktree verification
+source: exact YadiLab_Foundation_v0.48.0.zip checkpoint
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Phase 49 target-native optional dependency closure:
+- Linux x86-64 target policy binds esbuild -> @esbuild/linux-x64@0.28.2
+- target optional closure functional: 9 assertions PASS
+- target optional closure adversarial: 16 assertions PASS
+- dependency/browser-build gate: 31 assertions PASS
+- dependency/browser-build adversarial: 34 assertions PASS
+- offline dependency snapshot: 28 assertions PASS
+- offline snapshot transport: 42 assertions PASS
+- executable toolchain functional: 12 assertions PASS
+- executable toolchain adversarial: 20 assertions PASS
+
+Additional regression finding:
+- branding guard initially failed on three old test-only hardcoded YadiLab fixture titles
+- fixture titles replaced with neutral values; branding guard PASS
+- affected browser-index, browser-release and Phase 41 cache-lifecycle focused suites rerun PASS
+
+Whole Foundation regression:
+- exact test:foundation chain contains 108 deterministic commands
+- commands 0-54: PASS
+- commands 55-83: PASS
+- commands 84-107: PASS
+
+External gates:
+- dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed closure absent
+- executable browser toolchain: 77/BLOCKED
+- dependency-resolved browser build: 77/BLOCKED
+- real server-stopped Chromium React offline reload: BLOCKED until a real dependency-resolved release exists
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian 13
+
+Classification: VERIFIED DEVELOPMENT CHECKPOINT candidate, NOT VERIFIED PRODUCT RELEASE.

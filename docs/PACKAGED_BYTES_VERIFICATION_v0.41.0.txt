@@ -1,0 +1,4 @@
+YadiLab Foundation v0.41.0
+Candidate exact-byte readback: PASS (whole Foundation; 445 files, no transient Parrot report)
+Final exact-byte readback: independent external verification report after final ZIP is built
+Do not label product verified: npm dependency/browser and Parrot remain external acceptance gates.

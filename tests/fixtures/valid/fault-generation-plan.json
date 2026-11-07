@@ -1,0 +1,149 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-generation-plan",
+  "schemaVersion": "0.1.0",
+  "generatorId": "foundation.multi_fault",
+  "generatorVersion": "0.1.0",
+  "scenarioId": "foundation_acceptance",
+  "scenarioHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "seed": 7,
+  "request": {
+    "faultCount": 2,
+    "requireDistinctFaultDefinitions": true
+  },
+  "packLocks": [
+    {
+      "packId": "foundation.network.core",
+      "version": "0.2.0",
+      "packIdentity": "a67a18975d78db22f9fed76c4edd0ca0902d2b46e0302025d2f1ffeaf394362a"
+    },
+    {
+      "packId": "foundation.os.windows",
+      "version": "0.1.0",
+      "packIdentity": "c394e882cbadc16e29843af90a6264d32a171b068e6fac16bf34c8453948b861"
+    }
+  ],
+  "selections": [
+    {
+      "ordinal": 1,
+      "instanceId": "generated_fault_0001",
+      "packId": "foundation.os.windows",
+      "packVersion": "0.1.0",
+      "packIdentity": "c394e882cbadc16e29843af90a6264d32a171b068e6fac16bf34c8453948b861",
+      "faultId": "windows.rdp.change_listener_port",
+      "faultVersion": "0.1.0",
+      "seed": 1689118663,
+      "bindings": {
+        "target": "rds01"
+      },
+      "changedResources": [
+        "rds01"
+      ],
+      "expectedSymptoms": [
+        "Connections to the expected TCP/3389 listener fail even though the RDP service itself remains enabled."
+      ],
+      "hiddenTruth": "The RDP service remains enabled but its modeled listener port has moved away from 3389.",
+      "learningObjectives": [
+        "Check the actual listener port instead of assuming the default port."
+      ],
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "beforeStateRevision": 0,
+      "afterStateRevision": 1,
+      "preconditionsHeldOnBaseline": true
+    },
+    {
+      "ordinal": 2,
+      "instanceId": "generated_fault_0002",
+      "packId": "foundation.network.core",
+      "packVersion": "0.2.0",
+      "packIdentity": "a67a18975d78db22f9fed76c4edd0ca0902d2b46e0302025d2f1ffeaf394362a",
+      "faultId": "firewall.force_default_deny",
+      "faultVersion": "0.1.0",
+      "seed": 872914259,
+      "bindings": {
+        "target": "attacker"
+      },
+      "changedResources": [
+        "attacker"
+      ],
+      "expectedSymptoms": [
+        "Flows not explicitly permitted by modeled ACL rules may be blocked."
+      ],
+      "hiddenTruth": "The target resource's default ACL action has been changed to deny.",
+      "learningObjectives": [
+        "Distinguish policy-default behavior from explicit rule behavior."
+      ],
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "beforeStateRevision": 1,
+      "afterStateRevision": 2,
+      "preconditionsHeldOnBaseline": true
+    }
+  ],
+  "groundTruth": {
+    "overlayIdentity": "16ca4724a1f252e971b591eb2d16de36c627a49f95c0a85754e7b8b6877a3717",
+    "faultCount": 2,
+    "changedResources": [
+      "attacker",
+      "rds01"
+    ],
+    "expectedSymptoms": [
+      "Connections to the expected TCP/3389 listener fail even though the RDP service itself remains enabled.",
+      "Flows not explicitly permitted by modeled ACL rules may be blocked."
+    ],
+    "referenceInvestigationOrder": [
+      {
+        "ordinal": 1,
+        "instanceId": "generated_fault_0001",
+        "faultId": "windows.rdp.change_listener_port",
+        "rationale": "INDEPENDENT_STABLE_ORDER",
+        "expectedSymptoms": [
+          "Connections to the expected TCP/3389 listener fail even though the RDP service itself remains enabled."
+        ],
+        "learningObjectives": [
+          "Check the actual listener port instead of assuming the default port."
+        ]
+      },
+      {
+        "ordinal": 2,
+        "instanceId": "generated_fault_0002",
+        "faultId": "firewall.force_default_deny",
+        "rationale": "INDEPENDENT_STABLE_ORDER",
+        "expectedSymptoms": [
+          "Flows not explicitly permitted by modeled ACL rules may be blocked."
+        ],
+        "learningObjectives": [
+          "Distinguish policy-default behavior from explicit rule behavior."
+        ]
+      }
+    ],
+    "recoveryOrder": [
+      "generated_fault_0002",
+      "generated_fault_0001"
+    ],
+    "canonicalRecovery": [
+      {
+        "op": "remove",
+        "target": "attacker",
+        "path": "properties.aclDefaultAction"
+      },
+      {
+        "op": "set",
+        "target": "rds01",
+        "path": "properties.rdp.port",
+        "value": 3389
+      }
+    ],
+    "finalStateRevision": 2,
+    "solvabilityVerified": true
+  },
+  "planIdentity": "ae66f76f832210008149d13b2160595d01bd3ed53ebf1aa02f69b5eed6ebb6dc"
+}

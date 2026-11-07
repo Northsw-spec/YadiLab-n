@@ -1,0 +1,5 @@
+YadiLab v0.23.0 Parrot acceptance
+STATUS: BLOCKED / exit 77
+Current host: Debian GNU/Linux 13, x86-64.
+Reason: acceptance harness requires real Parrot OS x86-64 and fails closed on any other OS.
+VERIFIED RELEASE: NO

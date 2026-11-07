@@ -1,0 +1,5 @@
+YadiLab Foundation v0.39.0
+Candidate ZIP: full regression PASS from clean unzip; ZIP CRC, 441 files, executable Unix mode, no transient build artifacts PASS.
+Candidate external gates: browser/lock/Parrot correctly BLOCKED/77 in this environment.
+Final ZIP must independently pass the same full exact-byte gate before upload; final checks and hash are recorded in external YadiLab_Foundation_v0.39.0_VERIFICATION.txt.
+Status: DEVELOPMENT CHECKPOINT, not Parrot VERIFIED RELEASE.

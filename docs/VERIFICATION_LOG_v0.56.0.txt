@@ -1,0 +1,41 @@
+YadiLab Foundation v0.56.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.2 VERIFIED / LOCKED
+
+Phase 56 — trust activation and rotation ceremony
+- Trust-store schema: 1.2.0.
+- Public producer keys are staged as pending and are not trusted for snapshot signing.
+- Activation requires the matching external Ed25519 private key and creates a stored proof-of-possession signature over canonical trust metadata.
+- Trust-store reads cryptographically verify activation proofs before exposing active keys.
+- Manual pending->active mutation without a proof is rejected.
+- Tampered activation proof is rejected.
+- CLI activation requires private key realpath outside the source checkout and mode 0400 or 0600.
+- Revoked keys cannot be restaged/reactivated and remain blocked for provenance signing/verification.
+- Rotation verification covers an overlap checkpoint with old+new proven keys, old-key revocation, source-identity invalidation after trust mutation, and a fresh new-key snapshot for the post-revocation checkpoint.
+- No production trust anchor or private credential is embedded in this checkpoint.
+
+Focused Phase 56 verification
+- Trust lifecycle functional: 22 assertions PASS
+- Trust lifecycle adversarial: 19 assertions PASS
+- Trust CLI contract: 11 assertions PASS
+- Trust rotation: 10 assertions PASS
+- Phase 54 provenance regression: 12 functional + 16 adversarial PASS
+- Provenance producer contract: 12 assertions PASS
+- Offline dependency snapshot: 33 assertions PASS
+- Sealed snapshot transport: 44 assertions PASS
+
+Whole Foundation regression on final documented source tree
+- Exact test:foundation chain contains 126 deterministic commands.
+- Commands 0-102: PASS before execution-harness timeout while command 103 was starting.
+- Commands 103-114: PASS in deterministic fail-fast continuation; harness then timed out while command 115 was starting.
+- Commands 115-125: PASS in deterministic fail-fast continuation.
+- Therefore 126/126 deterministic commands PASS; no timed-out command is counted without an explicit successful rerun.
+
+External gates
+- Snapshot producer without a provisioned external signing key: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian 13.
+
+Classification: VERIFIED DEVELOPMENT SOURCE CHECKPOINT. Deterministic archive/readback and Google Drive readback are recorded in the external release verification sidecar.

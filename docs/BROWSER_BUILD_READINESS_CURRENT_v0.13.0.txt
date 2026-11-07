@@ -1,0 +1,25 @@
+YadiLab Foundation v0.13.0 browser build readiness
+
+STATUS: BLOCKED (expected fail-closed state in current sandbox)
+EXIT CODE: 77
+
+Reason:
+- package-lock.json is absent because a genuine dependency resolution has not completed;
+- the pinned direct browser/build packages are not installed in node_modules;
+- npm registry DNS/network access from the current build container is unavailable.
+
+Pinned direct runtime set:
+- @xyflow/react 12.11.6
+- @zip.js/zip.js 2.18.2
+- ajv 8.17.1
+- elkjs 0.12.0
+- react 19.3.0
+- react-dom 19.3.0
+
+Pinned development set:
+- esbuild 0.28.2
+- typescript 5.9.2
+
+This BLOCKED result is deliberate. The project must not fabricate a package lock, pretend missing dependencies are installed, or label a shell-only distribution as a complete browser application.
+
+Phase 13 still verifies the dependency policy, adversarial drift guards, local-only runtime guard, browser source/build pipeline contract, launcher distribution distinction, and hardened Parrot acceptance gate.

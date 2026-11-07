@@ -1,0 +1,422 @@
+{
+  "formatId": "infrastructure-cyber-lab.catalog",
+  "schemaVersion": "0.1.0",
+  "capabilities": [
+    {
+      "id": "core.network",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "network."
+        ],
+        "testTypePrefixes": [
+          "network."
+        ],
+        "connectionKinds": [
+          "network",
+          "management"
+        ],
+        "ruleOps": [
+          "reachable"
+        ]
+      }
+    },
+    {
+      "id": "core.identity",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "identity."
+        ],
+        "testTypePrefixes": [
+          "identity."
+        ],
+        "connectionKinds": [
+          "trust",
+          "authentication"
+        ],
+        "ruleOps": [
+          "member_of",
+          "has_permission"
+        ]
+      }
+    },
+    {
+      "id": "core.windows",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "windows."
+        ],
+        "testTypePrefixes": [
+          "windows."
+        ]
+      }
+    },
+    {
+      "id": "core.linux",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "linux."
+        ],
+        "testTypePrefixes": [
+          "linux."
+        ]
+      }
+    },
+    {
+      "id": "core.virtualization",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "virtualization."
+        ],
+        "testTypePrefixes": [
+          "virtualization."
+        ]
+      }
+    },
+    {
+      "id": "core.security",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "security."
+        ],
+        "testTypePrefixes": [
+          "security."
+        ]
+      }
+    },
+    {
+      "id": "core.logging",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "logging."
+        ],
+        "testTypePrefixes": [
+          "logging."
+        ]
+      }
+    },
+    {
+      "id": "core.backup",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "claims": {
+        "resourceTypePrefixes": [
+          "backup."
+        ],
+        "testTypePrefixes": [
+          "backup."
+        ]
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "vendor.proxmox",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "appliesTo": [
+        "virtualization.proxmox"
+      ],
+      "defaults": {
+        "vendor": "Proxmox",
+        "product": "Proxmox VE",
+        "properties": {
+          "management": {
+            "protocol": "https",
+            "port": 8006
+          }
+        }
+      }
+    },
+    {
+      "id": "vendor.microsoft.windows_server",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "appliesTo": [
+        "windows.*"
+      ],
+      "defaults": {
+        "vendor": "Microsoft",
+        "product": "Windows Server"
+      }
+    },
+    {
+      "id": "vendor.opnsense",
+      "version": "1.0.0",
+      "minimumEngineVersion": "0.2.0",
+      "appliesTo": [
+        "network.firewall"
+      ],
+      "defaults": {
+        "vendor": "Deciso",
+        "product": "OPNsense"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "id": "network.firewall",
+      "version": "1.0.0",
+      "label": "Firewall",
+      "path": "assets/builtin/network.firewall.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "network.firewall"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "network.router",
+      "version": "1.0.0",
+      "label": "Router",
+      "path": "assets/builtin/network.router.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "network.router"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "network.switch",
+      "version": "1.0.0",
+      "label": "Switch",
+      "path": "assets/builtin/network.switch.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "network.switch"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "endpoint.windows",
+      "version": "1.0.0",
+      "label": "Windows endpoint",
+      "path": "assets/builtin/endpoint.windows.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "endpoint.windows",
+        "windows.workstation"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "endpoint.linux",
+      "version": "1.0.0",
+      "label": "Linux endpoint",
+      "path": "assets/builtin/endpoint.linux.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "endpoint.linux",
+        "linux.workstation"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "endpoint.macos",
+      "version": "1.0.0",
+      "label": "macOS endpoint",
+      "path": "assets/builtin/endpoint.macos.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "endpoint.macos"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "server.generic",
+      "version": "1.0.0",
+      "label": "Generic server",
+      "path": "assets/builtin/server.generic.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "server.*"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.domain_controller",
+      "version": "1.0.0",
+      "label": "Domain controller",
+      "path": "assets/builtin/windows.domain_controller.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "windows.domain_controller"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.rd_gateway",
+      "version": "1.0.0",
+      "label": "RD Gateway",
+      "path": "assets/builtin/windows.rd_gateway.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "windows.rd_gateway"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "windows.rds_host",
+      "version": "1.0.0",
+      "label": "RDS host",
+      "path": "assets/builtin/windows.rds_host.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "windows.rds_host"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "virtualization.hypervisor",
+      "version": "1.0.0",
+      "label": "Hypervisor",
+      "path": "assets/builtin/virtualization.hypervisor.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "virtualization.hypervisor"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "virtualization.proxmox",
+      "version": "1.0.0",
+      "label": "Proxmox",
+      "path": "assets/builtin/virtualization.proxmox.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "virtualization.proxmox"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "security.siem",
+      "version": "1.0.0",
+      "label": "SIEM",
+      "path": "assets/builtin/security.siem.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "security.siem",
+        "logging.siem"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "security.edr",
+      "version": "1.0.0",
+      "label": "EDR",
+      "path": "assets/builtin/security.edr.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "security.edr"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "security.backup",
+      "version": "1.0.0",
+      "label": "Backup",
+      "path": "assets/builtin/security.backup.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "security.backup",
+        "backup.*"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "actor.user",
+      "version": "1.0.0",
+      "label": "User",
+      "path": "assets/builtin/actor.user.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "actor.user"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "actor.admin",
+      "version": "1.0.0",
+      "label": "Administrator",
+      "path": "assets/builtin/actor.admin.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "actor.admin"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "actor.attacker",
+      "version": "1.0.0",
+      "label": "Attacker",
+      "path": "assets/builtin/actor.attacker.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "actor.attacker"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    },
+    {
+      "id": "resource.generic",
+      "version": "1.0.0",
+      "label": "Generic resource",
+      "path": "assets/builtin/resource.generic.svg",
+      "mime": "image/svg+xml",
+      "appliesTo": [
+        "*"
+      ],
+      "width": 160,
+      "height": 100,
+      "trusted": true
+    }
+  ]
+}

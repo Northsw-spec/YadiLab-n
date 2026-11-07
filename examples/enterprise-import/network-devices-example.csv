@@ -1,0 +1,5 @@
+Asset ID,Hostname,Device Type,IP Address,Connected To
+router01,Edge Router,Router,192.168.10.1,
+switch01,Office Switch,Switch,192.168.10.2,router01
+pc01,Reception PC,Windows,192.168.10.101,switch01
+server01,File Server,Server,192.168.10.20,switch01

@@ -1,0 +1,53 @@
+YadiLab Foundation v0.64.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.63.0.zip bytes
+Baseline SHA256: 6caef593313cb401dbcd8a0053dd183112d1fc199410a70e03181624460147d5
+
+Phase 64 — Enterprise Baseline → Scenario/Topology Projection
+- Adds deterministic EnterpriseBaseline → ordinary scenario-source projection.
+- Projection does not create a special enterprise canvas; projected scenarios use the existing Compiler → normalized scenario → Layout Engine → Canvas Projection pipeline.
+- Only explicit enterprise site/zone evidence creates containers; zones and resources are never invented to improve appearance.
+- Only KNOWN/INFERRED facts may drive active scenario configuration.
+- UNKNOWN/CONFLICTING/INVALID/NOT_APPLICABLE facts remain preserved as enterprise knowledge but do not become active network truth.
+- Supported explicit enterprise relationships become ordinary scenario connections; unsupported/unresolved relationships are preserved in enterprise metadata and reported as skipped rather than fabricated.
+- enterpriseOrigin binds baselineId, baselineIdentity, model/projection versions and exact source hashes into scenario-source and normalized scenario without copying raw customer source bytes or display filenames.
+- The ordinary compiler preserves enterpriseOrigin exactly.
+- The ordinary layout graph accepts the projected scenario; no parallel enterprise topology representation is introduced.
+- Import Helper adds an explicit “Replace Builder with imported topology” action that projects the current verified baseline, compiles it and runs the ordinary deterministic ELK layout pipeline.
+- Projection remains fail-closed when baseline identity/model verification fails.
+- Fault injection is intentionally not added in Phase 64; it remains a later overlay on the projected scenario/baseline.
+
+Focused Phase 64 verification before full regression
+- Draft 2020-12 schema suite: 36/36 fixture expectations PASS; 13/13 schemas meta-valid.
+- Enterprise Projection functional: 9/9 PASS.
+- Enterprise Projection adversarial: 11/11 PASS.
+- Compiler including enterpriseOrigin preservation: 63 assertions PASS.
+- Import Helper including topology projection: 10/10 functional + 13/13 adversarial PASS.
+- Enterprise Import regression including XLSX/ODS: 30/30 functional + 28/28 adversarial PASS.
+- Mapping Review/Re-import Diff: 10/10 functional + 12/12 adversarial PASS.
+- Re-import Merge: 9/9 functional + 9/9 adversarial PASS.
+- Enterprise Model: 10/10 functional + 15/15 adversarial PASS.
+- Branding guard: PASS.
+- Generated TypeScript contract reproducibility: PASS.
+
+First whole-Foundation regression
+- Exact test:foundation chain contains 147 deterministic commands.
+- Commands 0–50: PASS.
+- Commands 51–100: PASS.
+- Commands 101–123: PASS.
+- Command 124 (offline dependency snapshot transport): normal harness runs exceeded the tool wall timeout and were not counted; detached completion returned exit 0 with 44/44 assertions PASS.
+- Commands 125–146: PASS.
+- Therefore 147/147 commands are covered by explicit successful runs; no timed-out command is counted without a successful rerun.
+
+External gates on the candidate source tree
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Actual dependency-resolved browser execution of Import Helper/projected topology: BLOCKED until genuine signed dependencies and a dependency-resolved browser release exist.
+- Actual server-stopped Chromium React offline reload: BLOCKED until genuine signed dependencies and dependency-resolved browser release exist.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian GNU/Linux 13.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

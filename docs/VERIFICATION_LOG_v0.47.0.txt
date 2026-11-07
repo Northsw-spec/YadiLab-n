@@ -1,0 +1,20 @@
+YadiLab Foundation v0.47.0 — worktree verification
+source: exact Google Drive YadiLab_Foundation_v0.46.0.zip
+source SHA256: a3a1e0666288a2b912a2ee89837961ff960d01af1b6eb2e8ebdea98b42737070
+Phase 47 browser release promotion integrity: 36 assertions PASS
+Phase 47 browser workflow fail-closed contract: 32 assertions PASS
+Acceptance contract: PASS
+Foundation monolithic segment through Phase 44 offline dependency snapshot: PASS before execution timeout
+Foundation deterministic tail commands 83-103: PASS in continuation runs
+Phase 45 sealed transport: 42 assertions PASS
+Phase 46 executable toolchain functional: 12 assertions PASS
+Phase 46 executable toolchain adversarial: 20 assertions PASS
+All Builder tail suites: PASS
+Current real dependency readiness/toolchain gate: 77/BLOCKED because genuine package-lock/node_modules are absent
+Real dependency-resolved browser build: BLOCKED
+Actual server-stopped Chromium React offline reload: BLOCKED until real browser release exists
+Real Parrot OS x86-64 acceptance: BLOCKED on Debian host
+Classification: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE
+
+AUDIT CORRECTION (added in v0.48.0 source tree):
+The exact packaged v0.47.0 build script did not load app-shell.js from generated full-build index.html despite the v0.47 verification claim. Phase 48 is the first checkpoint that actually binds the production builder to the tested renderer.

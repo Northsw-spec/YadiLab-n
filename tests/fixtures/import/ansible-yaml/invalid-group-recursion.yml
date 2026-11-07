@@ -1,0 +1,7 @@
+all:
+  children:
+    group01:
+      children:
+        group01:
+          hosts:
+            host01:

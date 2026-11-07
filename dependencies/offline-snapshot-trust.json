@@ -1,0 +1,18 @@
+{
+  "formatId": "infrastructure-cyber-lab.offline-snapshot-trust",
+  "schemaVersion": "1.2.0",
+  "keys": [
+    {
+      "activationProof": {
+        "formatId": "infrastructure-cyber-lab.offline-snapshot-trust-activation",
+        "schemaVersion": "1.0.0",
+        "signatureBase64": "nGlVA94uLf/MeRn9k8bp3av82vo00QnNopHv4T9LLuKZYVNI2MEgfiElFUhN2R36cjRG3WWK9Q/4smke00FGDg=="
+      },
+      "keyId": "ed25519-sha256:4bce090171de055f1d4f4aded451d1a04f0b9fc71898dd50a5419ec05d864be8",
+      "label": "v1.0.0-release-producer",
+      "publicKeySpkiBase64": "MCowBQYDK2VwAyEAVJuGCCeMGsxSRbtRUOYy4pUZSGWZYheBgcXf5bWSNWM=",
+      "role": "dependency-snapshot-producer",
+      "status": "active"
+    }
+  ]
+}

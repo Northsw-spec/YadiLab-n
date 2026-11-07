@@ -1,0 +1,48 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-reimport-merge-plan",
+  "schemaVersion": "0.1.0",
+  "status": "REVIEW_REQUIRED",
+  "ancestorBaseline": {
+    "baselineId": "corp",
+    "baselineIdentity": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "currentBaseline": {
+    "baselineId": "corp",
+    "baselineIdentity": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "incomingBaseline": {
+    "baselineId": "corp",
+    "baselineIdentity": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "summary": {
+    "autoApplyIncoming": 1,
+    "keepCurrent": 1,
+    "alreadyConverged": 0,
+    "reviewRequired": 1
+  },
+  "entries": [
+    {
+      "entryKey": "fact:pc01:/network/defaultGateway",
+      "objectKind": "FACT",
+      "decision": "GUESS",
+      "reason": "BOTH_CHANGED_DIFFERENT",
+      "ancestor": {
+        "state": "KNOWN"
+      },
+      "current": {
+        "state": "KNOWN"
+      },
+      "incoming": {
+        "state": "KNOWN"
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "REIMPORT_MERGE_REVIEW_REQUIRED",
+      "severity": "warning",
+      "message": "review",
+      "entryKey": "fact:pc01:/network/defaultGateway"
+    }
+  ]
+}

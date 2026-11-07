@@ -1,0 +1,1155 @@
+{
+  "formatId": "yadilab.import.capability-audit",
+  "schemaVersion": "1.0.0",
+  "status": "SOURCE_AUDIT_NOT_FUNCTIONAL_CERTIFICATION",
+  "auditBaseline": {
+    "mainSha": "56d2b9c11f65e8ce7b205a924db40c8d1d711219",
+    "treeSha": "6d2dab76c3451e27d2a7dafb55c773c9b4132387",
+    "date": "2026-10-31",
+    "note": "Read-only audit baseline. ALWAYS refetch fresh main for future development."
+  },
+  "fields": {
+    "stageValues": "Conservative, profile-specific current source-supported capability; never a proof of real hardware/network behavior.",
+    "ciCoverage": "Required CI vs specialized tests/verified runs are separate; specialized suites existing in repo are not presumed executed on every commit.",
+    "registry": "PLANNED_HINT is never an active enterprise import adapter even if a separate specialized preview exists."
+  },
+  "profiles": [
+    {
+      "id": "builtin.json",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".json"
+      ],
+      "registry": "ACTIVE_ADAPTER",
+      "stage": {
+        "detect": "ACTIVE_MEDIA_ADAPTER",
+        "parse": "ACTIVE_TABULAR",
+        "preview": "QUICK_NETWORK_SHA_BOUND_AND_IMPORT_HELPER",
+        "review": "SOURCE_BOUND_EXPLICIT_LINK_CHOICE_AND_REIMPORT_APPROVAL",
+        "projection": "EXPLICIT_DECLARED_NETWORK_WORKBOOK_OR_ENTERPRISE_BASELINE",
+        "builder": "CONSENTED_QUICK_NETWORK_BUILDER_WITH_FRESH_SOURCE_RECHECK",
+        "modeledProbe": "IMPORTED_MODELED_RUNTIME_SOURCE_AND_CHROMIUM_VERIFIED",
+        "replay": "SOURCE_BOUND_REIMPORT_REVIEW_AND_READ_ONLY_SAVED_REPORT",
+        "ui": "QUICK_NETWORK_NATIVE_PICKER_AND_IMPORT_HELPER"
+      },
+      "sources": [
+        "enterprise-import/src/json.ts",
+        "enterprise-import/src/adapters.ts",
+        "enterprise-import/src/external-mapping.ts",
+        "ui/src/browser/import-helper.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_enterprise_import_tests.mjs",
+        "tests/enterprise-import/run_external_data_capability_tests.mjs",
+        "tests/browser/run_ic020_p1_core_source_freshness_tests.mjs",
+        "tests/browser/run_ic020_p2a_dual_link_review_tests.mjs",
+        "tests/browser/run_ic020_p2b_reimport_review_tests.mjs",
+        "tests/browser/run_ic020_p2c1_saved_report_replay_tests.mjs",
+        "tests/browser/run_ic020_p2c3_unmapped_inventory_tests.mjs",
+        "tests/acceptance/run_ic020_p1_core_inventory_real_browser.py",
+        "tests/acceptance/run_ic020_p2a_link_review_real_browser.py",
+        "tests/acceptance/run_ic020_p2b_reimport_real_browser.py",
+        "tests/acceptance/run_ic020_p2c1_saved_report_real_browser.py",
+        "tests/acceptance/run_ic020_p2c3_unmapped_real_browser.py",
+        "tests/browser/run_ic020_p2c5_truth_tests.mjs",
+        "tests/acceptance/run_ic020_p2c5_truth_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_IC020_P1_TO_P2C6_SOURCE_AND_BROWSER; SCOPED_EXIT_TRUTH_REGRESSION",
+      "nextCheckpoint": "IC-030",
+      "risk": "Only explicitly declared source records, connections and modeled Engine results are supported. Flat Devices all-five Chromium FALSE/UNKNOWN are not proof of canonical six-sheet subtype FALSE/UNKNOWN; only ODS six-sheet modeled Runtime interaction is separately attested. External network/guest commands/Parrot are NOT_RUN; unrelated planned import profiles remain non-active.",
+      "ic020Refresh": {
+        "checkpoint": "IC-020 P2c4",
+        "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+        "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+        "independentLinuxRelease": {
+          "runId": 41234186594,
+          "headSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+          "conclusion": "success"
+        },
+        "sourceBoundOriginalShaRecheck": "ATTESTED_P1_ALL_FIVE",
+        "manualCompetingLinkSourceChoice": "ATTESTED_P2A_SUPPORTED_INVENTORY",
+        "consentedLiveReimport": "ATTESTED_P2B",
+        "readOnlySavedReimportReview": "ATTESTED_P2C1",
+        "typedOriginalPortChecks": "NOT_CLAIMED_FOR_THIS_SUBTYPE",
+        "ambiguousInventoryAndUnmappedColumns": "ATTESTED_P2C3_ALL_FIVE",
+        "compiledChromiumFileToBuilder": "ATTESTED_P1_ALL_FIVE",
+        "compiledChromiumImportedModeledRuntime": "NOT_ATTESTED_FOR_THIS_SUBTYPE",
+        "importedNegativeUnknownVerdictsInChromium": "NOT_ATTESTED",
+        "crossRowContradictoryFactsReconciliation": "NOT_ATTESTED",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      },
+      "ic020CurrentEvidence": {
+        "checkpoint": "IC-020 P2c6",
+        "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+        "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+        "independentlyVerifiedPreviousRelease": {
+          "runId": 41237691702,
+          "headSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+          "conclusion": "success"
+        },
+        "scope": "FIVE_ACTIVE_NETWORK_INVENTORY_FORMATS_TESTED_SOURCE_VARIANTS_ONLY",
+        "consentAndOriginalSha": "P1_TO_P2C5_SHA_BOUND_REPARSE_ATTESTED",
+        "manualConflictingLinkSource": "P2A_ATTESTED_FOR_TESTED_SOURCES",
+        "reimportReplacementAndReplay": "P2B_P2C1_READ_ONLY_EXPLICIT_APPROVAL_ATTESTED",
+        "ambiguousCompetingTablesAndUnmappedPrivacy": "P2C3_BLOCK_AND_WARNING_ATTESTED",
+        "flatDevicesAddressPrefixConflict": "P2C5_ALL_FIVE_BLOCKED_IN_SOURCE_AND_CHROMIUM",
+        "flatDevicesProbeModeledWindowsLinux": "P2C5_ALL_FIVE_FALSE_OFFLINK_UNKNOWN_DNS_CHROMIUM",
+        "compiledChromiumNativeFilePicker": "P1_ALL_FIVE",
+        "canonicalSixSheetPortValidation": "NOT_APPLICABLE",
+        "canonicalSixSheetModeledRuntimeBrowser": "NOT_APPLICABLE",
+        "canonicalSixSheetFalseUnknownChromium": "NOT_APPLICABLE",
+        "modeledBoundary": "NO_GUEST_COMMAND_EXECUTION",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      }
+    },
+    {
+      "id": "builtin.csv",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".csv"
+      ],
+      "registry": "ACTIVE_ADAPTER",
+      "stage": {
+        "detect": "ACTIVE_MEDIA_ADAPTER",
+        "parse": "ACTIVE_TABULAR",
+        "preview": "QUICK_NETWORK_SHA_BOUND_AND_IMPORT_HELPER",
+        "review": "SOURCE_BOUND_EXPLICIT_LINK_CHOICE_AND_REIMPORT_APPROVAL",
+        "projection": "EXPLICIT_DECLARED_NETWORK_WORKBOOK_OR_ENTERPRISE_BASELINE",
+        "builder": "CONSENTED_QUICK_NETWORK_BUILDER_WITH_FRESH_SOURCE_RECHECK",
+        "modeledProbe": "IMPORTED_MODELED_RUNTIME_SOURCE_AND_CHROMIUM_VERIFIED",
+        "replay": "SOURCE_BOUND_REIMPORT_REVIEW_AND_READ_ONLY_SAVED_REPORT",
+        "ui": "QUICK_NETWORK_NATIVE_PICKER_AND_IMPORT_HELPER"
+      },
+      "sources": [
+        "enterprise-import/src/delimited.ts",
+        "enterprise-import/src/adapters.ts",
+        "ui/src/browser/network-topology-import.ts",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_network_topology_import_checkpoint.mjs",
+        "tests/browser/run_import004_probe_runtime_tests.mjs",
+        "tests/browser/run_ic020_p1_core_source_freshness_tests.mjs",
+        "tests/browser/run_ic020_p2a_dual_link_review_tests.mjs",
+        "tests/browser/run_ic020_p2b_reimport_review_tests.mjs",
+        "tests/browser/run_ic020_p2c1_saved_report_replay_tests.mjs",
+        "tests/browser/run_ic020_p2c3_unmapped_inventory_tests.mjs",
+        "tests/acceptance/run_ic020_p1_core_inventory_real_browser.py",
+        "tests/acceptance/run_ic020_p2a_link_review_real_browser.py",
+        "tests/acceptance/run_ic020_p2b_reimport_real_browser.py",
+        "tests/acceptance/run_ic020_p2c1_saved_report_real_browser.py",
+        "tests/acceptance/run_ic020_p2c3_unmapped_real_browser.py",
+        "tests/browser/run_ic020_p2c5_truth_tests.mjs",
+        "tests/acceptance/run_ic020_p2c5_truth_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_IC020_P1_TO_P2C6_SOURCE_AND_BROWSER; SCOPED_EXIT_TRUTH_REGRESSION",
+      "nextCheckpoint": "IC-030",
+      "risk": "Only explicitly declared source records, connections and modeled Engine results are supported. Flat Devices all-five Chromium FALSE/UNKNOWN are not proof of canonical six-sheet subtype FALSE/UNKNOWN; only ODS six-sheet modeled Runtime interaction is separately attested. External network/guest commands/Parrot are NOT_RUN; unrelated planned import profiles remain non-active.",
+      "ic020Refresh": {
+        "checkpoint": "IC-020 P2c4",
+        "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+        "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+        "independentLinuxRelease": {
+          "runId": 41234186594,
+          "headSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+          "conclusion": "success"
+        },
+        "sourceBoundOriginalShaRecheck": "ATTESTED_P1_ALL_FIVE",
+        "manualCompetingLinkSourceChoice": "ATTESTED_P2A_SUPPORTED_INVENTORY",
+        "consentedLiveReimport": "ATTESTED_P2B",
+        "readOnlySavedReimportReview": "ATTESTED_P2C1",
+        "typedOriginalPortChecks": "NOT_CLAIMED_FOR_THIS_SUBTYPE",
+        "ambiguousInventoryAndUnmappedColumns": "ATTESTED_P2C3_ALL_FIVE",
+        "compiledChromiumFileToBuilder": "ATTESTED_P1_ALL_FIVE",
+        "compiledChromiumImportedModeledRuntime": "ATTESTED_P1_CSV",
+        "importedNegativeUnknownVerdictsInChromium": "NOT_ATTESTED",
+        "crossRowContradictoryFactsReconciliation": "NOT_ATTESTED",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      },
+      "ic020CurrentEvidence": {
+        "checkpoint": "IC-020 P2c6",
+        "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+        "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+        "independentlyVerifiedPreviousRelease": {
+          "runId": 41237691702,
+          "headSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+          "conclusion": "success"
+        },
+        "scope": "FIVE_ACTIVE_NETWORK_INVENTORY_FORMATS_TESTED_SOURCE_VARIANTS_ONLY",
+        "consentAndOriginalSha": "P1_TO_P2C5_SHA_BOUND_REPARSE_ATTESTED",
+        "manualConflictingLinkSource": "P2A_ATTESTED_FOR_TESTED_SOURCES",
+        "reimportReplacementAndReplay": "P2B_P2C1_READ_ONLY_EXPLICIT_APPROVAL_ATTESTED",
+        "ambiguousCompetingTablesAndUnmappedPrivacy": "P2C3_BLOCK_AND_WARNING_ATTESTED",
+        "flatDevicesAddressPrefixConflict": "P2C5_ALL_FIVE_BLOCKED_IN_SOURCE_AND_CHROMIUM",
+        "flatDevicesProbeModeledWindowsLinux": "P2C5_ALL_FIVE_FALSE_OFFLINK_UNKNOWN_DNS_CHROMIUM",
+        "compiledChromiumNativeFilePicker": "P1_ALL_FIVE",
+        "canonicalSixSheetPortValidation": "NOT_APPLICABLE",
+        "canonicalSixSheetModeledRuntimeBrowser": "NOT_APPLICABLE",
+        "canonicalSixSheetFalseUnknownChromium": "NOT_APPLICABLE",
+        "modeledBoundary": "NO_GUEST_COMMAND_EXECUTION",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      }
+    },
+    {
+      "id": "builtin.tsv",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".tsv"
+      ],
+      "registry": "ACTIVE_ADAPTER",
+      "stage": {
+        "detect": "ACTIVE_MEDIA_ADAPTER",
+        "parse": "ACTIVE_TABULAR",
+        "preview": "QUICK_NETWORK_SHA_BOUND_AND_IMPORT_HELPER",
+        "review": "SOURCE_BOUND_EXPLICIT_LINK_CHOICE_AND_REIMPORT_APPROVAL",
+        "projection": "EXPLICIT_DECLARED_NETWORK_WORKBOOK_OR_ENTERPRISE_BASELINE",
+        "builder": "CONSENTED_QUICK_NETWORK_BUILDER_WITH_FRESH_SOURCE_RECHECK",
+        "modeledProbe": "IMPORTED_MODELED_RUNTIME_SOURCE_AND_CHROMIUM_VERIFIED",
+        "replay": "SOURCE_BOUND_REIMPORT_REVIEW_AND_READ_ONLY_SAVED_REPORT",
+        "ui": "QUICK_NETWORK_NATIVE_PICKER_AND_IMPORT_HELPER"
+      },
+      "sources": [
+        "enterprise-import/src/delimited.ts",
+        "enterprise-import/src/adapters.ts",
+        "ui/src/browser/network-topology-import.ts",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_enterprise_import_tests.mjs",
+        "tests/browser/run_network_topology_checkpoint_tests.mjs",
+        "tests/browser/run_ic020_p1_core_source_freshness_tests.mjs",
+        "tests/browser/run_ic020_p2a_dual_link_review_tests.mjs",
+        "tests/browser/run_ic020_p2b_reimport_review_tests.mjs",
+        "tests/browser/run_ic020_p2c1_saved_report_replay_tests.mjs",
+        "tests/browser/run_ic020_p2c3_unmapped_inventory_tests.mjs",
+        "tests/acceptance/run_ic020_p1_core_inventory_real_browser.py",
+        "tests/acceptance/run_ic020_p2a_link_review_real_browser.py",
+        "tests/acceptance/run_ic020_p2b_reimport_real_browser.py",
+        "tests/acceptance/run_ic020_p2c1_saved_report_real_browser.py",
+        "tests/acceptance/run_ic020_p2c3_unmapped_real_browser.py",
+        "tests/browser/run_ic020_p2c5_truth_tests.mjs",
+        "tests/acceptance/run_ic020_p2c5_truth_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_IC020_P1_TO_P2C6_SOURCE_AND_BROWSER; SCOPED_EXIT_TRUTH_REGRESSION",
+      "nextCheckpoint": "IC-030",
+      "risk": "Only explicitly declared source records, connections and modeled Engine results are supported. Flat Devices all-five Chromium FALSE/UNKNOWN are not proof of canonical six-sheet subtype FALSE/UNKNOWN; only ODS six-sheet modeled Runtime interaction is separately attested. External network/guest commands/Parrot are NOT_RUN; unrelated planned import profiles remain non-active.",
+      "ic020Refresh": {
+        "checkpoint": "IC-020 P2c4",
+        "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+        "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+        "independentLinuxRelease": {
+          "runId": 41234186594,
+          "headSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+          "conclusion": "success"
+        },
+        "sourceBoundOriginalShaRecheck": "ATTESTED_P1_ALL_FIVE",
+        "manualCompetingLinkSourceChoice": "ATTESTED_P2A_SUPPORTED_INVENTORY",
+        "consentedLiveReimport": "ATTESTED_P2B",
+        "readOnlySavedReimportReview": "ATTESTED_P2C1",
+        "typedOriginalPortChecks": "NOT_CLAIMED_FOR_THIS_SUBTYPE",
+        "ambiguousInventoryAndUnmappedColumns": "ATTESTED_P2C3_ALL_FIVE",
+        "compiledChromiumFileToBuilder": "ATTESTED_P1_ALL_FIVE",
+        "compiledChromiumImportedModeledRuntime": "NOT_ATTESTED_FOR_THIS_SUBTYPE",
+        "importedNegativeUnknownVerdictsInChromium": "NOT_ATTESTED",
+        "crossRowContradictoryFactsReconciliation": "NOT_ATTESTED",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      },
+      "ic020CurrentEvidence": {
+        "checkpoint": "IC-020 P2c6",
+        "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+        "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+        "independentlyVerifiedPreviousRelease": {
+          "runId": 41237691702,
+          "headSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+          "conclusion": "success"
+        },
+        "scope": "FIVE_ACTIVE_NETWORK_INVENTORY_FORMATS_TESTED_SOURCE_VARIANTS_ONLY",
+        "consentAndOriginalSha": "P1_TO_P2C5_SHA_BOUND_REPARSE_ATTESTED",
+        "manualConflictingLinkSource": "P2A_ATTESTED_FOR_TESTED_SOURCES",
+        "reimportReplacementAndReplay": "P2B_P2C1_READ_ONLY_EXPLICIT_APPROVAL_ATTESTED",
+        "ambiguousCompetingTablesAndUnmappedPrivacy": "P2C3_BLOCK_AND_WARNING_ATTESTED",
+        "flatDevicesAddressPrefixConflict": "P2C5_ALL_FIVE_BLOCKED_IN_SOURCE_AND_CHROMIUM",
+        "flatDevicesProbeModeledWindowsLinux": "P2C5_ALL_FIVE_FALSE_OFFLINK_UNKNOWN_DNS_CHROMIUM",
+        "compiledChromiumNativeFilePicker": "P1_ALL_FIVE",
+        "canonicalSixSheetPortValidation": "NOT_APPLICABLE",
+        "canonicalSixSheetModeledRuntimeBrowser": "NOT_APPLICABLE",
+        "canonicalSixSheetFalseUnknownChromium": "NOT_APPLICABLE",
+        "modeledBoundary": "NO_GUEST_COMMAND_EXECUTION",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      }
+    },
+    {
+      "id": "builtin.xlsx",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".xlsx"
+      ],
+      "registry": "ACTIVE_ADAPTER",
+      "stage": {
+        "detect": "ACTIVE_MEDIA_ADAPTER",
+        "parse": "ACTIVE_TABULAR",
+        "preview": "QUICK_NETWORK_SHA_BOUND_AND_IMPORT_HELPER",
+        "review": "SOURCE_BOUND_EXPLICIT_LINK_CHOICE_AND_REIMPORT_APPROVAL",
+        "projection": "EXPLICIT_DECLARED_NETWORK_WORKBOOK_OR_ENTERPRISE_BASELINE",
+        "builder": "CONSENTED_QUICK_NETWORK_BUILDER_WITH_FRESH_SOURCE_RECHECK",
+        "modeledProbe": "IMPORTED_MODELED_RUNTIME_SOURCE_AND_CHROMIUM_VERIFIED",
+        "replay": "SOURCE_BOUND_REIMPORT_REVIEW_AND_READ_ONLY_SAVED_REPORT",
+        "ui": "QUICK_NETWORK_NATIVE_PICKER_AND_IMPORT_HELPER"
+      },
+      "sources": [
+        "enterprise-import/src/xlsx.ts",
+        "enterprise-import/src/adapters.ts",
+        "ui/src/browser/network-topology-import.ts",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_network_topology_import_checkpoint.mjs",
+        "tests/browser/run_network_topology_checkpoint_tests.mjs",
+        "tests/browser/run_ic020_p1_core_source_freshness_tests.mjs",
+        "tests/browser/run_ic020_p2a_dual_link_review_tests.mjs",
+        "tests/browser/run_ic020_p2b_reimport_review_tests.mjs",
+        "tests/browser/run_ic020_p2c1_saved_report_replay_tests.mjs",
+        "tests/browser/run_ic020_p2c3_unmapped_inventory_tests.mjs",
+        "tests/acceptance/run_ic020_p1_core_inventory_real_browser.py",
+        "tests/acceptance/run_ic020_p2a_link_review_real_browser.py",
+        "tests/acceptance/run_ic020_p2b_reimport_real_browser.py",
+        "tests/acceptance/run_ic020_p2c1_saved_report_real_browser.py",
+        "tests/acceptance/run_ic020_p2c3_unmapped_real_browser.py",
+        "tests/browser/run_ic020_p2c2_multisheet_tests.mjs",
+        "tests/acceptance/run_ic020_p2c2_multisheet_real_browser.py",
+        "tests/browser/run_ic020_p2c5_truth_tests.mjs",
+        "tests/acceptance/run_ic020_p2c5_truth_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_IC020_P1_TO_P2C6_SOURCE_AND_BROWSER; SCOPED_EXIT_TRUTH_REGRESSION",
+      "nextCheckpoint": "IC-030",
+      "risk": "Only explicitly declared source records, connections and modeled Engine results are supported. Flat Devices all-five Chromium FALSE/UNKNOWN are not proof of canonical six-sheet subtype FALSE/UNKNOWN; only ODS six-sheet modeled Runtime interaction is separately attested. External network/guest commands/Parrot are NOT_RUN; unrelated planned import profiles remain non-active.",
+      "ic020Refresh": {
+        "checkpoint": "IC-020 P2c4",
+        "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+        "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+        "independentLinuxRelease": {
+          "runId": 41234186594,
+          "headSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+          "conclusion": "success"
+        },
+        "sourceBoundOriginalShaRecheck": "ATTESTED_P1_ALL_FIVE",
+        "manualCompetingLinkSourceChoice": "ATTESTED_P2A_SUPPORTED_INVENTORY",
+        "consentedLiveReimport": "ATTESTED_P2B",
+        "readOnlySavedReimportReview": "ATTESTED_P2C1",
+        "typedOriginalPortChecks": "ATTESTED_P2C2_SIX_SHEET",
+        "ambiguousInventoryAndUnmappedColumns": "ATTESTED_P2C3_ALL_FIVE",
+        "compiledChromiumFileToBuilder": "ATTESTED_P1_ALL_FIVE",
+        "compiledChromiumImportedModeledRuntime": "NOT_ATTESTED_FOR_THIS_SUBTYPE",
+        "importedNegativeUnknownVerdictsInChromium": "NOT_ATTESTED",
+        "crossRowContradictoryFactsReconciliation": "NOT_ATTESTED",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      },
+      "ic020CurrentEvidence": {
+        "checkpoint": "IC-020 P2c6",
+        "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+        "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+        "independentlyVerifiedPreviousRelease": {
+          "runId": 41237691702,
+          "headSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+          "conclusion": "success"
+        },
+        "scope": "FIVE_ACTIVE_NETWORK_INVENTORY_FORMATS_TESTED_SOURCE_VARIANTS_ONLY",
+        "consentAndOriginalSha": "P1_TO_P2C5_SHA_BOUND_REPARSE_ATTESTED",
+        "manualConflictingLinkSource": "P2A_ATTESTED_FOR_TESTED_SOURCES",
+        "reimportReplacementAndReplay": "P2B_P2C1_READ_ONLY_EXPLICIT_APPROVAL_ATTESTED",
+        "ambiguousCompetingTablesAndUnmappedPrivacy": "P2C3_BLOCK_AND_WARNING_ATTESTED",
+        "flatDevicesAddressPrefixConflict": "P2C5_ALL_FIVE_BLOCKED_IN_SOURCE_AND_CHROMIUM",
+        "flatDevicesProbeModeledWindowsLinux": "P2C5_ALL_FIVE_FALSE_OFFLINK_UNKNOWN_DNS_CHROMIUM",
+        "compiledChromiumNativeFilePicker": "P1_ALL_FIVE",
+        "canonicalSixSheetPortValidation": "P2C2_XLSX_ODS_TYPED_PORTS_SOURCE_AND_CHROMIUM",
+        "canonicalSixSheetModeledRuntimeBrowser": "NOT_ATTESTED_FOR_XLSX_SIX_SHEET_PROBE",
+        "canonicalSixSheetFalseUnknownChromium": "NOT_ATTESTED_FOR_CANONICAL_SIX_SHEET",
+        "modeledBoundary": "NO_GUEST_COMMAND_EXECUTION",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      }
+    },
+    {
+      "id": "builtin.ods",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".ods"
+      ],
+      "registry": "ACTIVE_ADAPTER",
+      "stage": {
+        "detect": "ACTIVE_MEDIA_ADAPTER",
+        "parse": "ACTIVE_TABULAR",
+        "preview": "QUICK_NETWORK_SHA_BOUND_AND_IMPORT_HELPER",
+        "review": "SOURCE_BOUND_EXPLICIT_LINK_CHOICE_AND_REIMPORT_APPROVAL",
+        "projection": "EXPLICIT_DECLARED_NETWORK_WORKBOOK_OR_ENTERPRISE_BASELINE",
+        "builder": "CONSENTED_QUICK_NETWORK_BUILDER_WITH_FRESH_SOURCE_RECHECK",
+        "modeledProbe": "IMPORTED_MODELED_RUNTIME_SOURCE_AND_CHROMIUM_VERIFIED",
+        "replay": "SOURCE_BOUND_REIMPORT_REVIEW_AND_READ_ONLY_SAVED_REPORT",
+        "ui": "QUICK_NETWORK_NATIVE_PICKER_AND_IMPORT_HELPER"
+      },
+      "sources": [
+        "enterprise-import/src/ods.ts",
+        "enterprise-import/src/adapters.ts",
+        "ui/src/browser/network-topology-import.ts",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_workbook_mapping_tests.mjs",
+        "tests/browser/run_import004_probe_runtime_tests.mjs",
+        "tests/browser/run_ic020_p1_core_source_freshness_tests.mjs",
+        "tests/browser/run_ic020_p2a_dual_link_review_tests.mjs",
+        "tests/browser/run_ic020_p2b_reimport_review_tests.mjs",
+        "tests/browser/run_ic020_p2c1_saved_report_replay_tests.mjs",
+        "tests/browser/run_ic020_p2c3_unmapped_inventory_tests.mjs",
+        "tests/acceptance/run_ic020_p1_core_inventory_real_browser.py",
+        "tests/acceptance/run_ic020_p2a_link_review_real_browser.py",
+        "tests/acceptance/run_ic020_p2b_reimport_real_browser.py",
+        "tests/acceptance/run_ic020_p2c1_saved_report_real_browser.py",
+        "tests/acceptance/run_ic020_p2c3_unmapped_real_browser.py",
+        "tests/browser/run_ic020_p2c2_multisheet_tests.mjs",
+        "tests/acceptance/run_ic020_p2c2_multisheet_real_browser.py",
+        "tests/browser/run_ic020_p2c5_truth_tests.mjs",
+        "tests/acceptance/run_ic020_p2c5_truth_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_IC020_P1_TO_P2C6_SOURCE_AND_BROWSER; SCOPED_EXIT_TRUTH_REGRESSION",
+      "nextCheckpoint": "IC-030",
+      "risk": "Only explicitly declared source records, connections and modeled Engine results are supported. Flat Devices all-five Chromium FALSE/UNKNOWN are not proof of canonical six-sheet subtype FALSE/UNKNOWN; only ODS six-sheet modeled Runtime interaction is separately attested. External network/guest commands/Parrot are NOT_RUN; unrelated planned import profiles remain non-active.",
+      "ic020Refresh": {
+        "checkpoint": "IC-020 P2c4",
+        "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+        "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+        "independentLinuxRelease": {
+          "runId": 41234186594,
+          "headSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+          "conclusion": "success"
+        },
+        "sourceBoundOriginalShaRecheck": "ATTESTED_P1_ALL_FIVE",
+        "manualCompetingLinkSourceChoice": "ATTESTED_P2A_SUPPORTED_INVENTORY",
+        "consentedLiveReimport": "ATTESTED_P2B",
+        "readOnlySavedReimportReview": "ATTESTED_P2C1",
+        "typedOriginalPortChecks": "ATTESTED_P2C2_SIX_SHEET",
+        "ambiguousInventoryAndUnmappedColumns": "ATTESTED_P2C3_ALL_FIVE",
+        "compiledChromiumFileToBuilder": "ATTESTED_P1_ALL_FIVE",
+        "compiledChromiumImportedModeledRuntime": "ATTESTED_P2C2_ODS",
+        "importedNegativeUnknownVerdictsInChromium": "NOT_ATTESTED",
+        "crossRowContradictoryFactsReconciliation": "NOT_ATTESTED",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      },
+      "ic020CurrentEvidence": {
+        "checkpoint": "IC-020 P2c6",
+        "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+        "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+        "independentlyVerifiedPreviousRelease": {
+          "runId": 41237691702,
+          "headSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+          "conclusion": "success"
+        },
+        "scope": "FIVE_ACTIVE_NETWORK_INVENTORY_FORMATS_TESTED_SOURCE_VARIANTS_ONLY",
+        "consentAndOriginalSha": "P1_TO_P2C5_SHA_BOUND_REPARSE_ATTESTED",
+        "manualConflictingLinkSource": "P2A_ATTESTED_FOR_TESTED_SOURCES",
+        "reimportReplacementAndReplay": "P2B_P2C1_READ_ONLY_EXPLICIT_APPROVAL_ATTESTED",
+        "ambiguousCompetingTablesAndUnmappedPrivacy": "P2C3_BLOCK_AND_WARNING_ATTESTED",
+        "flatDevicesAddressPrefixConflict": "P2C5_ALL_FIVE_BLOCKED_IN_SOURCE_AND_CHROMIUM",
+        "flatDevicesProbeModeledWindowsLinux": "P2C5_ALL_FIVE_FALSE_OFFLINK_UNKNOWN_DNS_CHROMIUM",
+        "compiledChromiumNativeFilePicker": "P1_ALL_FIVE",
+        "canonicalSixSheetPortValidation": "P2C2_XLSX_ODS_TYPED_PORTS_SOURCE_AND_CHROMIUM",
+        "canonicalSixSheetModeledRuntimeBrowser": "P2C2_ODS_PROBE_INTERACTION_VERDICT_NOT_RESTRICTED",
+        "canonicalSixSheetFalseUnknownChromium": "NOT_ATTESTED_FOR_CANONICAL_SIX_SHEET",
+        "modeledBoundary": "NO_GUEST_COMMAND_EXECUTION",
+        "nativeParrotAndPhysicalNetwork": "NOT_RUN"
+      }
+    },
+    {
+      "id": "native.scenario.json",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".json"
+      ],
+      "registry": "NATIVE_SCENARIO",
+      "stage": {
+        "detect": "NATIVE_FORMAT_ID",
+        "parse": "NATIVE_JSON",
+        "preview": "SCENARIO_WORKBENCH",
+        "review": "COMPILER_VALIDATION",
+        "projection": "NATIVE_SCENARIO_SOURCE",
+        "builder": "NATIVE_SOURCE_EXPLICIT",
+        "modeledProbe": "SCENARIO_RUNTIME_SEPARATE",
+        "replay": "NONE",
+        "ui": "SCENARIO_FILE_MENU"
+      },
+      "sources": [
+        "ui/src/browser/import-workbench.ts",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/browser/run_dev3_import_workbench_tests.mjs"
+      ],
+      "ciCoverage": "SOURCE_TEST_NOT_IN_REQUIRED_GATE",
+      "nextCheckpoint": "IC-020",
+      "risk": "Only schema-matching YadiLab scenario source JSON is accepted, not arbitrary JSON or a live network dump."
+    },
+    {
+      "id": "graphml.structural.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".graphml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_GRAPHML_FILE_ENTRY",
+        "parse": "BOUNDED_GRAPHML_ORIGINAL_XML_SHA",
+        "preview": "ORIGINAL_SHA_READ_ONLY_SPECIALIZED_MODAL",
+        "review": "MANUAL_NODE_ROLES_FIRST_80_AND_UNDIRECTED_EDGES_ACK",
+        "projection": "EXPLICIT_REVIEWED_GRAPHML_WORKBOOK_CANDIDATE",
+        "builder": "REAL_COMPILER_ELK_ORIGINAL_REREAD_WORKSPACE_GATE",
+        "modeledProbe": "NOT_ATTESTED_NO_AUTOMATIC_RUNTIME",
+        "replay": "NO_SAVED_REPORT_ORIGINAL_REREAD_AT_COMMIT",
+        "ui": "SPECIALIZED_REVIEW_MODAL_BUILDER_CONFIRM_ONLY"
+      },
+      "sources": [
+        "enterprise-import/src/graphml-preview.ts",
+        "enterprise-import/src/graphml-review-mapping.ts",
+        "ui/app/graphml-preview-panel.mjs",
+        "ui/app/main.mjs",
+        "ui/src/browser/graphml-import-preview.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_graphml_review_mapping_tests.mjs",
+        "tests/browser/run_graphml_builder_compilation_tests.mjs",
+        "tests/browser/run_graphml_preview_ui_tests.mjs",
+        "tests/acceptance/run_graphml_p2c_real_browser.py",
+        "tests/browser/run_ic030_p1_graphml_freshness_tests.mjs",
+        "tests/acceptance/run_ic030_p1_graphml_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_AND_POSTMERGE_SOURCE_PLUS_REAL_CHROMIUM_GATES_CHECK_EXACT_SHA",
+      "nextCheckpoint": "IC-040_AFTER_VERIFIED_P3_RELEASE",
+      "risk": "GraphML is a manually reviewed Builder candidate, not a verified topology. UI individually exposes only first 80 node roles and edge choices, leaves remaining nodes generic and remaining edges unselected; directed edges cannot be mapped to undirected connections. No automatic Runtime or Engine PASS; modeled probe end-to-end, physical links, reachability and native Parrot are NOT_ATTESTED."
+    },
+    {
+      "id": "nmap.xml.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".xml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "EVIDENCE_ONLY",
+        "review": "SOURCE_BOUND_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/nmap-xml-preview.ts",
+        "enterprise-import/src/nmap-association-review.ts",
+        "enterprise-import/src/nmap-report-replay.ts",
+        "ui/app/nmap-observation-panel.mjs",
+        "ui/app/nmap-reference-replay-panel.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_nmap_xml_preview_tests.mjs",
+        "tests/browser/run_nmap_xml_p5_saved_replay_tests.mjs",
+        "tests/acceptance/run_nmap_xml_p5_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-070",
+      "risk": "Scan-time host/port evidence, not a current live service, device identity or Engine TRUE; no scenario creation."
+    },
+    {
+      "id": "nessus.xml.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".nessus",
+        ".xml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "EVIDENCE_ONLY",
+        "review": "SOURCE_BOUND_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/nessus-v2-preview.ts",
+        "enterprise-import/src/nessus-association-review.ts",
+        "enterprise-import/src/nessus-report-replay.ts",
+        "ui/app/nessus-severity-panel.mjs",
+        "ui/app/nessus-reference-replay-panel.mjs"
+      ],
+      "tests": [
+        "tests/browser/run_nessus_p6_saved_replay_tests.mjs",
+        "tests/acceptance/run_nessus_p6_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-070",
+      "risk": "Nessus severity is report-time evidence only; findings are not verified current vulnerabilities and cannot activate topology."
+    },
+    {
+      "id": "diagrams.drawio.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".drawio",
+        ".xml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_DRAWIO_P1P6_XML_READ_ONLY_AND_P2B_DRAWIO_ONLY",
+        "parse": "BOUNDED_2MIB_16P_1000V_2000E_RAW_DEFLATE_SHA",
+        "preview": "SEPARATE_READ_ONLY_AND_ORDINAL_ONLY_P2B_MODALS",
+        "review": "P1P6_REFERENCE_ONLY_OR_P2B_1_TO_20_EXPLICIT_NODES_EDGES_ACK",
+        "projection": "P2B_EXPLICIT_REVIEWED_DRAWIO_GRAPH_CANDIDATE_ONLY",
+        "builder": "P2B_REAL_COMPILER_ELK_LAST_ORIGINAL_REREAD_WORKSPACE_GATE",
+        "modeledProbe": "NOT_ATTESTED_NO_AUTOMATIC_RUNTIME",
+        "replay": "P1P6_REFERENCE_REPORT_ONLY_P2B_CANDIDATE_NOT_REPLAYED",
+        "ui": "SEPARATE_READ_ONLY_AND_P2B_REVIEWED_BUILDER_MODALS"
+      },
+      "sources": [
+        "enterprise-import/src/drawio-structural-preview.ts",
+        "enterprise-import/src/drawio-compressed-page.ts",
+        "enterprise-import/src/drawio-association-review.ts",
+        "enterprise-import/src/drawio-report-replay.ts",
+        "ui/app/drawio-structure-panel.mjs",
+        "enterprise-import/src/drawio-reviewed-candidate.ts",
+        "ui/src/browser/drawio-reviewed-candidate-file.ts",
+        "ui/app/drawio-reviewed-builder-panel.mjs",
+        "ui/app/main.mjs"
+      ],
+      "tests": [
+        "tests/browser/run_drawio_p6_position_navigation_tests.mjs",
+        "tests/acceptance/run_drawio_p6_real_browser.py",
+        "tests/browser/run_ic030_p2b_drawio_ui_tests.mjs",
+        "tests/acceptance/run_ic030_p2b_drawio_real_browser.py"
+      ],
+      "ciCoverage": "REQUIRED_AND_POSTMERGE_P1P6_AND_P2B_SOURCE_PLUS_REAL_CHROMIUM_CHECK_EXACT_SHA",
+      "nextCheckpoint": "IC-040_AFTER_VERIFIED_P3_RELEASE",
+      "risk": "Existing .xml/.drawio read-only metadata association and P4-P6 replay are separate from P2b's .drawio-only reviewed Builder candidate; P2b supports at most 20 deliberately selected vertex ordinals and 20 acknowledged drawn connections, not diagram source values/physical links. Candidate has no saved replay or automatic Runtime/Engine/probe truth; modeled probe E2E, real network and native Parrot NOT_ATTESTED."
+    },
+    {
+      "id": "visio.vsdx.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".vsdx"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-080",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "gns3.project.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".gns3",
+        ".gns3project"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-080",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "eve-ng.unl.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".unl"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-080",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "cisco-cml.yaml.v1",
+      "track": "TOPOLOGY_DECLARED",
+      "extensions": [
+        ".yaml",
+        ".yml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-080",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "inventory.yaml.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".yaml",
+        ".yml"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "SPECIALIZED_MODAL",
+        "review": "SOURCE_BOUND_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/ansible-yaml-preview.ts",
+        "enterprise-import/src/ansible-association-review.ts",
+        "enterprise-import/src/ansible-yaml-report-replay.ts",
+        "ui/app/ansible-inventory-panel.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_ansible_yaml_readonly_preview_tests.mjs",
+        "tests/browser/run_ansible_yaml_p6_host_pagination_tests.mjs",
+        "tests/acceptance/run_ansible_yaml_p6_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-060",
+      "risk": "Only a static Ansible YAML subset; not a generic YAML or Cisco CML importer and never executes playbooks."
+    },
+    {
+      "id": "ansible.inventory.ini.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".ini"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "SPECIALIZED_MODAL",
+        "review": "SOURCE_BOUND_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/ansible-ini-preview.ts",
+        "enterprise-import/src/ansible-ini-association-review.ts",
+        "enterprise-import/src/ansible-ini-report-replay.ts",
+        "ui/app/ansible-ini-inspection-panel.mjs"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_ansible_ini_readonly_preview_tests.mjs",
+        "tests/browser/run_ansible_ini_p6_host_pagination_tests.mjs",
+        "tests/acceptance/run_ansible_ini_p6_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-060",
+      "risk": "Host aliases and group memberships do not prove a physical asset, an assigned address or an Engine route."
+    },
+    {
+      "id": "configuration.text.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".cfg",
+        ".conf",
+        ".txt"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "office.docx-tables.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".docx"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "TABLE_STRUCTURE_ONLY",
+        "review": "CONSENTED_CELL_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/docx-tables-structural-preview.ts",
+        "enterprise-import/src/docx-cell-disclosure.ts",
+        "enterprise-import/src/docx-association-review.ts",
+        "enterprise-import/src/docx-report-replay.ts",
+        "ui/app/docx-structure-panel.mjs"
+      ],
+      "tests": [
+        "tests/browser/run_docx_p6_report_replay_tests.mjs",
+        "tests/acceptance/run_docx_p6_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-040",
+      "risk": "Source-bound references and consented cell review exist; no general table-to-network scenario mapper."
+    },
+    {
+      "id": "office.odt-tables.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".odt"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "SPECIALIZED_FILE_ENTRY",
+        "parse": "BOUNDED_READ_ONLY",
+        "preview": "TABLE_STRUCTURE_ONLY",
+        "review": "CONSENTED_CELL_REFERENCE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "SOURCE_BOUND_REPORT",
+        "ui": "SPECIALIZED_MODAL"
+      },
+      "sources": [
+        "enterprise-import/src/odt-tables-structural-preview.ts",
+        "enterprise-import/src/odt-cell-disclosure.ts",
+        "enterprise-import/src/odt-association-review.ts",
+        "enterprise-import/src/odt-report-replay.ts",
+        "ui/app/odt-structure-panel.mjs"
+      ],
+      "tests": [
+        "tests/browser/run_odt_p6_report_replay_tests.mjs",
+        "tests/acceptance/run_odt_p6_real_browser.py"
+      ],
+      "ciCoverage": "DEDICATED_TESTS_AND_WORKFLOWS_NOT_CORE_REQUIRED",
+      "nextCheckpoint": "IC-040",
+      "risk": "Only bounded, reviewed document-table references; no general ODT network topology activation."
+    },
+    {
+      "id": "pdf.digital-tables.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".pdf"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-050",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "terraform.hcl.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".tf"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "terraform.state.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".tfstate"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "capture.pcap.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".pcap",
+        ".pcapng"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-100",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "windows.evtx.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".evtx"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-100",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "logs.jsonl.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".jsonl"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "logs.text.v1",
+      "track": "EVIDENCE_OBSERVED",
+      "extensions": [
+        ".log",
+        ".txt"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    },
+    {
+      "id": "html.static-tables.v1",
+      "track": "CONFIG_DOCUMENTED",
+      "extensions": [
+        ".html",
+        ".htm"
+      ],
+      "registry": "PLANNED_HINT",
+      "stage": {
+        "detect": "HINT_ONLY_BLOCKED",
+        "parse": "NONE",
+        "preview": "NONE",
+        "review": "NONE",
+        "projection": "NONE",
+        "builder": "NONE",
+        "modeledProbe": "NONE",
+        "replay": "NONE",
+        "ui": "NONE"
+      },
+      "sources": [
+        "enterprise-import/src/planned-format-profiles.ts"
+      ],
+      "tests": [
+        "tests/enterprise-import/run_planned_format_profile_tests.mjs"
+      ],
+      "ciCoverage": "HINT_REGISTRY_NEGATIVE_ONLY",
+      "nextCheckpoint": "IC-090",
+      "risk": "Only a proposed suffix/profile hint. No active importer, preview, reviewed Builder projection, Runtime probe or replay."
+    }
+  ],
+  "auditRefreshP2c4": {
+    "basis": "SOURCE_BACKED_SUBSET_REFRESH_NOT_FULL_FUNCTIONAL_CERTIFICATION",
+    "evidenceMainSha": "3c2d00d73c1204827c12be276b9d15855aadbd7f",
+    "evidenceTreeSha": "25ab69f011f86dd22c4528b79846a8592f0e43e3",
+    "releaseRun": 41234186594,
+    "note": "Historical auditBaseline is intentionally unchanged; five active adapters only updated. Other 22 profile statuses remain the original IC-000 audit observations, not current full-feature certification. IC-020 exit remains open."
+  },
+  "auditRefreshP2c6": {
+    "basis": "FIVE_ACTIVE_ADAPTERS_SOURCE_AND_CHROMIUM_SCOPED_EXIT_EVIDENCE",
+    "preAuditMainSha": "8e43ee8341b1def9bea00ea75726889a592ce4b0",
+    "preAuditTreeSha": "b04a3d49f28fdf5da730088bc4c31ecc37168fb2",
+    "previousVerifiedIndependentRelease": 41237691702,
+    "status": "CODE_EVIDENCE_MET_P2C6_HEAD_CI_AND_POSTMERGE_RELEASE_REQUIRED_FOR_FINAL_VERIFICATION",
+    "note": "Previous IC-000 baseline and P2c4 snapshot retained exactly as historical observations. Only five active rows updated. Unchanged 22 other profiles are not certified; canonical six-sheet FALSE/UNKNOWN browser verdicts not claimed. The project-wide import issue remains open through IC-110."
+  }
+}

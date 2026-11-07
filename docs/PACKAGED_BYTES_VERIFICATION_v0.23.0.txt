@@ -1,0 +1,27 @@
+YadiLab Foundation v0.23.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Final exact-byte evidence:
+- candidate extracted into a clean directory and the complete Foundation regression through Phase 23 passed;
+- candidate executable mode bits were preserved;
+- candidate contained no dist-*/node_modules transient content;
+- candidate contained no superseded Masterprompt references;
+- browser dependency readiness returned 77/BLOCKED as required in this environment;
+- Parrot target acceptance returned 77/BLOCKED as required on this Debian host;
+- trusted Asset Library bytes were present in both source and loopback distribution.
+
+Required exact-byte gates:
+- complete Foundation regression through Phase 23 PASS;
+- exact asset refs/locks and package lock cross-check PASS;
+- Asset Library functional/adversarial + local SVG safety audit PASS;
+- Builder Asset Library functional/adversarial PASS;
+- loopback distribution serves trusted built-in SVG assets;
+- custom scenario SVG remains fail-closed;
+- browser dependency readiness remains fail-closed;
+- Parrot target gate remains fail-closed on non-Parrot host;
+- executable permissions retained;
+- no superseded Masterprompt reference;
+- transient dist-* directories excluded.

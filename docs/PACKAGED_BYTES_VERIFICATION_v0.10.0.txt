@@ -1,0 +1,11 @@
+YadiLab Foundation v0.10.0 packaged-byte verification
+
+Candidate archive was deterministically packaged from the exact v0.9.0-derived working tree, extracted into a clean directory, and npm run test:foundation passed from the extracted candidate bytes.
+
+The final archive adds only this verification record and is independently re-extracted and retested after final packaging.
+
+Runtime-boundary notes:
+- full repository tsc remains blocked only by absent installed Ajv modules/types in this sandbox;
+- all isolated compiler/engine/package/CLI/canvas/layout/browser/persistence typechecks used by test:foundation pass;
+- actual IndexedDB/service-worker/browser/PWA/Parrot runtime acceptance remains explicitly pending;
+- actual elkjs package execution remains pending a dependency-resolved environment.

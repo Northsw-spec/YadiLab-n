@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="label" for="node" attr.name="label" attr.type="string"/>
+  <graph id="synthetic-site" edgedefault="undirected">
+    <node id="router_1"><data key="label">Router 1</data></node>
+    <node id="switch_1"><data key="label">Switch 1</data></node>
+    <edge id="edge_1" source="router_1" target="switch_1"/>
+  </graph>
+</graphml>

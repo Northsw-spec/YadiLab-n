@@ -1,0 +1,25 @@
+{
+  "formatId": "infrastructure-cyber-lab.enterprise-mapping-review",
+  "schemaVersion": "0.1.0",
+  "status": "GUESS",
+  "adapter": {
+    "id": "builtin.csv",
+    "version": "1.0.0"
+  },
+  "source": {
+    "sourceId": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mediaType": "text/csv",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": 1
+  },
+  "mapping": {
+    "profileId": "enterprise.devices.basic",
+    "version": "1.0.0",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "tables": [],
+  "diagnostics": [],
+  "availableTables": [
+    "records"
+  ]
+}

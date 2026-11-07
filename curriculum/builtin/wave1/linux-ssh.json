@@ -1,0 +1,259 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario-source",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "guided_linux_ssh",
+  "metadata": {
+    "title": "Linux · SSH-tjänsten avstängd",
+    "description": "Guided troubleshooting curriculum Wave 1 · service.",
+    "language": "sv",
+    "authors": [
+      "Foundation curriculum"
+    ],
+    "tags": [
+      "guided-lab",
+      "wave1",
+      "linux",
+      "service"
+    ],
+    "briefing": "Nätvägen är frisk men TCP/22 svarar inte. Samla service- och TCP-evidens innan du testar en remediation."
+  },
+  "requires": {
+    "capabilities": [
+      {
+        "id": "core.network",
+        "version": "^1.0.0"
+      },
+      {
+        "id": "core.linux",
+        "version": "^1.0.0"
+      }
+    ],
+    "profiles": []
+  },
+  "zones": [
+    {
+      "id": "client_zone",
+      "label": "Client zone",
+      "kind": "lan"
+    },
+    {
+      "id": "transit_zone",
+      "label": "Transit",
+      "kind": "lan"
+    },
+    {
+      "id": "server_zone",
+      "label": "Server zone",
+      "kind": "server"
+    }
+  ],
+  "resources": [
+    {
+      "id": "client1",
+      "type": "linux.workstation",
+      "label": "Linux client",
+      "zone": "client_zone",
+      "properties": {
+        "defaultGateway": "10.78.8.1",
+        "dnsServers": [],
+        "dhcp": {
+          "enabled": true
+        },
+        "aclDefaultAction": "allow",
+        "NetworkManager": {
+          "enabled": true
+        },
+        "systemdResolved": {
+          "enabled": true
+        }
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "eth0",
+          "addresses": [
+            "10.78.8.20/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "r1",
+      "type": "network.router",
+      "label": "Router",
+      "zone": "transit_zone",
+      "properties": {
+        "routes": [
+          {
+            "id": "to-server",
+            "destination": "server1",
+            "via": "server1",
+            "action": "forward",
+            "enabled": true
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "lan",
+          "label": "LAN",
+          "addresses": [
+            "10.78.8.1/24",
+            "10.78.108.1/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "server1",
+      "type": "linux.server",
+      "label": "Linux server",
+      "zone": "server_zone",
+      "properties": {
+        "defaultGateway": "10.78.108.1",
+        "aclDefaultAction": "allow",
+        "ssh": {
+          "enabled": false,
+          "port": 22,
+          "protocol": "tcp"
+        },
+        "NetworkManager": {
+          "enabled": true
+        },
+        "systemdResolved": {
+          "enabled": true
+        }
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "eth0",
+          "addresses": [
+            "10.78.108.80/24"
+          ]
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "client_r1",
+      "kind": "network",
+      "from": {
+        "resource": "client1"
+      },
+      "to": {
+        "resource": "r1"
+      },
+      "properties": {}
+    },
+    {
+      "id": "r1_server",
+      "kind": "network",
+      "from": {
+        "resource": "r1"
+      },
+      "to": {
+        "resource": "server1"
+      },
+      "properties": {}
+    }
+  ],
+  "tests": [
+    {
+      "id": "baseline_reachability",
+      "type": "network.reachability",
+      "params": {
+        "from": "client1",
+        "to": "server1",
+        "protocol": "tcp",
+        "port": 22
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "TRUE"
+    }
+  ],
+  "findings": [],
+  "objectives": [
+    {
+      "id": "restore_expected_state",
+      "title": "Återställ förväntad funktion utan att ändra mer än nödvändigt",
+      "category": "troubleshooting",
+      "required": true,
+      "condition": {
+        "op": "service_enabled",
+        "target": "server1",
+        "service": "ssh"
+      }
+    }
+  ],
+  "troubleshootingObjectives": [
+    {
+      "id": "collect_required_evidence",
+      "title": "Samla evidens före åtgärd",
+      "description": "Följ den transparenta evidenskedjan och formulera sedan din egen hypotes.",
+      "required": true,
+      "evidenceOrder": "ordered",
+      "requirements": [
+        {
+          "id": "service_state",
+          "label": "Dokumentera serverns tjänstestatus",
+          "kind": "observation",
+          "category": "service",
+          "targetId": "server1"
+        },
+        {
+          "id": "ssh_failure",
+          "label": "Bevisa att TCP/22 inte är nåbar",
+          "kind": "active_probe",
+          "category": "connectivity",
+          "sourceId": "client1",
+          "destinationId": "server1",
+          "protocol": "tcp",
+          "port": 22,
+          "truth": "FALSE"
+        }
+      ]
+    }
+  ],
+  "completion": {
+    "op": "service_enabled",
+    "target": "server1",
+    "service": "ssh"
+  },
+  "hints": [
+    {
+      "level": 1,
+      "text": "Börja med att observera aktuell konfiguration och bevisa sedan felet med en modellerad probe."
+    },
+    {
+      "level": 2,
+      "text": "Spara före-evidens i notebooken innan du provar en typed remediation."
+    }
+  ],
+  "notes": [],
+  "canonicalSolution": {
+    "operations": [
+      {
+        "op": "set",
+        "target": "server1",
+        "path": "properties.ssh.enabled",
+        "value": true
+      }
+    ]
+  },
+  "layoutHints": [
+    {
+      "target": "client1",
+      "rank": 1
+    },
+    {
+      "target": "r1",
+      "rank": 2
+    },
+    {
+      "target": "server1",
+      "rank": 3
+    }
+  ]
+}

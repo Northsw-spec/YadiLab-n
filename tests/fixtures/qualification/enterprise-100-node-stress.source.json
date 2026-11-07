@@ -1,0 +1,3426 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario-source",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "qualification_enterprise_100_node_stress",
+  "metadata": {
+    "title": "Qualification — canonical 100-node stress fixture",
+    "language": "sv",
+    "briefing": "Test-only deterministic scale fixture; not a built-in teaching scenario or product support promise.",
+    "tags": [
+      "enterprise",
+      "baseline",
+      "30-plus-nodes",
+      "scaled-enterprise",
+      "qualification",
+      "stress-fixture"
+    ]
+  },
+  "requires": {
+    "capabilities": [
+      {
+        "id": "core.network",
+        "version": "^1.0.0"
+      },
+      {
+        "id": "core.windows",
+        "version": "1.x"
+      },
+      {
+        "id": "core.linux",
+        "version": "1.x"
+      },
+      {
+        "id": "core.virtualization",
+        "version": "1.x"
+      }
+    ],
+    "profiles": [
+      {
+        "id": "vendor.proxmox",
+        "version": "1.x"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "wan",
+      "label": "WAN / Internet edge",
+      "kind": "wan"
+    },
+    {
+      "id": "dmz",
+      "label": "DMZ",
+      "kind": "dmz"
+    },
+    {
+      "id": "server",
+      "label": "Server zone",
+      "kind": "server"
+    },
+    {
+      "id": "users",
+      "label": "User LAN · VLAN 10",
+      "kind": "lan"
+    },
+    {
+      "id": "management",
+      "label": "Management · VLAN 30",
+      "kind": "management"
+    },
+    {
+      "id": "guest",
+      "label": "Guest / Wi-Fi · VLAN 50",
+      "kind": "guest"
+    },
+    {
+      "id": "infra",
+      "label": "Infrastructure",
+      "kind": "custom"
+    }
+  ],
+  "resources": [
+    {
+      "id": "internet",
+      "type": "network.router",
+      "label": "Internet edge",
+      "zone": "wan",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.10/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wan-rtr01",
+      "type": "network.router",
+      "label": "WAN-RTR-01",
+      "zone": "wan",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.11/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fw01",
+      "type": "network.firewall",
+      "label": "EDGE-FW-01",
+      "zone": "dmz",
+      "properties": {
+        "defaultAction": "deny",
+        "rules": [
+          {
+            "source": "users",
+            "destination": "dmz-web01",
+            "protocol": "tcp",
+            "port": 443,
+            "action": "allow"
+          },
+          {
+            "source": "wan",
+            "destination": "dmz-web01",
+            "protocol": "tcp",
+            "port": 443,
+            "action": "allow"
+          },
+          {
+            "source": "guest",
+            "destination": "db01",
+            "protocol": "tcp",
+            "port": 5432,
+            "action": "deny"
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.12/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fw02",
+      "type": "network.firewall",
+      "label": "EDGE-FW-02",
+      "zone": "dmz",
+      "properties": {
+        "rules": [
+          {
+            "source": "wan",
+            "destination": "dmz-web02",
+            "protocol": "tcp",
+            "port": 443,
+            "action": "allow"
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.13/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dmz-web01",
+      "type": "linux.server",
+      "label": "DMZ-WEB-01",
+      "zone": "dmz",
+      "properties": {
+        "services": [
+          {
+            "name": "https",
+            "enabled": true,
+            "protocol": "tcp",
+            "port": 443
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.14/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dmz-web02",
+      "type": "linux.server",
+      "label": "DMZ-WEB-02",
+      "zone": "dmz",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.15/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "core01",
+      "type": "network.switch",
+      "label": "CORE-SW-01",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.16/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "core02",
+      "type": "network.switch",
+      "label": "CORE-SW-02",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.17/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "access01",
+      "type": "network.switch",
+      "label": "ACCESS-SW-01",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.18/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "access02",
+      "type": "network.switch",
+      "label": "ACCESS-SW-02",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.19/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "access03",
+      "type": "network.switch",
+      "label": "ACCESS-SW-03",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.20/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "access04",
+      "type": "network.switch",
+      "label": "ACCESS-SW-04",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.21/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ap01",
+      "type": "network.router",
+      "label": "WIFI-AP-01",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.22/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ap02",
+      "type": "network.router",
+      "label": "WIFI-AP-02",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.23/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ad-dns01",
+      "type": "windows.server",
+      "label": "AD/DNS-01",
+      "zone": "infra",
+      "properties": {
+        "services": [
+          {
+            "name": "dns",
+            "enabled": true,
+            "protocol": "udp",
+            "port": 53
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.24/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ad-dns02",
+      "type": "windows.server",
+      "label": "AD/DNS-02",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.25/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dhcp01",
+      "type": "linux.server",
+      "label": "DHCP-01",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.26/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "file01",
+      "type": "windows.server",
+      "label": "FILE-01",
+      "zone": "server",
+      "properties": {
+        "services": [
+          {
+            "name": "https",
+            "enabled": true,
+            "protocol": "tcp",
+            "port": 443
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.27/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "app01",
+      "type": "linux.server",
+      "label": "APP-01",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.28/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "db01",
+      "type": "linux.server",
+      "label": "DB-01",
+      "zone": "server",
+      "properties": {
+        "isFirewall": true,
+        "defaultAction": "allow",
+        "rules": [
+          {
+            "source": "guest",
+            "destination": "db01",
+            "protocol": "tcp",
+            "port": 5432,
+            "action": "deny"
+          }
+        ],
+        "services": [
+          {
+            "name": "https",
+            "enabled": true,
+            "protocol": "tcp",
+            "port": 443
+          },
+          {
+            "name": "postgres",
+            "enabled": true,
+            "protocol": "tcp",
+            "port": 5432
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.29/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backup01",
+      "type": "linux.server",
+      "label": "BACKUP-01",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.30/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jump01",
+      "type": "windows.workstation",
+      "label": "MGMT-JUMP-01",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.31/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "siem01",
+      "type": "linux.server",
+      "label": "SIEM-01",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.32/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "monitor01",
+      "type": "linux.server",
+      "label": "MONITOR-01",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.33/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prox01",
+      "type": "virtualization.proxmox",
+      "label": "PROXMOX-01",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.34/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "win01",
+      "type": "windows.workstation",
+      "label": "WIN-USER-01",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.35/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "win02",
+      "type": "windows.workstation",
+      "label": "WIN-USER-02",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.36/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "win03",
+      "type": "windows.workstation",
+      "label": "WIN-USER-03",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.37/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "win04",
+      "type": "windows.workstation",
+      "label": "WIN-USER-04",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.38/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linux01",
+      "type": "linux.workstation",
+      "label": "LINUX-USER-01",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.39/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linux02",
+      "type": "linux.workstation",
+      "label": "LINUX-USER-02",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.40/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "printer01",
+      "type": "resource.generic",
+      "label": "PRINTER-01",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.41/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "iot01",
+      "type": "resource.generic",
+      "label": "IOT-SENSOR-01",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.42/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guest01",
+      "type": "windows.workstation",
+      "label": "GUEST-CLIENT-01",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.43/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guest02",
+      "type": "linux.workstation",
+      "label": "GUEST-CLIENT-02",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.0.44/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-36",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-36",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.55/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-38",
+      "type": "linux.server",
+      "label": "BRANCH-APP-38",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.57/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-40",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-40",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.59/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-42",
+      "type": "network.switch",
+      "label": "ACCESS-SW-42",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.61/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-44",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-44",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.63/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-46",
+      "type": "linux.server",
+      "label": "BRANCH-APP-46",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.65/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-48",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-48",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.67/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-50",
+      "type": "network.switch",
+      "label": "ACCESS-SW-50",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.69/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-52",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-52",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.71/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-54",
+      "type": "linux.server",
+      "label": "BRANCH-APP-54",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.73/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-56",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-56",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.75/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-58",
+      "type": "network.switch",
+      "label": "ACCESS-SW-58",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.77/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-60",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-60",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.79/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-62",
+      "type": "linux.server",
+      "label": "BRANCH-APP-62",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.81/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-64",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-64",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.83/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-66",
+      "type": "network.switch",
+      "label": "ACCESS-SW-66",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.85/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-68",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-68",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.87/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-70",
+      "type": "linux.server",
+      "label": "BRANCH-APP-70",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.89/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-72",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-72",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.91/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-74",
+      "type": "network.switch",
+      "label": "ACCESS-SW-74",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.93/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-76",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-76",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.95/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-78",
+      "type": "linux.server",
+      "label": "BRANCH-APP-78",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.97/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-80",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-80",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.99/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-82",
+      "type": "network.switch",
+      "label": "ACCESS-SW-82",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.101/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-84",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-84",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.103/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-86",
+      "type": "linux.server",
+      "label": "BRANCH-APP-86",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.105/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-88",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-88",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.107/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-90",
+      "type": "network.switch",
+      "label": "ACCESS-SW-90",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.109/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-92",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-92",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.111/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-94",
+      "type": "linux.server",
+      "label": "BRANCH-APP-94",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.113/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-96",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-96",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.115/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-98",
+      "type": "network.switch",
+      "label": "ACCESS-SW-98",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.117/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-100",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-100",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.119/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-102",
+      "type": "linux.server",
+      "label": "BRANCH-APP-102",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.121/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-104",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-104",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.123/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-106",
+      "type": "network.switch",
+      "label": "ACCESS-SW-106",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.125/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-108",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-108",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.127/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-110",
+      "type": "linux.server",
+      "label": "BRANCH-APP-110",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.129/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-112",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-112",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.131/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-114",
+      "type": "network.switch",
+      "label": "ACCESS-SW-114",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.133/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-116",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-116",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.135/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-118",
+      "type": "linux.server",
+      "label": "BRANCH-APP-118",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.137/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-120",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-120",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.139/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-122",
+      "type": "network.switch",
+      "label": "ACCESS-SW-122",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.141/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-expansion-124",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-124",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.24.1.143/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-081",
+      "type": "network.switch",
+      "label": "DISTRIBUTION-SW-081",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.20/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-082",
+      "type": "network.switch",
+      "label": "ACCESS-SW-082",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.21/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-083",
+      "type": "windows.workstation",
+      "label": "WIN-BRANCH-083",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.22/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-084",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-084",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.23/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-085",
+      "type": "windows.server",
+      "label": "BRANCH-FILE-085",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.24/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-086",
+      "type": "linux.server",
+      "label": "BRANCH-APP-086",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.25/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-087",
+      "type": "resource.generic",
+      "label": "IOT-BRANCH-087",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.26/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-088",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-088",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.27/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-089",
+      "type": "network.switch",
+      "label": "DISTRIBUTION-SW-089",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.28/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-090",
+      "type": "network.switch",
+      "label": "ACCESS-SW-090",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.29/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-091",
+      "type": "windows.workstation",
+      "label": "WIN-BRANCH-091",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.30/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-092",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-092",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.31/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-093",
+      "type": "windows.server",
+      "label": "BRANCH-FILE-093",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.32/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-094",
+      "type": "linux.server",
+      "label": "BRANCH-APP-094",
+      "zone": "server",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.33/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-095",
+      "type": "resource.generic",
+      "label": "IOT-BRANCH-095",
+      "zone": "guest",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.34/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-096",
+      "type": "linux.server",
+      "label": "MGMT-COLLECTOR-096",
+      "zone": "management",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.35/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-097",
+      "type": "network.switch",
+      "label": "DISTRIBUTION-SW-097",
+      "zone": "infra",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.36/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-098",
+      "type": "network.switch",
+      "label": "ACCESS-SW-098",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.37/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-099",
+      "type": "windows.workstation",
+      "label": "WIN-BRANCH-099",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.38/24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qualification-expansion-100",
+      "type": "linux.workstation",
+      "label": "LINUX-BRANCH-100",
+      "zone": "users",
+      "properties": {},
+      "interfaces": [
+        {
+          "id": "eth0",
+          "label": "Ethernet",
+          "addresses": [
+            "10.25.0.39/24"
+          ]
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "enterprise-link-01",
+      "kind": "network",
+      "from": {
+        "resource": "internet"
+      },
+      "to": {
+        "resource": "wan-rtr01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-02",
+      "kind": "network",
+      "from": {
+        "resource": "wan-rtr01"
+      },
+      "to": {
+        "resource": "fw01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-03",
+      "kind": "network",
+      "from": {
+        "resource": "wan-rtr01"
+      },
+      "to": {
+        "resource": "fw02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-04",
+      "kind": "network",
+      "from": {
+        "resource": "fw01"
+      },
+      "to": {
+        "resource": "fw02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-05",
+      "kind": "network",
+      "from": {
+        "resource": "fw01"
+      },
+      "to": {
+        "resource": "dmz-web01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-06",
+      "kind": "network",
+      "from": {
+        "resource": "fw02"
+      },
+      "to": {
+        "resource": "dmz-web02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-07",
+      "kind": "network",
+      "from": {
+        "resource": "fw01"
+      },
+      "to": {
+        "resource": "core01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-08",
+      "kind": "network",
+      "from": {
+        "resource": "fw02"
+      },
+      "to": {
+        "resource": "core02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-09",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "core02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-10",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "access01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-11",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "access02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-12",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "access03"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-13",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "access04"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-14",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "ap01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-15",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "ap02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-16",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "ad-dns01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-17",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "ad-dns02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-18",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "dhcp01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-19",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "file01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-20",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "app01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-21",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "db01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-22",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "backup01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-23",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "prox01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-24",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "jump01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-25",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "siem01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-26",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "monitor01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-27",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "win01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-28",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "win02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-29",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "win03"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-30",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "win04"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-31",
+      "kind": "network",
+      "from": {
+        "resource": "access03"
+      },
+      "to": {
+        "resource": "linux01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-32",
+      "kind": "network",
+      "from": {
+        "resource": "access04"
+      },
+      "to": {
+        "resource": "linux02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-33",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "printer01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-34",
+      "kind": "network",
+      "from": {
+        "resource": "ap01"
+      },
+      "to": {
+        "resource": "iot01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-35",
+      "kind": "network",
+      "from": {
+        "resource": "ap02"
+      },
+      "to": {
+        "resource": "guest01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-36",
+      "kind": "network",
+      "from": {
+        "resource": "ap02"
+      },
+      "to": {
+        "resource": "guest02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-37",
+      "kind": "network",
+      "from": {
+        "resource": "ad-dns01"
+      },
+      "to": {
+        "resource": "ad-dns02"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-38",
+      "kind": "network",
+      "from": {
+        "resource": "file01"
+      },
+      "to": {
+        "resource": "backup01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-39",
+      "kind": "network",
+      "from": {
+        "resource": "app01"
+      },
+      "to": {
+        "resource": "db01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-40",
+      "kind": "network",
+      "from": {
+        "resource": "jump01"
+      },
+      "to": {
+        "resource": "siem01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-link-41",
+      "kind": "network",
+      "from": {
+        "resource": "monitor01"
+      },
+      "to": {
+        "resource": "siem01"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-01",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-36"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-02",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-38"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-03",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-40"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-04",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-42"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-05",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-44"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-06",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-46"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-07",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-48"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-08",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-50"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-09",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-52"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-10",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-54"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-11",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-56"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-12",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-58"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-13",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-60"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-14",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-62"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-15",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-64"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-16",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-66"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-17",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-68"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-18",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-70"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-19",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-72"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-20",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-74"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-21",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-76"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-22",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-78"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-23",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-80"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-24",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-82"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-25",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-84"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-26",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-86"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-27",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-88"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-28",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-90"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-29",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-92"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-30",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-94"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-31",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-96"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-32",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-98"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-33",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-100"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-34",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-102"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-35",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-104"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-36",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-106"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-37",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-108"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-38",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-110"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-39",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-112"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-40",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-114"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-41",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-116"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-42",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-118"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-43",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-120"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-44",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "enterprise-expansion-122"
+      },
+      "properties": {}
+    },
+    {
+      "id": "enterprise-expansion-link-45",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "enterprise-expansion-124"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-01",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "qualification-expansion-081"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-02",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-082"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-03",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "qualification-expansion-083"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-04",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-084"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-05",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "qualification-expansion-085"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-06",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "qualification-expansion-086"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-07",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "qualification-expansion-087"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-08",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "qualification-expansion-088"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-09",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "qualification-expansion-089"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-10",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-090"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-11",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "qualification-expansion-091"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-12",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-092"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-13",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "qualification-expansion-093"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-14",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "qualification-expansion-094"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-15",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "qualification-expansion-095"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-16",
+      "kind": "network",
+      "from": {
+        "resource": "core01"
+      },
+      "to": {
+        "resource": "qualification-expansion-096"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-17",
+      "kind": "network",
+      "from": {
+        "resource": "core02"
+      },
+      "to": {
+        "resource": "qualification-expansion-097"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-18",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-098"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-19",
+      "kind": "network",
+      "from": {
+        "resource": "access02"
+      },
+      "to": {
+        "resource": "qualification-expansion-099"
+      },
+      "properties": {}
+    },
+    {
+      "id": "qualification-expansion-link-20",
+      "kind": "network",
+      "from": {
+        "resource": "access01"
+      },
+      "to": {
+        "resource": "qualification-expansion-100"
+      },
+      "properties": {}
+    }
+  ],
+  "tests": [
+    {
+      "id": "user_to_db",
+      "type": "network.reachability",
+      "params": {
+        "from": "win01",
+        "to": "db01",
+        "protocol": "tcp",
+        "port": 443
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "user_to_dns",
+      "type": "network.reachability",
+      "params": {
+        "from": "win01",
+        "to": "ad-dns01",
+        "protocol": "udp",
+        "port": 53
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "user_to_dmz",
+      "type": "network.reachability",
+      "params": {
+        "from": "win01",
+        "to": "dmz-web01",
+        "protocol": "tcp",
+        "port": 443
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    },
+    {
+      "id": "guest_to_db",
+      "type": "network.reachability",
+      "params": {
+        "from": "guest01",
+        "to": "db01",
+        "protocol": "tcp",
+        "port": 5432
+      },
+      "expectedInitial": "FALSE",
+      "expectedSolved": "FALSE"
+    },
+    {
+      "id": "management_to_server",
+      "type": "network.reachability",
+      "params": {
+        "from": "jump01",
+        "to": "file01",
+        "protocol": "tcp",
+        "port": 443
+      },
+      "expectedInitial": "TRUE",
+      "expectedSolved": "TRUE"
+    }
+  ],
+  "findings": [],
+  "objectives": [
+    {
+      "id": "enterprise_baseline_ready",
+      "title": "Verifiera enterprise-baselinen",
+      "category": "network",
+      "required": true,
+      "condition": {
+        "op": "reachable",
+        "from": "win01",
+        "to": "db01",
+        "protocol": "tcp",
+        "port": 443
+      }
+    }
+  ],
+  "completion": {
+    "op": "reachable",
+    "from": "win01",
+    "to": "db01",
+    "protocol": "tcp",
+    "port": 443
+  },
+  "layoutHints": [
+    {
+      "target": "internet",
+      "rank": 1
+    },
+    {
+      "target": "wan-rtr01",
+      "rank": 1
+    },
+    {
+      "target": "fw01",
+      "rank": 1
+    },
+    {
+      "target": "fw02",
+      "rank": 1
+    },
+    {
+      "target": "dmz-web01",
+      "rank": 1
+    },
+    {
+      "target": "dmz-web02",
+      "rank": 1
+    },
+    {
+      "target": "core01",
+      "rank": 2
+    },
+    {
+      "target": "core02",
+      "rank": 2
+    },
+    {
+      "target": "access01",
+      "rank": 2
+    },
+    {
+      "target": "access02",
+      "rank": 2
+    },
+    {
+      "target": "access03",
+      "rank": 2
+    },
+    {
+      "target": "access04",
+      "rank": 2
+    },
+    {
+      "target": "ap01",
+      "rank": 3
+    },
+    {
+      "target": "ap02",
+      "rank": 3
+    },
+    {
+      "target": "ad-dns01",
+      "rank": 3
+    },
+    {
+      "target": "ad-dns02",
+      "rank": 3
+    },
+    {
+      "target": "dhcp01",
+      "rank": 3
+    },
+    {
+      "target": "file01",
+      "rank": 3
+    },
+    {
+      "target": "app01",
+      "rank": 4
+    },
+    {
+      "target": "db01",
+      "rank": 4
+    },
+    {
+      "target": "backup01",
+      "rank": 4
+    },
+    {
+      "target": "jump01",
+      "rank": 4
+    },
+    {
+      "target": "siem01",
+      "rank": 4
+    },
+    {
+      "target": "monitor01",
+      "rank": 4
+    },
+    {
+      "target": "prox01",
+      "rank": 5
+    },
+    {
+      "target": "win01",
+      "rank": 5
+    },
+    {
+      "target": "win02",
+      "rank": 5
+    },
+    {
+      "target": "win03",
+      "rank": 5
+    },
+    {
+      "target": "win04",
+      "rank": 5
+    },
+    {
+      "target": "linux01",
+      "rank": 5
+    },
+    {
+      "target": "linux02",
+      "rank": 6
+    },
+    {
+      "target": "printer01",
+      "rank": 6
+    },
+    {
+      "target": "iot01",
+      "rank": 6
+    },
+    {
+      "target": "guest01",
+      "rank": 6
+    },
+    {
+      "target": "guest02",
+      "rank": 6
+    },
+    {
+      "target": "enterprise-expansion-36",
+      "rank": 6
+    },
+    {
+      "target": "enterprise-expansion-38",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-40",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-42",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-44",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-46",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-48",
+      "rank": 7
+    },
+    {
+      "target": "enterprise-expansion-50",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-52",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-54",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-56",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-58",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-60",
+      "rank": 8
+    },
+    {
+      "target": "enterprise-expansion-62",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-64",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-66",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-68",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-70",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-72",
+      "rank": 9
+    },
+    {
+      "target": "enterprise-expansion-74",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-76",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-78",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-80",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-82",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-84",
+      "rank": 10
+    },
+    {
+      "target": "enterprise-expansion-86",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-88",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-90",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-92",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-94",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-96",
+      "rank": 11
+    },
+    {
+      "target": "enterprise-expansion-98",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-100",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-102",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-104",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-106",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-108",
+      "rank": 12
+    },
+    {
+      "target": "enterprise-expansion-110",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-112",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-114",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-116",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-118",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-120",
+      "rank": 13
+    },
+    {
+      "target": "enterprise-expansion-122",
+      "rank": 14
+    },
+    {
+      "target": "enterprise-expansion-124",
+      "rank": 14
+    },
+    {
+      "target": "qualification-expansion-081",
+      "rank": 14
+    },
+    {
+      "target": "qualification-expansion-082",
+      "rank": 14
+    },
+    {
+      "target": "qualification-expansion-083",
+      "rank": 14
+    },
+    {
+      "target": "qualification-expansion-084",
+      "rank": 14
+    },
+    {
+      "target": "qualification-expansion-085",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-086",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-087",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-088",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-089",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-090",
+      "rank": 15
+    },
+    {
+      "target": "qualification-expansion-091",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-092",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-093",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-094",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-095",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-096",
+      "rank": 16
+    },
+    {
+      "target": "qualification-expansion-097",
+      "rank": 17
+    },
+    {
+      "target": "qualification-expansion-098",
+      "rank": 17
+    },
+    {
+      "target": "qualification-expansion-099",
+      "rank": 17
+    },
+    {
+      "target": "qualification-expansion-100",
+      "rank": 17
+    }
+  ]
+}

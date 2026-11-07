@@ -1,0 +1,71 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario-source",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "profile_defaults",
+  "metadata": {
+    "title": "Profile defaults",
+    "language": "sv"
+  },
+  "requires": {
+    "capabilities": [
+      {
+        "id": "core.virtualization",
+        "version": "^1.0.0"
+      }
+    ],
+    "profiles": [
+      {
+        "id": "vendor.proxmox",
+        "version": "1.x"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "mgmt",
+      "label": "Management",
+      "kind": "management"
+    }
+  ],
+  "resources": [
+    {
+      "id": "pve01",
+      "type": "virtualization.proxmox",
+      "label": "PVE01",
+      "zone": "mgmt",
+      "profile": "vendor.proxmox",
+      "properties": {
+        "management": {
+          "bind": "10.0.0.10"
+        }
+      },
+      "asset": {
+        "id": "virtualization.proxmox",
+        "version": "^1.0.0"
+      }
+    }
+  ],
+  "connections": [],
+  "tests": [],
+  "findings": [],
+  "objectives": [
+    {
+      "id": "keep_mgmt",
+      "title": "Management exists",
+      "category": "management",
+      "required": true,
+      "condition": {
+        "op": "equals",
+        "target": "pve01",
+        "path": "properties.management.bind",
+        "value": "10.0.0.10"
+      }
+    }
+  ],
+  "completion": {
+    "op": "equals",
+    "target": "pve01",
+    "path": "properties.management.bind",
+    "value": "10.0.0.10"
+  }
+}

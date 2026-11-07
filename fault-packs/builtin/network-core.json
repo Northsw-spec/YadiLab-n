@@ -1,0 +1,2485 @@
+{
+  "formatId": "infrastructure-cyber-lab.fault-pack",
+  "schemaVersion": "0.1.0",
+  "packId": "foundation.network.core",
+  "version": "0.2.0",
+  "domain": "network",
+  "packIdentity": "99645df24c86671005dc781e657a26f88480545ea2d8d3711b95cf6ab73fe477",
+  "faults": [
+    {
+      "faultId": "routing.remove_default_gateway",
+      "version": "0.1.0",
+      "title": "Remove default gateway",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "remove_gateway",
+          "op": "remove",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_absent",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Traffic that depends on the default route may lose external reachability while local state remains otherwise unchanged."
+      ],
+      "hiddenTruth": "The target resource's modeled default gateway has been removed.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "routing",
+        "gateway"
+      ],
+      "learningObjectives": [
+        "Verify default-route configuration before changing unrelated services."
+      ]
+    },
+    {
+      "faultId": "routing.set_wrong_default_gateway",
+      "version": "0.1.0",
+      "title": "Set wrong default gateway",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultGateway"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "192.0.2.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "198.51.100.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": "203.0.113.1"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_gateway",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.defaultGateway",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.1",
+              "198.51.100.1",
+              "203.0.113.1"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "192.0.2.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "198.51.100.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.defaultGateway",
+              "value": "203.0.113.1"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Local-subnet communication may still work while off-subnet traffic follows a non-existent or incorrect next hop."
+      ],
+      "hiddenTruth": "The modeled default gateway was replaced with a deterministic incorrect documentation-prefix address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "routing",
+        "gateway",
+        "wrong-next-hop"
+      ],
+      "learningObjectives": [
+        "Separate local-link reachability from default-route reachability and verify the configured gateway."
+      ]
+    },
+    {
+      "faultId": "routing.blackhole_primary_route",
+      "version": "0.1.0",
+      "title": "Blackhole primary route",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.router",
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.routes.0.action"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.routes.0.action",
+          "value": "blackhole"
+        }
+      ],
+      "incompatibilities": [
+        "routing.set_wrong_next_hop",
+        "routing.disable_primary_route"
+      ],
+      "mutations": [
+        {
+          "mutationId": "blackhole_route",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.routes.0.action",
+          "value": {
+            "kind": "literal",
+            "value": "blackhole"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.routes.0.action",
+          "value": "blackhole"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "A destination covered by the first modeled route becomes deterministically unreachable even though the interface and neighboring devices may remain healthy."
+      ],
+      "hiddenTruth": "The first modeled route action was changed to blackhole.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "routing",
+        "blackhole",
+        "route-table"
+      ],
+      "learningObjectives": [
+        "Identify an explicit blackhole route instead of troubleshooting unrelated DNS or application services."
+      ]
+    },
+    {
+      "faultId": "routing.set_wrong_next_hop",
+      "version": "0.1.0",
+      "title": "Set wrong route next hop",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.router",
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.routes.0.via"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.routes.0.via",
+          "value": "192.0.2.254"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.routes.0.via",
+          "value": "198.51.100.254"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.routes.0.via",
+          "value": "203.0.113.254"
+        }
+      ],
+      "incompatibilities": [
+        "routing.blackhole_primary_route",
+        "routing.disable_primary_route"
+      ],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_route_via",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.routes.0.via",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.254",
+              "198.51.100.254",
+              "203.0.113.254"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.routes.0.via",
+              "value": "192.0.2.254"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.routes.0.via",
+              "value": "198.51.100.254"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.routes.0.via",
+              "value": "203.0.113.254"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The route still exists, but traffic may be forwarded toward a next hop that is not the declared neighbor."
+      ],
+      "hiddenTruth": "The first modeled route was retained but its next-hop value was replaced with an incorrect address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "routing",
+        "next-hop",
+        "route-table"
+      ],
+      "learningObjectives": [
+        "Check route destination, next hop and neighboring topology together rather than treating route presence as sufficient."
+      ]
+    },
+    {
+      "faultId": "routing.disable_primary_route",
+      "version": "0.1.0",
+      "title": "Disable primary route",
+      "domain": "routing",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.router",
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.routes.0"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.routes.0.enabled",
+          "value": false
+        }
+      ],
+      "incompatibilities": [
+        "routing.blackhole_primary_route",
+        "routing.set_wrong_next_hop"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_route",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.routes.0.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.routes.0.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The first route remains visible in configuration data but is no longer eligible for forwarding."
+      ],
+      "hiddenTruth": "The first modeled route was administratively disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "routing",
+        "disabled-route",
+        "route-table"
+      ],
+      "learningObjectives": [
+        "Verify route administrative state as well as destination and next hop."
+      ]
+    },
+    {
+      "faultId": "vlan.replace_membership",
+      "version": "0.1.0",
+      "title": "Replace VLAN membership",
+      "domain": "vlan_l2",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.vlans"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlans",
+          "value": [
+            999
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlans",
+          "value": [
+            1000
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlans",
+          "value": [
+            1001
+          ]
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "replace_vlans",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.vlans",
+          "value": {
+            "kind": "choice",
+            "values": [
+              [
+                999
+              ],
+              [
+                1000
+              ],
+              [
+                1001
+              ]
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlans",
+              "value": [
+                999
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlans",
+              "value": [
+                1000
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlans",
+              "value": [
+                1001
+              ]
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The endpoint can remain link-up yet lose Layer-2 compatibility with links that require its original VLAN."
+      ],
+      "hiddenTruth": "The target VLAN membership list was replaced with a deterministic wrong VLAN.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "vlan",
+        "l2",
+        "membership"
+      ],
+      "learningObjectives": [
+        "Distinguish physical/link-up state from VLAN membership and broadcast-domain reachability."
+      ]
+    },
+    {
+      "faultId": "vlan.set_wrong_access_vlan",
+      "version": "0.1.0",
+      "title": "Set wrong access VLAN",
+      "domain": "vlan_l2",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.vlan"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlan",
+          "value": 999
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlan",
+          "value": 1000
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.vlan",
+          "value": 1001
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_access_vlan",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.vlan",
+          "value": {
+            "kind": "choice",
+            "values": [
+              999,
+              1000,
+              1001
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlan",
+              "value": 999
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlan",
+              "value": 1000
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.vlan",
+              "value": 1001
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "A port or endpoint can appear operational while frames are placed in the wrong broadcast domain."
+      ],
+      "hiddenTruth": "The modeled access/native VLAN value was changed to an incorrect VLAN ID.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "vlan",
+        "access-vlan",
+        "l2"
+      ],
+      "learningObjectives": [
+        "Verify the VLAN assigned to an access endpoint when link state alone looks healthy."
+      ]
+    },
+    {
+      "faultId": "l2.disable_switch_port",
+      "version": "0.1.0",
+      "title": "Disable switch port",
+      "domain": "vlan_l2",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.switch"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.portAdminUp"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.portAdminUp",
+          "value": false
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_port",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.portAdminUp",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.portAdminUp",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The modeled switch port is administratively down; higher-layer configuration may still look correct."
+      ],
+      "hiddenTruth": "The switch port administrative state was set down.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "l2",
+        "switch",
+        "port-state"
+      ],
+      "learningObjectives": [
+        "Check administrative port state before investigating higher network layers."
+      ]
+    },
+    {
+      "faultId": "l2.force_stp_blocking",
+      "version": "0.1.0",
+      "title": "Force STP blocking state",
+      "domain": "vlan_l2",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.switch"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "stp_port_state_equals",
+          "binding": "target",
+          "interface": "p1",
+          "state": "FORWARDING"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "force_stp_blocking",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.stpPorts",
+          "value": {
+            "kind": "stp_port_state",
+            "interface": "p1",
+            "state": "BLOCKING"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "stp_port_state_equals",
+          "binding": "target",
+          "interface": "p1",
+          "state": "BLOCKING"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The link can remain physically up while the modeled spanning-tree state prevents ordinary forwarding."
+      ],
+      "hiddenTruth": "The modeled switch port spanning-tree state was forced to blocking.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "l2",
+        "stp",
+        "switch"
+      ],
+      "learningObjectives": [
+        "Recognize that an up link can intentionally stop forwarding because of spanning-tree state."
+      ]
+    },
+    {
+      "faultId": "l2.restrict_trunk_vlans",
+      "version": "0.1.0",
+      "title": "Restrict trunk allowed VLANs",
+      "domain": "vlan_l2",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.switch"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.allowedVlans"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.allowedVlans",
+          "value": [
+            10
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.allowedVlans",
+          "value": [
+            20
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.allowedVlans",
+          "value": [
+            30
+          ]
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "restrict_allowed_vlans",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.allowedVlans",
+          "value": {
+            "kind": "choice",
+            "values": [
+              [
+                10
+              ],
+              [
+                20
+              ],
+              [
+                30
+              ]
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.allowedVlans",
+              "value": [
+                10
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.allowedVlans",
+              "value": [
+                20
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.allowedVlans",
+              "value": [
+                30
+              ]
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Only a subset of expected VLANs remains allowed across the modeled trunk, producing selective reachability failures."
+      ],
+      "hiddenTruth": "The trunk allowed-VLAN list was deterministically reduced to one VLAN.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "l2",
+        "trunk",
+        "vlan"
+      ],
+      "learningObjectives": [
+        "Use selective cross-VLAN symptoms to inspect trunk allowed-VLAN configuration."
+      ]
+    },
+    {
+      "faultId": "dns.replace_resolvers",
+      "version": "0.1.0",
+      "title": "Replace DNS resolvers",
+      "domain": "dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dnsServers"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "192.0.2.53"
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "198.51.100.53"
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "incompatibilities": [
+        "dns.remove_all_resolvers"
+      ],
+      "mutations": [
+        {
+          "mutationId": "replace_dns_servers",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": {
+            "kind": "choice",
+            "values": [
+              [
+                "192.0.2.53"
+              ],
+              [
+                "198.51.100.53"
+              ],
+              [
+                "203.0.113.53"
+              ]
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dnsServers",
+              "value": [
+                "192.0.2.53"
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dnsServers",
+              "value": [
+                "198.51.100.53"
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dnsServers",
+              "value": [
+                "203.0.113.53"
+              ]
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "IP connectivity may remain intact while hostname lookups time out or query an unintended resolver."
+      ],
+      "hiddenTruth": "The target resolver list was replaced with a deterministic unreachable/wrong documentation-prefix resolver.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dns",
+        "resolver",
+        "client"
+      ],
+      "learningObjectives": [
+        "Test name resolution separately from raw IP reachability and inspect resolver configuration."
+      ]
+    },
+    {
+      "faultId": "dns.remove_all_resolvers",
+      "version": "0.1.0",
+      "title": "Remove all DNS resolvers",
+      "domain": "dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dnsServers"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": []
+        }
+      ],
+      "incompatibilities": [
+        "dns.replace_resolvers"
+      ],
+      "mutations": [
+        {
+          "mutationId": "clear_dns_servers",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": {
+            "kind": "literal",
+            "value": []
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dnsServers",
+          "value": []
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Direct IP connections may work while normal hostname-based access fails immediately because no resolver is configured."
+      ],
+      "hiddenTruth": "The target resolver list was emptied.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 1,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dns",
+        "resolver",
+        "client"
+      ],
+      "learningObjectives": [
+        "Confirm that at least one resolver is configured before investigating authoritative DNS."
+      ]
+    },
+    {
+      "faultId": "dns.set_wrong_search_domain",
+      "version": "0.1.0",
+      "title": "Set wrong DNS search domain",
+      "domain": "dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dnsSearchDomains"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsSearchDomains",
+          "value": [
+            "invalid.example"
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dnsSearchDomains",
+          "value": [
+            "wrong.example"
+          ]
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_wrong_search_domain",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dnsSearchDomains",
+          "value": {
+            "kind": "choice",
+            "values": [
+              [
+                "invalid.example"
+              ],
+              [
+                "wrong.example"
+              ]
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dnsSearchDomains",
+              "value": [
+                "invalid.example"
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dnsSearchDomains",
+              "value": [
+                "wrong.example"
+              ]
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Fully-qualified names may resolve while short hostnames fail or resolve in an unintended suffix."
+      ],
+      "hiddenTruth": "The client DNS search-domain list was replaced with an incorrect suffix.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dns",
+        "search-domain",
+        "client"
+      ],
+      "learningObjectives": [
+        "Compare short-name and FQDN behavior and inspect the DNS suffix/search list."
+      ]
+    },
+    {
+      "faultId": "dns.disable_server",
+      "version": "0.1.0",
+      "title": "Disable DNS server",
+      "domain": "dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.dns_server"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dns.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [
+        "dns.corrupt_primary_record"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_dns_service",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dns.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dns.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Clients configured to use this resolver may lose all answers even though network reachability to the server remains."
+      ],
+      "hiddenTruth": "The modeled DNS service was disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "dns",
+        "server",
+        "service"
+      ],
+      "learningObjectives": [
+        "Separate server reachability from DNS service availability."
+      ]
+    },
+    {
+      "faultId": "dns.corrupt_primary_record",
+      "version": "0.1.0",
+      "title": "Corrupt primary DNS record",
+      "domain": "dns",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.dns_server"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dns.records.0.address"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dns.records.0.address",
+          "value": "192.0.2.80"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dns.records.0.address",
+          "value": "198.51.100.80"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dns.records.0.address",
+          "value": "203.0.113.80"
+        }
+      ],
+      "incompatibilities": [
+        "dns.disable_server"
+      ],
+      "mutations": [
+        {
+          "mutationId": "corrupt_dns_record",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dns.records.0.address",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.80",
+              "198.51.100.80",
+              "203.0.113.80"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dns.records.0.address",
+              "value": "192.0.2.80"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dns.records.0.address",
+              "value": "198.51.100.80"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dns.records.0.address",
+              "value": "203.0.113.80"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "DNS queries can succeed syntactically but direct clients to the wrong address, creating an application-looking failure."
+      ],
+      "hiddenTruth": "The address in the first modeled DNS record was replaced with an incorrect documentation-prefix address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "dns",
+        "record",
+        "server"
+      ],
+      "learningObjectives": [
+        "Verify returned DNS data, not only whether the DNS query itself succeeds."
+      ]
+    },
+    {
+      "faultId": "dhcp.disable_client",
+      "version": "0.1.0",
+      "title": "Disable DHCP client",
+      "domain": "dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": true
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.set_wrong_gateway",
+        "dhcp.set_wrong_dns",
+        "dhcp.set_wrong_prefix"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_dhcp_client",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The endpoint stops accepting modeled DHCP configuration; stale or missing addressing can then dominate symptoms."
+      ],
+      "hiddenTruth": "The modeled DHCP client was disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dhcp",
+        "client",
+        "addressing"
+      ],
+      "learningObjectives": [
+        "Check whether the client is actually configured to obtain settings from DHCP."
+      ]
+    },
+    {
+      "faultId": "dhcp.set_wrong_gateway",
+      "version": "0.1.0",
+      "title": "Set wrong DHCP gateway option",
+      "domain": "dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dhcp.gateway"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.gateway",
+          "value": "192.0.2.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.gateway",
+          "value": "198.51.100.1"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.gateway",
+          "value": "203.0.113.1"
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.disable_client"
+      ],
+      "mutations": [
+        {
+          "mutationId": "wrong_dhcp_gateway",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.gateway",
+          "value": {
+            "kind": "choice",
+            "values": [
+              "192.0.2.1",
+              "198.51.100.1",
+              "203.0.113.1"
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.gateway",
+              "value": "192.0.2.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.gateway",
+              "value": "198.51.100.1"
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.gateway",
+              "value": "203.0.113.1"
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "A client can receive a lease and local connectivity yet fail off-subnet because the leased gateway is wrong."
+      ],
+      "hiddenTruth": "The modeled DHCP gateway option was replaced with an incorrect address.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dhcp",
+        "gateway",
+        "option"
+      ],
+      "learningObjectives": [
+        "Inspect individual DHCP lease options rather than treating any successful lease as valid configuration."
+      ]
+    },
+    {
+      "faultId": "dhcp.set_wrong_dns",
+      "version": "0.1.0",
+      "title": "Set wrong DHCP DNS option",
+      "domain": "dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dhcp.dnsServers"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.dnsServers",
+          "value": [
+            "192.0.2.53"
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.dnsServers",
+          "value": [
+            "198.51.100.53"
+          ]
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.dnsServers",
+          "value": [
+            "203.0.113.53"
+          ]
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.disable_client"
+      ],
+      "mutations": [
+        {
+          "mutationId": "wrong_dhcp_dns",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.dnsServers",
+          "value": {
+            "kind": "choice",
+            "values": [
+              [
+                "192.0.2.53"
+              ],
+              [
+                "198.51.100.53"
+              ],
+              [
+                "203.0.113.53"
+              ]
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.dnsServers",
+              "value": [
+                "192.0.2.53"
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.dnsServers",
+              "value": [
+                "198.51.100.53"
+              ]
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.dnsServers",
+              "value": [
+                "203.0.113.53"
+              ]
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The lease succeeds and IP routing can work while hostname resolution fails because DHCP supplied the wrong resolver."
+      ],
+      "hiddenTruth": "The modeled DHCP DNS option was replaced with an incorrect resolver list.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "dhcp",
+        "dns",
+        "option"
+      ],
+      "learningObjectives": [
+        "Trace a DNS symptom back to the DHCP option that supplied the resolver configuration."
+      ]
+    },
+    {
+      "faultId": "dhcp.set_wrong_prefix",
+      "version": "0.1.0",
+      "title": "Set wrong DHCP prefix length",
+      "domain": "dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dhcp.prefixLength"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.prefixLength",
+          "value": 8
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.prefixLength",
+          "value": 16
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.prefixLength",
+          "value": 32
+        }
+      ],
+      "incompatibilities": [
+        "dhcp.disable_client"
+      ],
+      "mutations": [
+        {
+          "mutationId": "wrong_dhcp_prefix",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.prefixLength",
+          "value": {
+            "kind": "choice",
+            "values": [
+              8,
+              16,
+              32
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.prefixLength",
+              "value": 8
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.prefixLength",
+              "value": 16
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.dhcp.prefixLength",
+              "value": 32
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The client may misclassify remote hosts as local or local hosts as remote, producing confusing ARP/routing behavior."
+      ],
+      "hiddenTruth": "The modeled DHCP subnet-prefix option was replaced with an incorrect prefix length.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "dhcp",
+        "subnet",
+        "option"
+      ],
+      "learningObjectives": [
+        "Verify subnet mask/prefix semantics when same-subnet and routed reachability disagree."
+      ]
+    },
+    {
+      "faultId": "dhcp.exhaust_server_pool",
+      "version": "0.1.0",
+      "title": "Exhaust DHCP server pool",
+      "domain": "dhcp",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.dhcp_server"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.dhcp.availableLeases"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.dhcp.availableLeases",
+          "value": 0
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "exhaust_dhcp_pool",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.dhcp.availableLeases",
+          "value": {
+            "kind": "literal",
+            "value": 0
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.dhcp.availableLeases",
+          "value": 0
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "New clients cannot obtain a lease while existing clients with valid leases may continue working."
+      ],
+      "hiddenTruth": "The modeled DHCP server available-lease count was reduced to zero.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "dhcp",
+        "server",
+        "pool-exhaustion"
+      ],
+      "learningObjectives": [
+        "Use the difference between existing and new clients to identify DHCP pool exhaustion."
+      ]
+    },
+    {
+      "faultId": "firewall.force_default_deny",
+      "version": "0.1.0",
+      "title": "Force default deny policy",
+      "domain": "firewall",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "*"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_default_deny",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": {
+            "kind": "literal",
+            "value": "deny"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.aclDefaultAction",
+          "value": "deny"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Flows not explicitly permitted by modeled ACL rules may be blocked."
+      ],
+      "hiddenTruth": "The target resource's default ACL action has been changed to deny.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 1,
+        "dependencyDepth": 1,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 0
+      },
+      "tags": [
+        "firewall",
+        "acl"
+      ],
+      "learningObjectives": [
+        "Distinguish policy-default behavior from explicit rule behavior."
+      ]
+    },
+    {
+      "faultId": "firewall.default_action_deny",
+      "version": "0.1.0",
+      "title": "Set firewall default action to deny",
+      "domain": "firewall_nat",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.defaultAction"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.defaultAction",
+          "value": "deny"
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "set_firewall_default_deny",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.defaultAction",
+          "value": {
+            "kind": "literal",
+            "value": "deny"
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.defaultAction",
+          "value": "deny"
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Flows without a matching allow rule are denied while explicitly allowed traffic can remain unaffected."
+      ],
+      "hiddenTruth": "The Engine-visible firewall defaultAction was changed to deny.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 2,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "firewall",
+        "default-action",
+        "policy"
+      ],
+      "learningObjectives": [
+        "Distinguish explicit rules from the policy applied to unmatched traffic."
+      ]
+    },
+    {
+      "faultId": "firewall.disable_primary_rule",
+      "version": "0.1.0",
+      "title": "Disable primary firewall rule",
+      "domain": "firewall_nat",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.rules.0"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.rules.0.enabled",
+          "value": false
+        }
+      ],
+      "incompatibilities": [],
+      "mutations": [
+        {
+          "mutationId": "disable_firewall_rule",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.rules.0.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.rules.0.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Traffic that depended on the first allow rule may now fall through to later rules or the default policy."
+      ],
+      "hiddenTruth": "The first modeled firewall rule was administratively disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 2,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 2,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "firewall",
+        "rule",
+        "disabled"
+      ],
+      "learningObjectives": [
+        "Verify rule enablement and ordered fall-through, not only that a rule object exists."
+      ]
+    },
+    {
+      "faultId": "nat.disable_primary_dnat",
+      "version": "0.1.0",
+      "title": "Disable primary DNAT rule",
+      "domain": "firewall_nat",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.type",
+          "value": "dnat"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.enabled",
+          "value": false
+        }
+      ],
+      "incompatibilities": [
+        "nat.wrong_translated_port"
+      ],
+      "mutations": [
+        {
+          "mutationId": "disable_dnat_rule",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.natRules.0.enabled",
+          "value": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.enabled",
+          "value": false
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "Inbound traffic reaches the firewall but no longer receives the expected destination/port translation."
+      ],
+      "hiddenTruth": "The first modeled DNAT rule was disabled.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "nat",
+        "dnat",
+        "port-forward"
+      ],
+      "learningObjectives": [
+        "Differentiate firewall allow policy from DNAT translation availability."
+      ]
+    },
+    {
+      "faultId": "nat.wrong_translated_port",
+      "version": "0.1.0",
+      "title": "Set wrong DNAT translated port",
+      "domain": "firewall_nat",
+      "targetBindings": [
+        {
+          "name": "target",
+          "resourceTypes": [
+            "network.firewall"
+          ]
+        }
+      ],
+      "preconditions": [
+        {
+          "op": "path_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.type",
+          "value": "dnat"
+        },
+        {
+          "op": "path_exists",
+          "binding": "target",
+          "path": "properties.natRules.0.translatedPort"
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.translatedPort",
+          "value": 444
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.translatedPort",
+          "value": 8443
+        },
+        {
+          "op": "path_not_equals",
+          "binding": "target",
+          "path": "properties.natRules.0.translatedPort",
+          "value": 9443
+        }
+      ],
+      "incompatibilities": [
+        "nat.disable_primary_dnat"
+      ],
+      "mutations": [
+        {
+          "mutationId": "wrong_dnat_port",
+          "op": "set",
+          "binding": "target",
+          "path": "properties.natRules.0.translatedPort",
+          "value": {
+            "kind": "choice",
+            "values": [
+              444,
+              8443,
+              9443
+            ]
+          }
+        }
+      ],
+      "expectedEffects": [
+        {
+          "op": "any",
+          "conditions": [
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.natRules.0.translatedPort",
+              "value": 444
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.natRules.0.translatedPort",
+              "value": 8443
+            },
+            {
+              "op": "path_equals",
+              "binding": "target",
+              "path": "properties.natRules.0.translatedPort",
+              "value": 9443
+            }
+          ]
+        }
+      ],
+      "negativeControls": [],
+      "observableSymptoms": [
+        "The external port-forward still matches, but traffic is translated to a backend port where the expected service may not listen."
+      ],
+      "hiddenTruth": "The first DNAT rule translatedPort was changed to an incorrect deterministic port.",
+      "recovery": {
+        "mode": "restore_pre_injection"
+      },
+      "blastRadius": {
+        "maxChangedResources": 1,
+        "allowedBindings": [
+          "target"
+        ]
+      },
+      "visibilityPolicy": {
+        "student": "SYMPTOMS_ONLY",
+        "instructor": "VISIBLE"
+      },
+      "difficulty": {
+        "layers": 3,
+        "dependencyDepth": 4,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 1
+      },
+      "tags": [
+        "nat",
+        "dnat",
+        "translated-port"
+      ],
+      "learningObjectives": [
+        "Compare external and translated service ports when a port-forward appears present but the service remains unreachable."
+      ]
+    }
+  ]
+}

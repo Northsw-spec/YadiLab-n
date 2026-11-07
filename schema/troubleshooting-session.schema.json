@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:troubleshooting-session:0.1.0",
+  "title": "Troubleshooting Session Persistence Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "scenarioId",
+    "scenarioHash",
+    "stateRevision",
+    "notebookIdentity",
+    "sessionIdentity",
+    "progress",
+    "notebook"
+  ],
+  "properties": {
+    "formatId": { "const": "infrastructure-cyber-lab.troubleshooting-session" },
+    "schemaVersion": { "const": "0.1.0" },
+    "scenarioId": { "$ref": "#/$defs/id" },
+    "scenarioHash": { "$ref": "#/$defs/sha256" },
+    "stateRevision": { "type": "integer", "minimum": 0 },
+    "notebookIdentity": { "$ref": "#/$defs/sha256" },
+    "sessionIdentity": { "$ref": "#/$defs/sha256" },
+    "progress": {
+      "type": "object",
+      "required": ["formatId", "scenarioHash", "stateRevision"],
+      "properties": {
+        "formatId": { "const": "infrastructure-cyber-lab.save" },
+        "scenarioHash": { "$ref": "#/$defs/sha256" },
+        "stateRevision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "notebook": {
+      "type": "object",
+      "required": ["formatId", "scenarioId", "scenarioHash", "notebookIdentity", "entries"],
+      "properties": {
+        "formatId": { "const": "infrastructure-cyber-lab.troubleshooting-notebook" },
+        "scenarioId": { "$ref": "#/$defs/id" },
+        "scenarioHash": { "$ref": "#/$defs/sha256" },
+        "notebookIdentity": { "$ref": "#/$defs/sha256" },
+        "entries": { "type": "array", "maxItems": 256 }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

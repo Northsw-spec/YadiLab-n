@@ -1,0 +1,3 @@
+generated_types_before=8fec70f429cf4925a377e235292e703177215366f9fc0a96b8a522d77bda391d
+generated_types_after=8fec70f429cf4925a377e235292e703177215366f9fc0a96b8a522d77bda391d
+generated core-model/src/generated/contracts.ts

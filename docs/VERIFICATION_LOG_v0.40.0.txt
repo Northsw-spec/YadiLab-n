@@ -1,0 +1,14 @@
+YadiLab Foundation v0.40.0 — verification evidence
+Authoritative architecture: Masterprompt v1.2 VERIFIED / LOCKED.
+Exact baseline ZIP v0.39.0 SHA-256: eaab8827b335ac7788732bd01591e0dbe53d9c05337d584f5c311aeda2c0be78
+Worktree full npm run test:foundation: PASS.
+Candidate exact-byte readback full npm run test:foundation: PASS.
+Candidate full test log SHA-256: 568cb2da7b88bca5970c8a5798862ac878c140ab658c32890fa1c76ec9386988
+PWA static contract: 15 assertions PASS.
+PWA cache + DOM attestation VM: 17 functional + 17 adversarial assertions PASS.
+Go launcher smoke and acceptance contract: PASS.
+Browser dependency readiness: BLOCKED / exit 77 (no authentic npm package-lock + node_modules).
+Parrot acceptance: BLOCKED / exit 77 (this build host is Debian, not Parrot).
+Rendered actual full React browser: NOT VERIFIED.
+Status: VERIFIED DEVELOPMENT CHECKPOINT after exact final ZIP verification. NOT VERIFIED PRODUCT RELEASE.
+Final exact-byte/readback SHA recorded in external YadiLab_Foundation_v0.40.0_VERIFICATION.txt.

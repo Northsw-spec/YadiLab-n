@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "outDir": "../dist-fault-engine-test",
+    "rootDir": ".."
+  },
+  "include": [
+    "../core-model/src/generated/contracts.ts",
+    "../engine/src/**/*.ts",
+    "../fault-engine/src/**/*.ts"
+  ]
+}

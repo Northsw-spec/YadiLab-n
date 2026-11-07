@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { createTroubleshootingCase, buildInvestigationIndex } from "../../dist-browser-test/ui/src/browser/troubleshooting-case.js";
+import { createReproductionRecipe, reproduceWithEngine } from "../../dist-browser-test/ui/src/browser/reproduction-recipe.js";
+import fs from "node:fs/promises";
+const source = JSON.parse(await fs.readFile("tests/fixtures/valid/scenario-source.json", "utf8"));
+const value = await createTroubleshootingCase({ source, title: "80-node/100-node qualification stress case" });
+assert.equal(buildInvestigationIndex(value).runCount, 0);
+const recipe = await createReproductionRecipe(value, "flow-unknown", 99);
+const result = await reproduceWithEngine(recipe, async () => ({ scenarioHash: "d".repeat(64), runtimeRevision: 1, flowId: "other-flow", outcome: { kind: "DROP" }, records: [] }));
+assert.equal(result.status, "NOT COMPARABLE");
+console.log("PASS v1.5 Dev4 adversarial: recipe without historical outcome remains NOT COMPARABLE and cannot fabricate diagnosis");

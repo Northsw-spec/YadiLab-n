@@ -1,0 +1,3 @@
+Asset ID,Hostname,IP Address,Default GW,OS,Notes
+pc01,PC-01,10.20.30.44,10.20.30.1,Windows 11,Primary user client
+pc02,PC-02,10.20.30.45,,Windows 11,Gateway intentionally undocumented

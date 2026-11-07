@@ -1,0 +1,15 @@
+import fs from "node:fs";
+import path from "node:path";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import { applyNotesAuthoring, buildBuilderAuthoringModel, createBuilderWorkspace } from "../../dist-browser-test/ui/src/browser/index.js";
+const here=path.dirname(fileURLToPath(import.meta.url)); const root=path.resolve(here,"../..");
+const source=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/scenario-source.json"),"utf8"));
+let checks=0; const ok=(v,m)=>{assert.ok(v,m);checks++}; const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++};
+let ws=createBuilderWorkspace(source); let model=buildBuilderAuthoringModel(ws); eq(model.notesJson,"[]","notes default to empty portable collection");
+let r=applyNotesAuthoring(ws,JSON.stringify([{id:"note_rds",title:"Review",text:"Check direct RDP exposure",target:"rds01"},{id:"note_general",text:"General author note"}]));
+ok(r.ok,"notes authoring succeeds"); if(!r.ok)process.exit(1); ws=r.workspace;
+eq(ws.source.notes?.length,2,"notes persist in ScenarioSource"); eq(ws.source.notes?.[0]?.target,"rds01","target-bound note preserved"); eq(ws.compile.status,"idle","notes semantic edit invalidates stale compile"); ok(ws.sourceRevision>0,"notes edit increments source revision");
+model=buildBuilderAuthoringModel(ws); ok(model.notesJson.includes("note_rds"),"authoring model round-trips notes JSON");
+const ui=fs.readFileSync(path.join(root,"ui/app/main.mjs"),"utf8"); ok(ui.includes("Anteckningar JSON"),"Builder UI exposes Notes panel"); ok(ui.includes("applyNotesAuthoring"),"Notes UI routes through Builder authoring boundary");
+console.log(`PASS builder notes suite: ${checks} assertions.`);

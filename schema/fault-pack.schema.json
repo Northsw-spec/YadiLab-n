@@ -1,0 +1,557 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:fault-pack:0.1.0",
+  "title": "Fault Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "packId",
+    "version",
+    "domain",
+    "packIdentity",
+    "faults"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.fault-pack"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "packId": {
+      "$ref": "#/$defs/dottedId"
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+    },
+    "packIdentity": {
+      "$ref": "#/$defs/sha256"
+    },
+    "faults": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/fault"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "dottedId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+    },
+    "binding": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "conditions"
+          ],
+          "properties": {
+            "op": {
+              "const": "all"
+            },
+            "conditions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "conditions"
+          ],
+          "properties": {
+            "op": {
+              "const": "any"
+            },
+            "conditions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "condition"
+          ],
+          "properties": {
+            "op": {
+              "const": "not"
+            },
+            "condition": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "binding",
+            "path"
+          ],
+          "properties": {
+            "op": {
+              "const": "path_exists"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "binding",
+            "path"
+          ],
+          "properties": {
+            "op": {
+              "const": "path_absent"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "binding",
+            "path",
+            "value"
+          ],
+          "properties": {
+            "op": {
+              "const": "path_equals"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "binding",
+            "path",
+            "value"
+          ],
+          "properties": {
+            "op": {
+              "const": "path_not_equals"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "binding",
+            "resourceType"
+          ],
+          "properties": {
+            "op": {
+              "const": "resource_type"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "resourceType": {
+              "$ref": "#/$defs/dottedId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "binding", "interface", "state"],
+          "properties": {
+            "op": { "const": "stp_port_state_equals" },
+            "binding": { "$ref": "#/$defs/binding" },
+            "interface": { "$ref": "#/$defs/id" },
+            "state": { "enum": ["FORWARDING", "BLOCKING", "DISCARDING", "LEARNING", "LISTENING", "DISABLED", "UNKNOWN"] }
+          }
+        }
+      ]
+    },
+    "valueSpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "literal"
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "values"
+          ],
+          "properties": {
+            "kind": {
+              "const": "choice"
+            },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "items": {}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "interface", "state"],
+          "properties": {
+            "kind": { "const": "stp_port_state" },
+            "interface": { "$ref": "#/$defs/id" },
+            "state": { "enum": ["FORWARDING", "BLOCKING", "DISCARDING", "LEARNING", "LISTENING", "DISABLED", "UNKNOWN"] }
+          }
+        }
+      ]
+    },
+    "mutation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mutationId",
+            "op",
+            "binding",
+            "path",
+            "value"
+          ],
+          "properties": {
+            "mutationId": {
+              "$ref": "#/$defs/id"
+            },
+            "op": {
+              "const": "set"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "$ref": "#/$defs/valueSpec"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mutationId",
+            "op",
+            "binding",
+            "path"
+          ],
+          "properties": {
+            "mutationId": {
+              "$ref": "#/$defs/id"
+            },
+            "op": {
+              "const": "remove"
+            },
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "faultId",
+        "version",
+        "title",
+        "domain",
+        "targetBindings",
+        "preconditions",
+        "incompatibilities",
+        "mutations",
+        "expectedEffects",
+        "negativeControls",
+        "observableSymptoms",
+        "hiddenTruth",
+        "recovery",
+        "blastRadius",
+        "visibilityPolicy",
+        "difficulty",
+        "tags",
+        "learningObjectives"
+      ],
+      "properties": {
+        "faultId": {
+          "$ref": "#/$defs/dottedId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "$ref": "#/$defs/dottedId"
+        },
+        "targetBindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "resourceTypes"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/binding"
+              },
+              "resourceTypes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^(\\*|[a-z][a-z0-9_.-]{0,127})$"
+                }
+              }
+            }
+          }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "incompatibilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/dottedId"
+          }
+        },
+        "mutations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/mutation"
+          }
+        },
+        "expectedEffects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "negativeControls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "observableSymptoms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "hiddenTruth": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "restore_pre_injection"
+            }
+          }
+        },
+        "blastRadius": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxChangedResources",
+            "allowedBindings"
+          ],
+          "properties": {
+            "maxChangedResources": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "allowedBindings": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/binding"
+              }
+            }
+          }
+        },
+        "visibilityPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "student",
+            "instructor"
+          ],
+          "properties": {
+            "student": {
+              "type": "string",
+              "enum": [
+                "HIDDEN",
+                "SYMPTOMS_ONLY",
+                "VISIBLE"
+              ]
+            },
+            "instructor": {
+              "const": "VISIBLE"
+            }
+          }
+        },
+        "difficulty": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layers",
+            "dependencyDepth",
+            "evidenceVisibility",
+            "remediationConstraints"
+          ],
+          "properties": {
+            "layers": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "dependencyDepth": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "evidenceVisibility": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "remediationConstraints": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "learningObjectives": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+YadiLab Foundation v0.66.0 — verification log
+Date: 2026-10-01
+Authority: Masterprompt v1.3 VERIFIED / LOCKED + approved Import Helper UI terminology override
+
+Input checkpoint: exact YadiLab_Foundation_v0.65.0.zip bytes
+Baseline SHA256: 58e938ec5a63166749c23cbd57a9b907c3f30c617277ba59c79010c578567a5f
+
+Phase 66 — Fault Injection UI
+- Adds the first browser Fault Injection panel over the deterministic Phase 65 Fault Engine Core.
+- React/browser code does not reimplement fault semantics; pack verification, preconditions, mutation resolution, expected effects, negative controls, blast radius and rollback safety remain Fault Engine responsibilities.
+- Runtime and Builder workflows share the same content-addressed built-in Fault Pack and core injection functions.
+- Runtime preview is side-effect free and injection is permitted only after a SHA-256 preview token binds scenario hash, state revision, pack identity, fault ID, exact bindings, seed, mode and active overlay identity.
+- Runtime injection records the entire resolved fault as one history step even when the fault contains multiple underlying Engine operations.
+- Compatible Runtime faults may append to a single overlay; active overlay divergence fails closed before additional injection.
+- Latest-fault rollback uses Phase 65 inverse operations and fails closed after later Runtime state changes.
+- Builder mode creates an isolated draft Engine state; the healthy Builder source is unchanged while one or more faults are prepared.
+- Persistent materialization occurs only through explicit Create faulted scenario variant action and produces an ordinary scenario-source with faultOrigin/canonical recovery.
+- Builder source revision or compiled-hash drift invalidates the draft.
+- UI displays the four declarative difficulty dimensions directly and does not invent an opaque scalar difficulty score.
+- Full temporal/intermittent scheduling, generated multi-fault curricula and broad domain Fault Pack expansion are intentionally deferred.
+
+Focused Phase 66 verification before full regression
+- Draft 2020-12 schema suite: 42/42 fixture expectations PASS; 15/15 schemas meta-valid.
+- Fault Injection UI functional: 11/11 PASS.
+- Fault Injection UI adversarial: 14/14 PASS.
+- Import Helper functional/adversarial regression: 10/10 + 13/13 PASS.
+- ui/app/main.mjs syntax: PASS.
+- Branding guard: PASS.
+
+First whole-Foundation regression
+- Exact test:foundation chain contains 153 deterministic commands.
+- Commands 0–39: PASS before execution-harness timeout while command 40 was running; command 40 was not counted from that run.
+- Commands 40–60: PASS in deterministic continuation.
+- Commands 61–100: PASS.
+- Commands 101–129: PASS.
+- Command 130 (offline dependency snapshot transport): detached completion exit 0 with 44/44 assertions PASS.
+- Commands 131–152: PASS.
+- Therefore 153/153 deterministic commands are covered by explicit successful runs; no timed-out command is counted without successful completion.
+- Precise successful-log FAIL/AssertionError/Traceback scan: PASS.
+
+External gates on the candidate source tree
+- Snapshot producer without external YADILAB_SNAPSHOT_SIGNING_KEY: 77/BLOCKED.
+- Dependency readiness: 77/BLOCKED — genuine npm-generated package-lock.json and exact installed dependency closure absent.
+- Executable browser toolchain: 77/BLOCKED.
+- Dependency-resolved React browser build: 77/BLOCKED.
+- Actual dependency-resolved live Fault Injection UI execution: BLOCKED until genuine signed dependencies and a dependency-resolved browser release exist.
+- Actual server-stopped Chromium React offline reload: BLOCKED until genuine signed dependencies and dependency-resolved browser release exist.
+- Parrot OS x86-64 acceptance: 77/BLOCKED — current host Debian GNU/Linux 13.
+
+Classification target: VERIFIED DEVELOPMENT CHECKPOINT, NOT VERIFIED PRODUCT RELEASE.

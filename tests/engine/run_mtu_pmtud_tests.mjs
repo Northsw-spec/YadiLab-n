@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import { derivePathMtu, evaluateMtuAtEgress } from "../../dist-engine-test/engine/src/index.js";
+const iface=(id,mtu)=>({id,addresses:[],...(mtu===undefined?{}:{mtu})});
+const scenario=(mtu=1400)=>({scenarioId:"mtu_lab",resources:[{id:"r1",type:"network.router",label:"R1",interfaces:[iface("out",mtu)],properties:{}},{id:"r2",type:"linux.server",label:"R2",interfaces:[iface("in",1500)],properties:{}}],connections:[{id:"link1",kind:"network",from:{resource:"r1",port:"out"},to:{resource:"r2",port:"in"},properties:{mtu:1450}}]});
+const state=(s)=>({scenarioId:s.scenarioId,scenarioHash:"m".repeat(64),stateRevision:0,resources:Object.fromEntries(s.resources.map(r=>[r.id,{...r,interfaces:r.interfaces}]))});
+let checks=0; const ok=(v,m)=>{assert.ok(v,m);checks++;}; const eq=(a,b,m)=>{assert.deepEqual(a,b,m);checks++;};
+const s=scenario();
+eq(evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1200}).comparison,"WITHIN_MTU","smaller packet fits");
+eq(evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1400}).comparison,"WITHIN_MTU","equal packet fits");
+const large=evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1401,ipVersion:"IPv4",df:true});
+eq(large.comparison,"EXCEEDS_MTU","larger packet exceeds applicable MTU"); eq(large.truth,"FALSE","Engine truth is FALSE for the comparison"); eq(large.fragmentation,"NOT_MODELED","no fabricated fragmentation"); eq(large.icmp,"NOT_MODELED","no fabricated ICMP Fragmentation Needed"); ok(large.provenance==="ENGINE_MTU_EVALUATION","MTU event has Engine provenance");
+const v6=evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1500,ipVersion:"IPv6"}); eq(v6.comparison,"EXCEEDS_MTU","IPv6 comparison is explicit"); eq(v6.icmp,"NOT_MODELED","no fabricated IPv6 PTB");
+eq(evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out"}).comparison,"UNMODELED","missing packet size is unmodeled");
+eq(evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1200}).egressMtu,1400,"interface MTU is authoritative lower bound");
+const path=derivePathMtu(s,state(s),["r1","r2"]); eq(path.pathMtu,1400,"path MTU derives from complete path"); eq(path.comparison,"UNMODELED","path MTU does not infer packet comparison");
+const missing=scenario(); missing.resources[0].interfaces[0].mtu=undefined; eq(derivePathMtu(missing,state(missing),["r1","r2"]).truth,"UNKNOWN","incomplete path MTU fails closed");
+const repeat=evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1401}); eq(repeat,evaluateMtuAtEgress(s,state(s),{resourceId:"r1",egressInterface:"out",packetSize:1401}),"MTU evaluation is deterministic");
+console.log(`PASS Dev31 MTU/PMTUD Engine functional: ${checks} assertions.`);

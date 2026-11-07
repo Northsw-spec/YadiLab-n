@@ -1,0 +1,19 @@
+YadiLab Foundation v0.35.0 — packaged-bytes verification
+
+STATUS: PASS — FINAL EXACT ZIP READ-BACK VERIFIED
+VERIFIED RELEASE: NO
+AUTHORITATIVE MASTERPROMPT: v1.2 VERIFIED / LOCKED
+
+Verified gates:
+- complete Foundation semantic/regression suites through Phase 35 PASS;
+- Engine 0.8.0 SNAT and DNAT composition: 110 functional + 60 adversarial PASS;
+- compiler static SNAT validation: 61 functional + 51 adversarial PASS;
+- full candidate exact-byte readback from a new system-unzip extraction PASS;
+- final exact-byte readback from a new system-unzip extraction PASS;
+- browser dependency readiness 77/BLOCKED (real npm dependency resolution absent here);
+- Parrot target gate 77/BLOCKED (Debian host; no false target verification);
+- Linux launcher and acceptance script executable bits preserved;
+- no superseded Masterprompt references, dist-* or node_modules in final ZIP;
+- built-in SVGs and third-party notice inventory retained in the offline distribution.
+
+External acceptance not claimed: dependency-resolved real browser, real zip.js/ELK runtime, and real Parrot x86-64 browser acceptance.

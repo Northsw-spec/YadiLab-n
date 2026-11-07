@@ -1,0 +1,116 @@
+{
+  "formatId": "infrastructure-cyber-lab.layout",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "golden_proxmox_rds_opnsense_01",
+  "engine": "elk.layered",
+  "nodes": [
+    {
+      "id": "wan",
+      "x": 0,
+      "y": 0,
+      "width": 700,
+      "height": 480
+    },
+    {
+      "id": "dmz",
+      "x": 750,
+      "y": 0,
+      "width": 700,
+      "height": 480
+    },
+    {
+      "id": "server",
+      "x": 1500,
+      "y": 0,
+      "width": 700,
+      "height": 480
+    },
+    {
+      "id": "mgmt",
+      "x": 2250,
+      "y": 0,
+      "width": 700,
+      "height": 480
+    },
+    {
+      "id": "attacker",
+      "x": 40,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "wan"
+    },
+    {
+      "id": "firewall01",
+      "x": 40,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "dmz"
+    },
+    {
+      "id": "rds01",
+      "x": 40,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "server"
+    },
+    {
+      "id": "admin01",
+      "x": 40,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "mgmt"
+    },
+    {
+      "id": "pve01",
+      "x": 325,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "mgmt"
+    },
+    {
+      "id": "ad01",
+      "x": 325,
+      "y": 80,
+      "width": 220,
+      "height": 90,
+      "parent": "server"
+    },
+    {
+      "id": "alice",
+      "x": 40,
+      "y": 215,
+      "width": 220,
+      "height": 90,
+      "parent": "mgmt"
+    },
+    {
+      "id": "admins",
+      "x": 325,
+      "y": 215,
+      "width": 220,
+      "height": 90,
+      "parent": "mgmt"
+    },
+    {
+      "id": "log01",
+      "x": 40,
+      "y": 350,
+      "width": 220,
+      "height": 90,
+      "parent": "mgmt"
+    },
+    {
+      "id": "backup01",
+      "x": 40,
+      "y": 215,
+      "width": 220,
+      "height": 90,
+      "parent": "server"
+    }
+  ]
+}

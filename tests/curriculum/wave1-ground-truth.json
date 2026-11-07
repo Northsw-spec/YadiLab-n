@@ -1,0 +1,42 @@
+{
+  "guided_win_gateway": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "windows.ping", "destinationId": "server1" },
+    "typedAction": { "actionId": "change_default_gateway", "targetId": "client1", "parameters": { "gateway": "10.78.1.1" } }
+  },
+  "guided_win_dns": {
+    "beforeTruth": "UNKNOWN",
+    "probe": { "sourceId": "client1", "probeId": "windows.resolve_dnsname", "queryName": "app.lab.test" },
+    "typedAction": { "actionId": "change_dns_servers", "targetId": "client1", "parameters": { "servers": ["10.78.102.53"] } }
+  },
+  "guided_win_firewall": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "windows.ping", "destinationId": "server1" },
+    "typedAction": { "actionId": "set_firewall_default_action", "targetId": "client1", "parameters": { "action": "allow" } }
+  },
+  "guided_win_rdp": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "windows.test_netconnection", "destinationId": "server1", "port": 3389 },
+    "typedAction": { "actionId": "set_service_enabled", "targetId": "server1", "parameters": { "service": "rdp", "enabled": true } }
+  },
+  "guided_linux_gateway": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "linux.ping", "destinationId": "server1" },
+    "typedAction": { "actionId": "change_default_gateway", "targetId": "client1", "parameters": { "gateway": "10.78.5.1" } }
+  },
+  "guided_linux_dns": {
+    "beforeTruth": "UNKNOWN",
+    "probe": { "sourceId": "client1", "probeId": "linux.dig", "queryName": "app.lab.test" },
+    "typedAction": { "actionId": "change_dns_servers", "targetId": "client1", "parameters": { "servers": ["10.78.106.53"] } }
+  },
+  "guided_linux_firewall": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "linux.ping", "destinationId": "server1" },
+    "typedAction": { "actionId": "set_firewall_default_action", "targetId": "client1", "parameters": { "action": "allow" } }
+  },
+  "guided_linux_ssh": {
+    "beforeTruth": "FALSE",
+    "probe": { "sourceId": "client1", "probeId": "linux.nc_tcp", "destinationId": "server1", "port": 22 },
+    "typedAction": { "actionId": "set_service_enabled", "targetId": "server1", "parameters": { "service": "ssh", "enabled": true } }
+  }
+}

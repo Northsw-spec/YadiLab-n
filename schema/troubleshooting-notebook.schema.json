@@ -1,0 +1,662 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:app:schema:troubleshooting-notebook:0.3.0",
+  "title": "Troubleshooting Evidence Notebook",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "scenarioId",
+    "scenarioHash",
+    "notebookIdentity",
+    "entries"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "infrastructure-cyber-lab.troubleshooting-notebook"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "enum": [
+        "0.1.0",
+        "0.2.0",
+        "0.3.0"
+      ]
+    },
+    "scenarioId": {
+      "$ref": "#/$defs/id"
+    },
+    "scenarioHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "notebookIdentity": {
+      "$ref": "#/$defs/sha256"
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "truth": {
+      "type": "string",
+      "enum": [
+        "TRUE",
+        "FALSE",
+        "UNKNOWN"
+      ]
+    },
+    "jsonValue": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      ]
+    },
+    "observationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "state"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "KNOWN",
+            "ABSENT",
+            "MALFORMED"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/jsonValue"
+        }
+      }
+    },
+    "activeProbeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject",
+        "state"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "engine_query",
+            "modeled_state",
+            "dns_record",
+            "topology_mapping"
+          ]
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "KNOWN",
+            "ABSENT",
+            "MALFORMED",
+            "TRUE",
+            "FALSE",
+            "UNKNOWN"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/jsonValue"
+        }
+      }
+    },
+    "baseEntry": {
+      "type": "object",
+      "required": [
+        "entryId",
+        "sequence",
+        "stateRevision"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "pattern": "^entry-[0-9]{4}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "observationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "sequence",
+        "kind",
+        "stateRevision",
+        "engineId",
+        "engineVersion",
+        "boundary",
+        "command",
+        "category",
+        "targetId",
+        "targetLabel",
+        "transcriptIdentity",
+        "lines",
+        "evidence"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "pattern": "^entry-[0-9]{4}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "kind": {
+          "const": "observation"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "engineId": {
+          "const": "foundation.observation"
+        },
+        "engineVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "boundary": {
+          "const": "NO_GUEST_COMMAND_EXECUTION"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "interface",
+            "routing",
+            "dns",
+            "dhcp",
+            "firewall",
+            "service"
+          ]
+        },
+        "targetId": {
+          "$ref": "#/$defs/id"
+        },
+        "targetLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "transcriptIdentity": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lines": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/observationEvidence"
+          }
+        },
+        "learnerNote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "activeProbeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "sequence",
+        "kind",
+        "stateRevision",
+        "engineId",
+        "engineVersion",
+        "boundary",
+        "probeMode",
+        "command",
+        "category",
+        "sourceId",
+        "sourceLabel",
+        "truth",
+        "transcriptIdentity",
+        "lines",
+        "evidence"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "pattern": "^entry-[0-9]{4}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "kind": {
+          "const": "active_probe"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "engineId": {
+          "const": "foundation.observation"
+        },
+        "engineVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "boundary": {
+          "const": "NO_GUEST_COMMAND_EXECUTION"
+        },
+        "probeMode": {
+          "const": "ACTIVE_MODELED_PROBE"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "connectivity",
+            "dns",
+            "path"
+          ]
+        },
+        "sourceId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "truth": {
+          "$ref": "#/$defs/truth"
+        },
+        "destinationId": {
+          "$ref": "#/$defs/id"
+        },
+        "destinationLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp",
+            "icmp",
+            "any"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "queryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "resolvedAddress": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "resolvedResourceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "blockingPoint": {
+          "$ref": "#/$defs/id"
+        },
+        "transcriptIdentity": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lines": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/activeProbeEvidence"
+          }
+        },
+        "learnerNote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "learnerNoteEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "sequence",
+        "kind",
+        "stateRevision",
+        "noteKind",
+        "text"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "pattern": "^entry-[0-9]{4}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "kind": {
+          "const": "learner_note"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "noteKind": {
+          "type": "string",
+          "enum": [
+            "hypothesis",
+            "next_step",
+            "conclusion"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "entry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/observationEntry"
+        },
+        {
+          "$ref": "#/$defs/activeProbeEntry"
+        },
+        {
+          "$ref": "#/$defs/remediationEntry"
+        },
+        {
+          "$ref": "#/$defs/learnerNoteEntry"
+        }
+      ]
+    },
+    "remediationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "sequence",
+        "kind",
+        "stateRevision",
+        "beforeStateRevision",
+        "afterStateRevision",
+        "boundary",
+        "operation",
+        "operationIdentity",
+        "beforeValueState",
+        "afterValueState"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "pattern": "^entry-[0-9]{4}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "kind": {
+          "const": "remediation_action"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "beforeStateRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "afterStateRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "boundary": {
+          "const": "LEARNER_OPERATION_NO_SOLUTION"
+        },
+        "operation": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "op",
+                "target",
+                "path",
+                "value"
+              ],
+              "properties": {
+                "op": {
+                  "const": "set"
+                },
+                "target": {
+                  "$ref": "#/$defs/id"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "value": {
+                  "$ref": "#/$defs/jsonValue"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "op",
+                "target",
+                "path"
+              ],
+              "properties": {
+                "op": {
+                  "const": "remove"
+                },
+                "target": {
+                  "$ref": "#/$defs/id"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                }
+              }
+            }
+          ]
+        },
+        "operationIdentity": {
+          "$ref": "#/$defs/sha256"
+        },
+        "beforeValueState": {
+          "type": "string",
+          "enum": [
+            "KNOWN",
+            "ABSENT"
+          ]
+        },
+        "beforeValue": {
+          "$ref": "#/$defs/jsonValue"
+        },
+        "afterValueState": {
+          "type": "string",
+          "enum": [
+            "KNOWN",
+            "ABSENT"
+          ]
+        },
+        "afterValue": {
+          "$ref": "#/$defs/jsonValue"
+        },
+        "learnerNote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "typedAction": {
+          "$ref": "#/$defs/typedRemediationAction"
+        }
+      }
+    },
+    "typedRemediationAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engineId",
+        "engineVersion",
+        "boundary",
+        "actionId",
+        "label",
+        "targetId",
+        "parameters"
+      ],
+      "properties": {
+        "engineId": {
+          "const": "foundation.typed_remediation"
+        },
+        "engineVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "boundary": {
+          "const": "LEARNER_ACTION_NO_SOLUTION"
+        },
+        "actionId": {
+          "type": "string",
+          "enum": [
+            "change_default_gateway",
+            "change_dns_servers",
+            "set_firewall_default_action",
+            "set_interface_addresses",
+            "set_service_enabled",
+            "set_service_port",
+            "set_windows_network_profile"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "targetId": {
+          "$ref": "#/$defs/id"
+        },
+        "parameters": {
+          "type": "object",
+          "maxProperties": 8,
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      }
+    }
+  }
+}
