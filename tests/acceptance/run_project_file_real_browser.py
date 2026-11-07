@@ -283,6 +283,81 @@ def main():
                 "window.__yadilabProjectStore.writes") == legacy_writes,
                 "Legacy cancellation recovery performed an implicit save")
             legacy_fallback.close()
+            # PROJECT-020: input.cancel must not release the Open lock after
+            # change has already supplied a selected File. Its asynchronous
+            # checksum/schema read may still be unresolved; a spurious late
+            # cancel cannot allow New/Save As/another Open in the meantime.
+            selected_read = context.new_page()
+            selected_read.add_init_script(MOCK)
+            selected_read.on("pageerror", lambda error: errors.append(str(error)))
+            selected_read.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            src = selected_read.locator('[data-project-file-controls="ready"]')
+            expect(src).to_be_visible(timeout=45000)
+            selected_read.locator('[data-project-action="save-as"]').click()
+            expect(selected_read.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            saved_selected_read = selected_read.evaluate(
+                "window.__yadilabProjectStore.text")
+            writes_selected_read = selected_read.evaluate(
+                "window.__yadilabProjectStore.writes")
+            selected_read.evaluate("""() => {
+                delete window.showOpenFilePicker;
+                const store = window.__yadilabProjectStore;
+                store.pendingSelectedRead = false;
+                store.releaseSelectedRead = null;
+                const original = Blob.prototype.arrayBuffer;
+                File.prototype.arrayBuffer = function() {
+                    if (this.name !== 'inflight-fallback.yadilab')
+                        return original.call(this);
+                    store.pendingSelectedRead = true;
+                    return new Promise((resolve, reject) => {
+                        store.releaseSelectedRead = () =>
+                            original.call(this).then(resolve, reject);
+                    });
+                };
+            }""")
+            selected_choosers = []
+            selected_read.on(
+                "filechooser", lambda chooser: selected_choosers.append(chooser))
+            with selected_read.expect_file_chooser() as read_chooser_info:
+                selected_read.locator('[data-project-action="open"]').click()
+            read_chooser_info.value.set_files({
+                "name": "inflight-fallback.yadilab",
+                "mimeType": "application/json",
+                "buffer": saved_selected_read.encode("utf-8"),
+            })
+            selected_read.wait_for_function(
+                "window.__yadilabProjectStore.pendingSelectedRead === true",
+                timeout=15000)
+            selected_read.evaluate("""() => {
+                const input = document.querySelector('[data-project-input]');
+                input.dispatchEvent(new Event('cancel', { bubbles: true }));
+                document.querySelector('[data-project-action="new"]').click();
+                document.querySelector('[data-project-action="save-as"]').click();
+                document.querySelector('[data-project-action="open"]').click();
+            }""")
+            expect(selected_read.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance")
+            expect(src).to_have_attribute(
+                "data-project-filename", "verified-network.yadilab")
+            require(len(selected_choosers) == 1,
+                    "A second fallback chooser launched during selected file read")
+            require(selected_read.evaluate(
+                "window.__yadilabProjectStore.writes") == writes_selected_read,
+                "Late cancel unlocked Save As during selected file read")
+            selected_read.evaluate("""() => {
+                window.__yadilabProjectStore.releaseSelectedRead();
+            }""")
+            expect(selected_read.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(src).to_have_attribute(
+                "data-project-filename", "inflight-fallback.yadilab")
+            expect(src).to_have_attribute("data-project-dirty", "false")
+            require(selected_read.evaluate(
+                "window.__yadilabProjectStore.writes") == writes_selected_read,
+                "Pending fallback Open caused an implicit project write")
+            selected_read.close()
+
             # PROJECT-016: beforeunload must request a browser warning when
             # the source is clean but an explicit native Save remains in flight.
             # This test uses a controlled pending writable open, not a timer.
