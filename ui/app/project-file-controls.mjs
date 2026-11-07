@@ -100,10 +100,12 @@ export function ProjectFileControls({
     if (!input) return;
     const onCancel = () => {
       const ticket = fallbackOpenRef.current;
-      if (ticket) {
-        finishFallbackOpen(ticket);
-        setMessage("Cancelled; current project was not changed.");
-      }
+      // Once change delivered a File, the picker has finished. A late cancel
+      // event must not release the exclusive lock while the selected file is
+      // still being validated. The reader owns the ticket until its finally.
+      if (!ticket || ticket.fileSelected) return;
+      finishFallbackOpen(ticket);
+      setMessage("Cancelled; current project was not changed.");
     };
     input.addEventListener("cancel", onCancel);
     // Older browsers can return focus after a cancelled file chooser without
