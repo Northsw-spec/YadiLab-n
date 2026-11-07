@@ -247,6 +247,21 @@ export function projectHasUnsavedChanges(currentSnapshot, savedSnapshot, unpersi
   return Boolean(unpersisted) || currentSnapshot !== savedSnapshot;
 }
 
+// A source swap is an edit of the associated project only if the canonical
+// scenario identity is unchanged. A newly imported/drafted Builder may carry
+// a larger revision and dirty=true; those fields alone cannot authorize
+// continued writes to another scenario's existing .yadilab file.
+export function sameEditableProjectRevision(previous, next) {
+  return previous?.mode === "builder" && next?.mode === "builder" &&
+    next.dirty === true &&
+    Number.isSafeInteger(previous.sourceRevision) &&
+    Number.isSafeInteger(next.sourceRevision) &&
+    next.sourceRevision > previous.sourceRevision &&
+    typeof previous.source?.scenarioId === "string" &&
+    previous.source.scenarioId.length > 0 &&
+    next.source?.scenarioId === previous.source.scenarioId;
+}
+
 export function projectSnapshot(workspace) {
   if (!workspace || workspace.mode !== "builder") return null;
   return JSON.stringify({ source: workspace.source, layoutOverrides: workspace.layoutOverrides ?? [] });
