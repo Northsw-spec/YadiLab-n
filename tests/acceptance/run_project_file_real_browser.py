@@ -573,6 +573,76 @@ def main():
             require(compile_race.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Stale compilation caused an implicit project-file write")
             compile_race.close()
+
+            # A valid runtime progress file may take time to read. If the user
+            # creates New while File.text() is unresolved, that old progress
+            # must NOT resurrect the prior runtime after the read completes.
+            restore_race = context.new_page()
+            restore_race.add_init_script(MOCK)
+            restore_race.on("pageerror", lambda error: errors.append(str(error)))
+            restore_race.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            rrc = restore_race.locator('[data-project-file-controls="ready"]')
+            expect(rrc).to_be_visible(timeout=45000)
+            rstudio = restore_race.locator("details.control-section").filter(
+                has_text="Scenario & Builder")
+            if rstudio.get_attribute("open") is None:
+                rstudio.locator("summary").first.click()
+            restore_race.locator('[data-studio-action="validate-compile"]').click()
+            run_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
+                "summary", has_text="Run & Preview"))
+            if run_menu.get_attribute("open") is None:
+                run_menu.locator("summary").click()
+            preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
+            expect(preview).to_be_enabled(timeout=30000)
+            preview.click()
+            expect(restore_race.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=20000)
+            export_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
+                "summary", has_text="Import / Export"))
+            if export_menu.get_attribute("open") is None:
+                export_menu.locator("summary").click()
+            with restore_race.expect_download(timeout=15000) as progress_download:
+                export_menu.get_by_role("button", name="Exportera framsteg").click()
+            saved_progress = Path(progress_download.value.path()).read_bytes()
+            require(saved_progress.startswith(b"{") and len(saved_progress) > 30,
+                    "Could not generate a genuine runtime progress fixture")
+
+            restore_race.evaluate("""() => {
+                const originalText = File.prototype.text;
+                window.__staleRuntimeFileRead = { pending: false, release: null };
+                File.prototype.text = function() {
+                  if (!this.name.endsWith(".yadiprogress"))
+                    return originalText.call(this);
+                  const file = this;
+                  return new Promise(resolve => {
+                    window.__staleRuntimeFileRead.pending = true;
+                    window.__staleRuntimeFileRead.release = () => {
+                      window.__staleRuntimeFileRead.pending = false;
+                      resolve(originalText.call(file));
+                    };
+                  });
+                };
+            }""")
+            progress_input = restore_race.locator('[data-menu-action="load-progress"]')
+            expect(progress_input).to_have_count(1)
+            progress_input.set_input_files({
+                "name": "scenario.yadiprogress", "mimeType": "application/json",
+                "buffer": saved_progress,
+            })
+            restore_race.wait_for_function(
+                "window.__staleRuntimeFileRead?.pending === true", timeout=15000)
+            restore_race.locator('[data-project-action="new"]').click()
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project", timeout=15000)
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
+            restore_race.evaluate("window.__staleRuntimeFileRead.release()")
+            restore_race.wait_for_timeout(500)
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
+            require(restore_race.evaluate("window.__yadilabProjectStore.writes") == 0,
+                    "Stale runtime restore unexpectedly wrote a project file")
+            restore_race.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -594,13 +664,14 @@ def main():
                 "staleSourceDuringIdentityDenied": True,
                 "recoveredSavePersistsNewerBuilder": True,
                 "staleAsyncCompileCannotResurrectOldProject": True,
+                "staleRuntimeProgressCannotResurrectOldProject": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict, stale identity, async compile and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
+                  " external conflict, stale identity, async compile, runtime restore and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()
