@@ -7,7 +7,7 @@ import layoutSchema from "../../schema/layout.schema.json" with { type: "json" }
 import troubleshootingNotebookSchema from "../../schema/troubleshooting-notebook.schema.json" with { type: "json" };
 import troubleshootingSessionSchema from "../../schema/troubleshooting-session.schema.json" with { type: "json" };
 
-export type ContractKind = "source" | "normalized" | "manifest" | "save" | "layout" | "troubleshootingNotebook" | "troubleshootingSession";
+export type ContractKind = "source" | "editableSource" | "normalized" | "manifest" | "save" | "layout" | "troubleshootingNotebook" | "troubleshootingSession";
 
 export interface ValidationResult {
   readonly valid: boolean;
@@ -21,8 +21,19 @@ const ajv = new Ajv2020({
   validateSchema: true,
 });
 
+// An editable New project may be empty, but is NOT a runnable scenario.
+// Preserve every canonical source constraint except the two runtime-only
+// minimum counts. All other source fields and references remain verified
+// by the project-document semantic integrity gate.
+const editableSourceSchema = structuredClone(sourceSchema);
+editableSourceSchema.$id = "urn:app:schema:editable-project-source:0.1.0";
+editableSourceSchema.title = "Editable Project Source";
+editableSourceSchema.properties.resources.minItems = 0;
+editableSourceSchema.properties.objectives.minItems = 0;
+
 const validators = {
   source: ajv.compile(sourceSchema),
+  editableSource: ajv.compile(editableSourceSchema),
   normalized: ajv.compile(normalizedSchema),
   manifest: ajv.compile(manifestSchema),
   save: ajv.compile(saveStateSchema),
