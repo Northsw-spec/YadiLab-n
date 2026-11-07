@@ -21,7 +21,9 @@ MOCK = r"""
     permissionDenied: false, cancelSave: false, cancelOpen: false,
     aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0,
     chooseAlternative: false, otherText: "", otherWrites: 0,
-    pauseIdentity: false, pendingIdentity: false, releaseIdentity: null };
+    pauseIdentity: false, pendingIdentity: false, releaseIdentity: null,
+    pauseOpenPicker: false, pendingOpenPicker: false, releaseOpenPicker: null,
+    openPickerCalls: 0 };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
@@ -81,6 +83,13 @@ MOCK = r"""
   });
   Object.defineProperty(window, "showOpenFilePicker", {
     configurable: true, value: async () => {
+      store.openPickerCalls++;
+      if (store.pauseOpenPicker) {
+        store.pendingOpenPicker = true;
+        await new Promise(resolve => { store.releaseOpenPicker = resolve; });
+        store.pendingOpenPicker = false;
+        store.releaseOpenPicker = null;
+      }
       if (store.cancelOpen) throw new DOMException("Open cancelled", "AbortError");
       return [handle];
     },
@@ -297,6 +306,49 @@ def main():
             page.locator('[data-project-action="open"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Opened editable source", timeout=20000)
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            # PROJECT-011: the native Open chooser may stay pending while
+            # other buttons/shortcuts are clicked. Open must reserve the
+            # same exclusive lock as Save, New, and other native Open calls
+            # BEFORE awaiting the chooser. A second action cannot mutate
+            # Builder or write an unrelated file during that window.
+            page.evaluate("""() => {
+                window.__yadilabProjectStore.pauseOpenPicker = true;
+            }""")
+            writes_before_picker = page.evaluate("window.__yadilabProjectStore.writes")
+            picker_calls_before = page.evaluate(
+                "window.__yadilabProjectStore.openPickerCalls")
+            page.locator('[data-project-action="open"]').click()
+            page.wait_for_function(
+                "window.__yadilabProjectStore.pendingOpenPicker === true",
+                timeout=10000)
+            page.locator('[data-project-action="new"]').click()
+            require(page.locator(".app-frame").get_attribute(
+                "data-runtime-scenario-id") == "foundation_acceptance",
+                "New replaced Builder while the native Open picker was pending")
+            page.locator('[data-project-action="save-as"]').click()
+            page.keyboard.press("Control+s")
+            page.locator('[data-project-action="open"]').click()
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_picker,
+                    "Save/Save As wrote file while Open picker was pending")
+            require(page.evaluate("window.__yadilabProjectStore.openPickerCalls")
+                    == picker_calls_before + 1,
+                    "Another Open picker was launched while the first was unresolved")
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            page.evaluate("""() => {
+                const store = window.__yadilabProjectStore;
+                store.pauseOpenPicker = false;
+                store.releaseOpenPicker();
+            }""")
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_picker,
+                    "Native Open performed an implicit project save")
+            require(page.locator(".app-frame").get_attribute(
+                "data-runtime-scenario-id") == "foundation_acceptance",
+                "Pending native Open replaced the wrong Builder project")
             expect(controls).to_have_attribute("data-project-dirty", "false")
             # A tampered stored file is not allowed to mutate the current workspace.
             page.evaluate("""() => {

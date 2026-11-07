@@ -129,12 +129,12 @@ export function ProjectFileControls({
     setRevision(n => n + 1);
   };
 
-  const openFromFile = async (file, handle = null, confirmed = false) => {
-    if (!file || busyRef.current) return;
+  const openFromFile = async (file, handle = null, confirmed = false, lockHeld = false) => {
+    if (!file || (busyRef.current && !lockHeld)) return;
     if (!confirmed && !canDiscard()) return;
     const origin = getWorkspace();
     const epoch = fileEpochRef.current;
-    busyRef.current = true;
+    if (!lockHeld) busyRef.current = true;
     try {
       const content = await readProjectFile(file, { validateSource });
       if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
@@ -151,7 +151,7 @@ export function ProjectFileControls({
       setMessage("Opened editable source; recompile to verify Engine truth.");
       setDiagnostics([diag("PROJECT_SOURCE_OPENED", "Project reopened as editable source. Archived runtime and Engine PASS were not restored.", "warning")]);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
-    finally { busyRef.current = false; }
+    finally { if (!lockHeld) busyRef.current = false; }
   };
 
   const openNative = async () => {
@@ -162,6 +162,11 @@ export function ProjectFileControls({
     }
     if (!canDiscard()) return;
     const origin = getWorkspace();
+    const epoch = fileEpochRef.current;
+    // Reserve the same lock used by Save/New and scenario switching BEFORE
+    // showing the native chooser. The picker and getFile() both await; neither
+    // may overlap another explicit project operation.
+    busyRef.current = true;
     try {
       const handles = await window.showOpenFilePicker({
         multiple: false, types: pickerTypes, excludeAcceptAllOption: true,
@@ -169,10 +174,13 @@ export function ProjectFileControls({
       const handle = handles?.[0];
       if (!handle) return;
       const file = await handle.getFile();
-      if (getWorkspace() !== origin)
+      if (getWorkspace() !== origin || fileEpochRef.current !== epoch)
         throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_PICKER");
-      await openFromFile(file, handle, true);
+      // Transfer temporary ownership of the lock to the same verified reader.
+      // The outer finally releases it only after Open has fully completed.
+      await openFromFile(file, handle, true, true);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
+    finally { busyRef.current = false; }
   };
 
   const newProject = () => {
