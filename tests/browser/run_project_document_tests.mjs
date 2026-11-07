@@ -125,6 +125,57 @@ await assert.rejects(writeProjectFile(samePhysicalFile,text,
 assert.equal(stored,conflictContent,
   "Second JS handle must not overwrite externally modified physical file");
 stored=firstWrite;
+// Save As must never overwrite an unrelated project just because the file picker
+// returned a writable handle to that existing, non-empty destination.
+let destinationDisk = "IRREPLACEABLE OTHER PROJECT";
+let destinationOpenCount = 0;
+let destinationWriteCount = 0;
+const destinationHandle = {
+  async getFile() { return file("other-project.yadilab", destinationDisk); },
+  async createWritable() {
+    destinationOpenCount++;
+    return {
+      async write(blob) { destinationWriteCount++; destinationDisk = await blob.text(); },
+      async close() {},
+      async abort() {},
+    };
+  },
+};
+await assert.rejects(writeProjectFile(destinationHandle, text, { requireEmptyTarget: true }),
+  /PROJECT_DESTINATION_NOT_EMPTY/);
+assert.equal(destinationDisk, "IRREPLACEABLE OTHER PROJECT");
+assert.equal(destinationOpenCount, 0, "Existing file must be rejected before opening writable stream");
+assert.equal(destinationWriteCount, 0);
+await assert.rejects(writeProjectFile(destinationHandle, text, {
+  requireEmptyTarget: true, expectedFileSha256: fromDisk.fileSha256,
+}), /PROJECT_DESTINATION_POLICY_CONFLICT/);
+await assert.rejects(writeProjectFile({
+  ...destinationHandle, async getFile() { return { name: "unverifiable.yadilab" }; },
+}, text, { requireEmptyTarget: true }), /PROJECT_DESTINATION_UNVERIFIABLE/);
+destinationDisk = "";
+assert.equal(await writeProjectFile(destinationHandle, text, { requireEmptyTarget: true }), true,
+  "New empty project destination must remain writable with full readback");
+assert.equal(destinationDisk, text);
+// External creation/edit between the two destination checks also fails closed.
+let delayedDestination = "";
+let delayedAbortCount = 0;
+let delayedWriteCount = 0;
+const racedDestination = {
+  async getFile() { return file("raced-new-project.yadilab", delayedDestination); },
+  async createWritable() {
+    delayedDestination = "ANOTHER WRITER CREATED CONTENT DURING OPEN";
+    return {
+      async write() { delayedWriteCount++; },
+      async close() { throw Error("Unexpected close"); },
+      async abort() { delayedAbortCount++; },
+    };
+  },
+};
+await assert.rejects(writeProjectFile(racedDestination, text, { requireEmptyTarget: true }),
+  /PROJECT_DESTINATION_NOT_EMPTY/);
+assert.equal(delayedWriteCount, 0);
+assert.equal(delayedAbortCount, 1);
+assert.equal(delayedDestination, "ANOTHER WRITER CREATED CONTENT DURING OPEN");
 // RACE: an independent writer edits the file while createWritable() resolves.
 // The second digest must refuse to write and abort the provisional stream.
 let raceDisk = firstWrite;

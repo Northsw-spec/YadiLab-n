@@ -176,9 +176,21 @@ export async function assertSafeRecoveryTarget(quarantinedHandles, selected) {
   }
 }
 
-export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}) {
+export async function writeProjectFile(handle, text, { expectedFileSha256, requireEmptyTarget = false } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");
+  // An unrelated Save As target may already contain a different project.
+  // File-picker selection is NOT permission to silently destroy those bytes.
+  // Opening the existing document is the explicit way to associate it for Save.
+  if (requireEmptyTarget && expectedFileSha256 !== undefined)
+    blocked("DESTINATION_POLICY_CONFLICT");
+  const assertEmptyDestination = async () => {
+    const file = await handle.getFile();
+    if (!file || !Number.isSafeInteger(file.size) || file.size < 0)
+      blocked("DESTINATION_UNVERIFIABLE");
+    if (file.size !== 0) blocked("DESTINATION_NOT_EMPTY");
+  };
+  if (requireEmptyTarget) await assertEmptyDestination();
   // Native File System Access does not provide a compare-and-swap write.
   // Check both BEFORE opening the writable and AGAIN immediately before write.
   // This closes the race while createWritable resolves; it cannot guarantee
@@ -203,6 +215,7 @@ export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}
   try {
     writable = await handle.createWritable({ keepExistingData: false });
     if (expectedFileSha256 !== undefined) await assertOriginalDiskBytes();
+    if (requireEmptyTarget) await assertEmptyDestination();
     await writable.write(new Blob([text], { type: "application/json;charset=utf-8" }));
     await writable.close();
     writable = null;

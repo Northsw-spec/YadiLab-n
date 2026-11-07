@@ -226,7 +226,9 @@ export function ProjectFileControls({
         throw new Error("PROJECT_EXPECTED_DIGEST_MISSING");
       try {
         await writeProjectFile(handle, data, {
-          ...(writingKnownFile ? { expectedFileSha256: fileFingerprintRef.current } : {}),
+          ...(writingKnownFile
+            ? { expectedFileSha256: fileFingerprintRef.current }
+            : { requireEmptyTarget: true }),
         });
       } catch (error) {
         // A failed native write may have modified the file. Quarantine this
