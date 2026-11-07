@@ -4875,16 +4875,20 @@ function App() {
   };
 
   const backToBuilder = () => {
-    releaseMedia();
-    setActiveJourney(null);
-    setTopologyStateFocus(null);
-    const source = workspace.mode === "runtime" ? workspace.source ?? welcomeScenario : workspace.source;
+    if (workspace.mode !== "runtime") return;
+    const source = workspace.source ?? welcomeScenario;
     const previous = lastBuilderWorkspaceRef.current;
     // Preserve editable topology, manual position overrides and the dirty flag
     // when returning from a preview of THIS exact Builder source.
-    const resume = workspace.mode === "runtime" && workspace.source &&
-      previous?.mode === "builder" && previous.source === workspace.source
+    const resume = workspace.source && previous?.mode === "builder" &&
+      previous.source === workspace.source
       ? previous : createBuilderWorkspace(source);
+    // React can batch this state update. Invalidate in-flight Runtime file,
+    // IndexedDB and evidence restores NOW, before their pending promises may
+    // resolve in the same event task and resurrect the abandoned Runtime.
+    beginScenarioTransition();
+    setBusy(false);
+    latestDrawioWorkspaceRef.current = resume;
     setWorkspace(resume);
   };
   const title = workspace.mode === "builder" ? workspace.source.metadata.title : workspace.scenario.metadata.title;

@@ -1617,6 +1617,51 @@ def main():
             })
             restore_race.wait_for_function(
                 "window.__staleRuntimeFileRead?.pending === true", timeout=15000)
+            # PROJECT-022: Back to Builder is an explicit transition even
+            # if React batches the repaint. Release the pending progress File
+            # in that SAME event turn; old Runtime may not reappear.
+            restore_race.evaluate("""() => {
+                const menus = [...document.querySelectorAll('.workspace-menu')];
+                const menu = menus.find(item =>
+                    item.querySelector('summary')?.textContent.trim() === 'Run & Preview');
+                const back = [...(menu?.querySelectorAll('button') || [])].find(
+                    button => button.textContent.trim() === 'Tillbaka till byggläget');
+                const release = window.__staleRuntimeFileRead?.release;
+                if (!back || back.disabled || typeof release !== 'function')
+                    throw new Error('PROJECT-022 requires live Runtime and pending progress File');
+                back.click();
+                release();
+            }""")
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=15000)
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
+            require("PROJECT-001 runtime restore source" in
+                    restore_race.locator(".mission-strip").inner_text(),
+                    "PROJECT-022 lost authored Builder source on immediate return")
+            restore_race.wait_for_timeout(450)
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder")
+            require(restore_race.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "PROJECT-022 stale Runtime progress wrote a project file")
+            # The original New-during-pending-Runtime test remains independent:
+            # re-enter Runtime, start the same verified progress read again,
+            # and make an explicit New project while it remains unresolved.
+            if run_menu.get_attribute("open") is None:
+                run_menu.locator("summary").click()
+            preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
+            expect(preview).to_be_enabled(timeout=15000)
+            preview.click()
+            expect(restore_race.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=15000)
+            progress_input = restore_race.locator('[data-menu-action="load-progress"]')
+            progress_input.evaluate("(element) => { element.value = ''; }")
+            progress_input.set_input_files({
+                "name": "scenario.yadiprogress", "mimeType": "application/json",
+                "buffer": saved_progress,
+            })
+            restore_race.wait_for_function(
+                "window.__staleRuntimeFileRead?.pending === true", timeout=15000)
             # The authored Builder source may still be unsaved in Runtime,
             # so explicitly confirm the user-requested replacement.
             restore_race.once("dialog", lambda dialog: dialog.accept())
