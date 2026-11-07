@@ -9,7 +9,8 @@ import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
   assertProjectOpenDiskUnchanged,
-  projectFilename, projectSnapshot, projectHasUnsavedChanges, sameEditableProjectRevision,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges, projectNeedsUnloadWarning,
+  sameEditableProjectRevision,
   sameProjectFileEntry,
   assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
@@ -781,5 +782,19 @@ assert.equal(sameEditableProjectRevision(savedScenario, {
   "Cross-project replacement stays detached even when the scenario differs");
 console.log("PASS PROJECT-014: explicit scenario transition invalidates native file association even for reused scenario ID");
 console.log("PASS PROJECT-013: native project association retained only for same-scenario Builder edits");
+// PROJECT-016: an in-flight explicit project operation requires a closing
+// warning even for a clean, previously verified project file. This is distinct
+// from dirty source and must clear when the operation has settled.
+assert.equal(projectNeedsUnloadWarning(false, false), false,
+  "A clean, idle project must not produce a needless unload warning");
+assert.equal(projectNeedsUnloadWarning(true, false), true,
+  "Unsaved source changes must request the browser closing warning");
+assert.equal(projectNeedsUnloadWarning(false, true), true,
+  "A clean but actively saving/opening project must request the warning");
+assert.equal(projectNeedsUnloadWarning(true, true), true,
+  "Concurrent dirty state and active operation must keep the warning");
+assert.equal(projectNeedsUnloadWarning(false, false), false,
+  "After completion, a clean project must return to ordinary closing behavior");
+console.log("PASS PROJECT-016: beforeunload warning covers active native file I/O as well as unsaved Builder state");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
