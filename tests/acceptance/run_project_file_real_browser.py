@@ -501,6 +501,52 @@ def main():
                 page.evaluate(
                     "(saved) => { window.__yadilabProjectStore.text = saved; }",
                     saved_after_ctrl)
+            # PROJECT-010: a schema-valid, freshly hashed file with a
+            # dangling resource or test in any nested rule must not open.
+            for corruption, expected_code in (
+                ("missing_completion_resource", "PROJECT_UNKNOWN_RULE_RESOURCE"),
+                ("missing_finding_test", "PROJECT_UNKNOWN_RULE_TEST"),
+                ("nested_objective_resource", "PROJECT_UNKNOWN_RULE_RESOURCE"),
+            ):
+                page.evaluate("""async ([saved, corruption]) => {
+                    const forged = JSON.parse(saved);
+                    const source = forged.content.source;
+                    if (corruption === 'missing_completion_resource') {
+                        source.completion = {
+                            op: 'reachable', from: 'missing_device', to: 'rds01',
+                        };
+                    } else if (corruption === 'missing_finding_test') {
+                        source.findings[0].when = {
+                            op: 'test_result', test: 'missing_test', expected: 'TRUE',
+                        };
+                    } else {
+                        source.objectives[0].condition = {
+                            op: 'all', rules: [{ op: 'not', rule: {
+                                op: 'has_permission', subject: 'attacker',
+                                resource: 'missing_device', permission: 'read',
+                            } }],
+                        };
+                    }
+                    const raw = new TextEncoder().encode(JSON.stringify(forged.content));
+                    const digest = await crypto.subtle.digest('SHA-256', raw);
+                    forged.contentSha256 = [...new Uint8Array(digest)]
+                        .map(n => n.toString(16).padStart(2, '0')).join('');
+                    window.__yadilabProjectStore.text = JSON.stringify(forged);
+                }""", [saved_after_ctrl, corruption])
+                before_bad_rule = page.evaluate("window.__yadilabProjectStore.writes")
+                page.locator('[data-project-action="open"]').click()
+                expect(page.locator('[data-project-message]')).to_contain_text(
+                    expected_code, timeout=20000)
+                require(page.locator(".app-frame").get_attribute(
+                    "data-runtime-scenario-id") == "foundation_acceptance",
+                    "Dangling rule reference replaced active Builder")
+                require(page.evaluate("window.__yadilabProjectStore.writes")
+                        == before_bad_rule,
+                        "Invalid rule caused implicit disk write")
+                expect(controls).to_have_attribute("data-project-dirty", "false")
+                page.evaluate(
+                    "(saved) => { window.__yadilabProjectStore.text = saved; }",
+                    saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)
