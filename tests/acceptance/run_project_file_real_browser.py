@@ -210,6 +210,66 @@ def main():
                 "Resumed explicit Save was not verified as exactly one disk write")
             unload_guard.close()
 
+            # PROJECT-017: when a write fails after a previously verified
+            # clean Save, native file content may be uncertain. Mark the
+            # Builder unsaved before permitting any New/Open or tab close.
+            # Recovery must require a different explicitly selected file.
+            failed_write = context.new_page()
+            failed_write.add_init_script(MOCK)
+            failed_write.on("pageerror", lambda error: errors.append(str(error)))
+            failed_write.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            fw_controls = failed_write.locator('[data-project-file-controls="ready"]')
+            expect(fw_controls).to_be_visible(timeout=45000)
+            failed_write.locator('[data-project-action="save-as"]').click()
+            expect(failed_write.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(fw_controls).to_have_attribute("data-project-dirty", "false")
+            original_disk = failed_write.evaluate(
+                "window.__yadilabProjectStore.text")
+            before_failure_writes = failed_write.evaluate(
+                "window.__yadilabProjectStore.writes")
+            failed_write.evaluate("""() => {
+                window.__yadilabProjectStore.fail = true;
+            }""")
+            failed_write.keyboard.press("Control+s")
+            expect(failed_write.locator('[data-project-message]')).to_contain_text(
+                "DISK_FULL", timeout=20000)
+            expect(fw_controls).to_have_attribute("data-project-dirty", "true")
+            require(failed_write.evaluate("window.__yadilabProjectStore.text")
+                    == original_disk, "Failed Save modified original disk contents")
+            require(failed_write.evaluate("window.__yadilabProjectStore.writes")
+                    == before_failure_writes, "Failed Save counted as committed write")
+            failure_unload_warning = failed_write.evaluate("""() => {
+                const event = new Event('beforeunload', { cancelable: true });
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            }""")
+            require(failure_unload_warning is True,
+                    "Failed native write did not protect beforeunload")
+            dismissed = []
+            failed_write.once("dialog", lambda d: (dismissed.append(d.type), d.dismiss()))
+            failed_write.locator('[data-project-action="new"]').click()
+            require(dismissed == ["confirm"],
+                    "Failed native write allowed New without unsaved confirmation")
+            expect(failed_write.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance")
+            failed_write.evaluate("""() => {
+                const s = window.__yadilabProjectStore;
+                s.fail = false;
+                s.chooseAlternative = true;
+            }""")
+            failed_write.locator('[data-project-action="save-as"]').click()
+            expect(failed_write.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(fw_controls).to_have_attribute("data-project-dirty", "false")
+            require(failed_write.evaluate(
+                "window.__yadilabProjectStore.otherWrites") == 1,
+                "Recovery did not save exactly once to separately selected disk file")
+            require(failed_write.evaluate(
+                "window.__yadilabProjectStore.text") == original_disk,
+                "Recovery unexpectedly overwrote quarantined original project")
+            failed_write.close()
+
             # PROJECT-015: React may batch updates when two explicit
             # project actions fire in one JS task. New MUST publish its
             # unpersisted state synchronously before Open checks the guard;
