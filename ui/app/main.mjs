@@ -4563,7 +4563,16 @@ function App() {
     }
     const result = previewRuntime(workspace);
     setDiagnostics(result.diagnostics);
-    if (result.ok) { releaseMedia(); setWorkspace(result.workspace); }
+    if (result.ok) {
+      // Runtime activation is an explicit scenario-generation boundary.
+      // Any older async compile/layout must not return later and replace the
+      // Runtime with its stale Builder result. A successful preview supersedes
+      // that pending operation; clear its old busy indicator here because its
+      // own finally no longer owns the current transition generation.
+      beginScenarioTransition();
+      setBusy(false);
+      setWorkspace(result.workspace);
+    }
   };
 
   const openSource = async (file) => {
