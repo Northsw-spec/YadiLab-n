@@ -962,8 +962,10 @@ def main():
                 "window.__yadilabProjectStore.text") == previous_bytes,
                 "Loading another scenario changed the previous project file")
             different_scenario.keyboard.press("Control+s")
+            # Scenario Studio deliberately starts with an incomplete draft:
+            # schema validation must fail before any native target is touched.
             expect(different_scenario.locator('[data-project-message]')).to_contain_text(
-                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
+                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
             require(different_scenario.evaluate(
                 "window.__yadilabProjectStore.text") == previous_bytes,
                 "New scenario overwrote the original .yadilab through inherited handle")
