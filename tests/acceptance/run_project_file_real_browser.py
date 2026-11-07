@@ -135,6 +135,53 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-015: React may batch updates when two explicit
+            # project actions fire in one JS task. New MUST publish its
+            # unpersisted state synchronously before Open checks the guard;
+            # otherwise Open can launch without confirming that the new,
+            # never-saved project may be discarded.
+            immediate_guard = context.new_page()
+            immediate_guard.add_init_script(MOCK)
+            immediate_guard.on("pageerror", lambda error: errors.append(str(error)))
+            immediate_guard.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            ig_controls = immediate_guard.locator(
+                '[data-project-file-controls="ready"]')
+            expect(ig_controls).to_be_visible(timeout=45000)
+            immediate = immediate_guard.evaluate("""() => {
+                const store = window.__yadilabProjectStore;
+                const fresh = document.querySelector('[data-project-action="new"]');
+                const open = document.querySelector('[data-project-action="open"]');
+                if (!fresh || !open || fresh.disabled || open.disabled)
+                    throw new Error("PROJECT-015 action controls unavailable");
+                let confirmations = 0;
+                const originalConfirm = window.confirm;
+                try {
+                    window.confirm = () => { confirmations++; return false; };
+                    fresh.click();
+                    open.click();
+                    return {
+                        confirmations,
+                        pickerCalls: store.openPickerCalls,
+                        diskWrites: store.writes,
+                    };
+                } finally {
+                    window.confirm = originalConfirm;
+                }
+            }""")
+            require(immediate["confirmations"] == 1,
+                    "New→Open in one task bypassed unsaved-change confirmation")
+            require(immediate["pickerCalls"] == 0,
+                    "Open picker started despite refusal to discard unsaved New")
+            require(immediate["diskWrites"] == 0,
+                    "New→Open performed an implicit project write")
+            expect(immediate_guard.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(ig_controls).to_have_attribute(
+                "data-project-dirty", "true")
+            require(immediate_guard.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "Never-saved new project was silently persisted")
+            immediate_guard.close()
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
