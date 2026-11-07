@@ -446,6 +446,31 @@ def main():
             require(recovery.evaluate("window.__yadilabProjectStore.otherWrites") ==
                     other_before + 1, "Ctrl+S did not use the safe alternate file")
             recovery.close()
+
+            # A fresh Save As to a *different*, already populated project file
+            # must not replace it. The OS picker choosing it is not an excuse
+            # to overwrite unrelated user data.
+            existing_target = context.new_page()
+            existing_target.add_init_script(MOCK)
+            existing_target.on("pageerror", lambda error: errors.append(str(error)))
+            existing_target.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            econtrols = existing_target.locator('[data-project-file-controls="ready"]')
+            expect(econtrols).to_be_visible(timeout=45000)
+            existing_target.evaluate("""() => {
+                const disk = window.__yadilabProjectStore;
+                disk.chooseAlternative = true;
+                disk.otherText = "DO_NOT_OVERWRITE_UNRELATED_PROJECT";
+            }""")
+            existing_target.locator('[data-project-action="save-as"]').click()
+            expect(existing_target.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=15000)
+            require(existing_target.evaluate("window.__yadilabProjectStore.otherText") ==
+                    "DO_NOT_OVERWRITE_UNRELATED_PROJECT",
+                    "Save As erased the unrelated existing .yadilab file")
+            require(existing_target.evaluate("window.__yadilabProjectStore.otherWrites") == 0,
+                    "Save As wrote to an existing project despite nonempty destination")
+            expect(econtrols).to_have_attribute("data-project-dirty", "true")
+            existing_target.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -463,13 +488,14 @@ def main():
                 "quarantinedFailedTargetCannotBeReselected": True,
                 "quarantinePersistsAfterSavingElsewhere": True,
                 "differentFileRecoveryAndCtrlS": True,
+                "unrelatedExistingSaveAsDenied": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
             print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
-                  " external conflict and write-open race blocked, failed-target quarantine, permission denial, cancel, fallback download,"
+                  " external conflict and write-open race blocked, failed-target quarantine, unrelated-file overwrite denied, permission denial, cancel, fallback download,"
                   " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()
