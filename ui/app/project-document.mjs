@@ -256,6 +256,17 @@ export function projectNeedsUnloadWarning(hasUnsavedChanges, fileOperationActive
   return Boolean(hasUnsavedChanges || fileOperationActive);
 }
 
+// Native and fallback file pickers both return asynchronously. A selected
+// document can replace only the exact workspace and file-association epoch
+// which initiated the chooser; a later file selection must not replace New
+// or an imported scenario that was activated while the dialog was open.
+export function projectFilePickerStillCurrent(startWorkspace, startEpoch,
+  activeWorkspace, activeEpoch) {
+  return startWorkspace === activeWorkspace &&
+    Number.isSafeInteger(startEpoch) && startEpoch >= 0 &&
+    startEpoch === activeEpoch;
+}
+
 // A source swap is an edit of the associated project only if the canonical
 // scenario identity is unchanged. A newly imported/drafted Builder may carry
 // a larger revision and dirty=true; those fields alone cannot authorize
