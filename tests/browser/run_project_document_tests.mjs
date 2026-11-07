@@ -83,12 +83,15 @@ const blankOpened = await readProjectDocument(blankBytes,
 assert.deepEqual(blankOpened.source, blankDraft,
   "Blank New project must reopen with zero invented resources or objectives");
 assert.deepEqual(blankOpened.layoutOverrides, []);
+const orphanDraftLink = structuredClone(source.connections[0]);
+orphanDraftLink.id = "orphan_draft_link";
+orphanDraftLink.from.resource = "unknown_source";
+orphanDraftLink.to.resource = "unknown_target";
+assert.equal(draftValidator({ ...blankDraft, connections: [orphanDraftLink] }), true,
+  "Negative orphan-link fixture must pass the editable source JSON schema");
 await assert.rejects(createProjectDocument({
   mode: "builder",
-  source: { ...blankDraft, connections: [{
-    id: "fabricated-link", kind: "network",
-    from: { resource: "not-real" }, to: { resource: "also-not-real" },
-  }] }, layoutOverrides: [],
+  source: { ...blankDraft, connections: [orphanDraftLink] }, layoutOverrides: [],
 }, { validateSource: draftValidator }), /PROJECT_DANGLING_CONNECTION/,
 "Editable draft exception may not authorize fabricated connectivity");
 console.log("PASS PROJECT-026: blank editable .yadilab project Save/Open without weakening executable source gate or fabricating topology");
