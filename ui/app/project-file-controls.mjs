@@ -73,7 +73,10 @@ export function ProjectFileControls({
       setMessage("A project file operation is still running.");
       return false;
     }
-    return !changedRef.current ||
+    // A failed disk write may set unpersistedRef before React commits the
+    // next render. Check the durable-save marker directly at this discard
+    // boundary rather than trusting only the last painted dirty state.
+    return !(changedRef.current || unpersistedRef.current) ||
       window.confirm("Projektet har osparade ändringar. Vill du fortsätta utan att spara dem?");
   };
   // This callback is used by other user-initiated scenario switches in App.
@@ -112,7 +115,8 @@ export function ProjectFileControls({
 
   useEffect(() => {
     const onBeforeUnload = (event) => {
-      if (projectNeedsUnloadWarning(changedRef.current, busyRef.current)) {
+      if (projectNeedsUnloadWarning(
+        changedRef.current || unpersistedRef.current, busyRef.current)) {
         event.preventDefault();
         event.returnValue = "";
       }
@@ -277,6 +281,10 @@ export function ProjectFileControls({
           handleRef.current = null;
           fileFingerprintRef.current = null;
           unpersistedRef.current = true;
+          // After a failed native write the physical target is uncertain.
+          // Publish the unsaved warning synchronously, even if React has not
+          // processed the revision update yet.
+          changedRef.current = true;
           setRevision(n => n + 1);
         }
         throw error;
@@ -297,6 +305,10 @@ export function ProjectFileControls({
       nameState(projectFilename(handle.name || filename));
       baselineRef.current = original;
       lastBuilderSnapshotRef.current = projectSnapshot(getWorkspace());
+      // A verified write clears the synchronous warning only when no newer
+      // Builder edits arrived while the file was being written.
+      changedRef.current = projectHasUnsavedChanges(
+        lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
       setRevision(n => n + 1);
       if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch) {
         setMessage("File saved, but the workspace changed during writing: newer edits remain unsaved.");
