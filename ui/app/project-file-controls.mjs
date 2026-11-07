@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
-  projectFilename, projectSnapshot, projectHasUnsavedChanges,
+  sameProjectFileEntry, projectFilename, projectSnapshot, projectHasUnsavedChanges,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -212,7 +212,7 @@ export function ProjectFileControls({
         return;
       }
       // Never overwrite a file changed by another tab or external editor.
-      const writingKnownFile = handleRef.current === handle;
+      const writingKnownFile = await sameProjectFileEntry(handleRef.current, handle);
       if (writingKnownFile && !fileFingerprintRef.current)
         throw new Error("PROJECT_EXPECTED_DIGEST_MISSING");
       try {
@@ -224,6 +224,8 @@ export function ProjectFileControls({
         // Detach the handle; a subsequent Save must use an explicit picker.
         handleRef.current = null;
         fileFingerprintRef.current = null;
+        unpersistedRef.current = true;
+        setRevision(n => n + 1);
         throw error;
       }
       // A different project may have been activated during asynchronous I/O.

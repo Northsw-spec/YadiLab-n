@@ -147,6 +147,23 @@ export async function digestProjectText(text) {
   if (typeof text !== "string") blocked("FILE_INVALID");
   return sha256(text);
 }
+// File System Access may return a fresh JS handle for the same physical path
+// selected again through Save As. Comparing JS object references is unsafe.
+// If an existing project association cannot be compared, reject the overwrite.
+export async function sameProjectFileEntry(previous, selected) {
+  if (!previous) return false;
+  if (!selected) blocked("FILE_IDENTITY_UNAVAILABLE");
+  if (previous === selected) return true;
+  if (typeof previous.isSameEntry !== "function" ||
+      typeof selected.isSameEntry !== "function")
+    blocked("FILE_IDENTITY_UNAVAILABLE");
+  let same;
+  try { same = await previous.isSameEntry(selected); }
+  catch { blocked("FILE_IDENTITY_UNAVAILABLE"); }
+  if (typeof same !== "boolean") blocked("FILE_IDENTITY_INVALID");
+  return same;
+}
+
 export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");

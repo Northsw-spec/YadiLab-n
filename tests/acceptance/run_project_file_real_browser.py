@@ -18,7 +18,8 @@ def require(condition, message):
 MOCK = r"""
 (() => {
   const store = { text: "", writes: 0, fail: false, reads: 0,
-    permissionDenied: false, cancelSave: false, cancelOpen: false };
+    permissionDenied: false, cancelSave: false, cancelOpen: false,
+    aliasSameEntryOnSaveAs: false };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
@@ -38,10 +39,13 @@ MOCK = r"""
       return new File([store.text], this.name, {type:"application/json"});
     },
   };
+  const alias = { ...handle };
+  handle.isSameEntry = async other => other === handle || other === alias;
+  alias.isSameEntry = async other => other === handle || other === alias;
   Object.defineProperty(window, "showSaveFilePicker", {
     configurable: true, value: async () => {
       if (store.cancelSave) throw new DOMException("Save cancelled", "AbortError");
-      return handle;
+      return store.aliasSameEntryOnSaveAs ? alias : handle;
     },
   });
   Object.defineProperty(window, "showOpenFilePicker", {
@@ -130,7 +134,29 @@ def main():
                     page.evaluate("window.__yadilabProjectStore.text"),
                     "Ctrl+S lost edited Builder metadata")
             saved_after_ctrl = page.evaluate("window.__yadilabProjectStore.text")
+            # Save As can select the same disk file through a DIFFERENT JS handle.
+            # The modified bytes must be detected, never silently overwritten.
+            page.evaluate("""() => {
+              const store = window.__yadilabProjectStore;
+              store.aliasSameEntryOnSaveAs = true;
+              store.text += " OUTSIDE EDIT";
+            }""")
+            changed_disk = page.evaluate("window.__yadilabProjectStore.text")
+            writes_before_alias = page.evaluate("window.__yadilabProjectStore.writes")
+            page.locator('[data-project-action="save-as"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_alias,
+                    "Save As through alias handle overwrote an externally modified file")
+            require(page.evaluate("window.__yadilabProjectStore.text") == changed_disk,
+                    "Save As alias changed disk bytes despite conflict")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            page.evaluate("""(saved) => {
+              window.__yadilabProjectStore.text = saved;
+              window.__yadilabProjectStore.aliasSameEntryOnSaveAs = false;
+            }""", saved_after_ctrl)
             writes = page.evaluate("window.__yadilabProjectStore.writes")
+            page.once("dialog", lambda dialog: dialog.accept())
             page.locator('[data-project-action="new"]').click()
             expect(page.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", "new_project")
@@ -309,6 +335,7 @@ def main():
                 "pickerCancelNoWrite": True, "fallbackDownloadUnverified": True,
                 "runtimeBuilderUnsavedRetained": True,
                 "nativeOpenCancelledNoMutation": True,
+                "saveAsAliasExternalConflictDenied": True,
                 "unrelatedBuilderDetachesFile": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
