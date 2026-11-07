@@ -3,7 +3,7 @@ import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
   assertProjectOpenDiskUnchanged, sameProjectFileEntry, assertSafeRecoveryTarget,
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
-  sameEditableProjectRevision,
+  projectNeedsUnloadWarning, sameEditableProjectRevision,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -112,7 +112,10 @@ export function ProjectFileControls({
 
   useEffect(() => {
     const onBeforeUnload = (event) => {
-      if (changedRef.current) { event.preventDefault(); event.returnValue = ""; }
+      if (projectNeedsUnloadWarning(changedRef.current, busyRef.current)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);

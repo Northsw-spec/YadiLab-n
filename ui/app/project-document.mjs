@@ -247,6 +247,15 @@ export function projectHasUnsavedChanges(currentSnapshot, savedSnapshot, unpersi
   return Boolean(unpersisted) || currentSnapshot !== savedSnapshot;
 }
 
+// A clean Builder file can still be in the middle of an explicit disk write,
+// native chooser, or verified Open. Closing during any operation risks an
+// interrupted write or an uncompleted user-requested file transition.
+// Request a browser beforeunload warning until the operation settles; the
+// browser, not the app, ultimately decides whether to display that prompt.
+export function projectNeedsUnloadWarning(hasUnsavedChanges, fileOperationActive) {
+  return Boolean(hasUnsavedChanges || fileOperationActive);
+}
+
 // A source swap is an edit of the associated project only if the canonical
 // scenario identity is unchanged. A newly imported/drafted Builder may carry
 // a larger revision and dirty=true; those fields alone cannot authorize
