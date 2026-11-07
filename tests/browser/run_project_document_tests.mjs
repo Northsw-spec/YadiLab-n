@@ -6,7 +6,7 @@ import example from "../../ui/app/welcome-scenario.json" with { type: "json" };
 import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
-  projectFilename, projectSnapshot, projectHasUnsavedChanges,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges, sameProjectFileEntry,
 } from "../../ui/app/project-document.mjs";
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
 const validateSource = new Ajv2020({ strict: true }).compile(schema);
@@ -89,6 +89,27 @@ await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:fromDisk.f
 assert.equal(stored,firstWrite+"\\n","Refused overwrite must leave external modification intact");
 stored=firstWrite;
 assert.equal(await writeProjectFile(handle,text,{expectedFileSha256:fromDisk.fileSha256}),true);
+const samePhysicalFile = { ...handle };
+handle.isSameEntry = async other => other === handle || other === samePhysicalFile;
+samePhysicalFile.isSameEntry = async other => other === handle || other === samePhysicalFile;
+assert.equal(await sameProjectFileEntry(handle,handle),true);
+assert.equal(await sameProjectFileEntry(handle,samePhysicalFile),true,
+  "Two different JS handles to the same physical file must be recognized");
+assert.equal(await sameProjectFileEntry(null,samePhysicalFile),false);
+const differentFile = { ...handle, isSameEntry:async()=>false };
+assert.equal(await sameProjectFileEntry(handle,differentFile),false);
+await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:null}),
+  /PROJECT_FILE_IDENTITY_UNAVAILABLE/,
+  "Lack of identity comparison must block potentially destructive Save As");
+await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:async()=>"true"}),
+  /PROJECT_FILE_IDENTITY_INVALID/);
+stored += "EXTERNAL-EDIT";
+const conflictContent = stored;
+await assert.rejects(writeProjectFile(samePhysicalFile,text,
+    {expectedFileSha256:fromDisk.fileSha256}),/PROJECT_EXTERNAL_FILE_CHANGED/);
+assert.equal(stored,conflictContent,
+  "Second JS handle must not overwrite externally modified physical file");
+stored=firstWrite;
 await assert.rejects(writeProjectFile({ ...handle, async getFile() {
   return file("network.yadilab",stored+"CORRUPT");
 }}, text),/PROJECT_READBACK_MISMATCH/);
