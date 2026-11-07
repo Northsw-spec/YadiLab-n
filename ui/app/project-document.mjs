@@ -134,11 +134,31 @@ export async function readProjectFile(file, options = {}) {
   let text;
   try { text = decoder.decode(raw); }
   catch { blocked("UTF8_INVALID"); }
-  return readProjectDocument(text, options);
+  const checked = await readProjectDocument(text, options);
+  return { ...checked, fileSha256: await sha256(text) };
 }
-export async function writeProjectFile(handle, text) {
+export async function digestProjectText(text) {
+  if (typeof text !== "string") blocked("FILE_INVALID");
+  return sha256(text);
+}
+export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");
+  // Optimistic conflict check: refuse an overwrite when the file no longer
+  // contains the bytes that were opened or last successfully saved.
+  if (expectedFileSha256 !== undefined) {
+    if (typeof expectedFileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedFileSha256))
+      blocked("EXPECTED_DIGEST_INVALID");
+    const before = await handle.getFile();
+    if (!before || typeof before.arrayBuffer !== "function") blocked("CONFLICT_READ_UNAVAILABLE");
+    const buffer = await before.arrayBuffer();
+    if (!(buffer instanceof ArrayBuffer) || buffer.byteLength > PROJECT_MAX_BYTES)
+      blocked("EXTERNAL_FILE_CHANGED");
+    let earlier;
+    try { earlier = decoder.decode(buffer); }
+    catch { blocked("EXTERNAL_FILE_CHANGED"); }
+    if (await sha256(earlier) !== expectedFileSha256) blocked("EXTERNAL_FILE_CHANGED");
+  }
   let writable;
   try {
     writable = await handle.createWritable({ keepExistingData: false });
@@ -156,6 +176,9 @@ export async function writeProjectFile(handle, text) {
   const bytes = await actual.arrayBuffer();
   if (!(bytes instanceof ArrayBuffer) || bytes.byteLength > PROJECT_MAX_BYTES)
     blocked("READBACK_INVALID");
-  if (decoder.decode(bytes) !== text) blocked("READBACK_MISMATCH");
+  let confirmed;
+  try { confirmed = decoder.decode(bytes); }
+  catch { blocked("READBACK_INVALID"); }
+  if (confirmed !== text) blocked("READBACK_MISMATCH");
   return true;
 }

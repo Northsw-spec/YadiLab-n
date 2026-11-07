@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  createProjectDocument, readProjectFile, writeProjectFile,
+  createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
   projectFilename, projectSnapshot,
 } from "./project-document.mjs";
 
@@ -31,15 +31,22 @@ export function ProjectFileControls({
   const inputRef = useRef(null);
   const busyRef = useRef(false);
   const handleRef = useRef(null);
+  const fileFingerprintRef = useRef(null);
   const baselineRef = useRef(projectSnapshot(workspace));
+  const lastBuilderSnapshotRef = useRef(projectSnapshot(workspace));
   const fileEpochRef = useRef(0);
   const nameRef = useRef(projectFilename(workspace.mode === "builder" ? workspace.source.scenarioId : "Untitled"));
   const [name, setName] = useState(nameRef.current);
   const [message, setMessage] = useState("No project file attached");
   const [revision, setRevision] = useState(0);
-  const currentSnapshot = projectSnapshot(workspace);
-  const changed = workspace.mode === "builder" &&
-    currentSnapshot !== baselineRef.current;
+  // A 10k-resource project is serialized only when editable source/layout
+  // references actually change, not on every React render or Engine frame.
+  const currentSnapshot = useMemo(() => projectSnapshot(workspace),
+    [workspace.mode, workspace.mode === "builder" ? workspace.source : null,
+      workspace.mode === "builder" ? workspace.layoutOverrides : null]);
+  if (workspace.mode === "builder") lastBuilderSnapshotRef.current = currentSnapshot;
+  // Runtime preview is not a project save: pending Builder edits stay pending.
+  const changed = lastBuilderSnapshotRef.current !== baselineRef.current;
   const changedRef = useRef(changed);
   changedRef.current = changed;
   const nameState = (value) => { nameRef.current = value; setName(value); };
@@ -85,17 +92,19 @@ export function ProjectFileControls({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
-  const resetAssociation = (next, filename, handle) => {
+  const resetAssociation = (next, filename, handle, fileFingerprint = null) => {
     fileEpochRef.current++;
     baselineRef.current = projectSnapshot(next);
+    lastBuilderSnapshotRef.current = baselineRef.current;
     handleRef.current = handle;
+    fileFingerprintRef.current = fileFingerprint;
     nameState(filename);
     setRevision(n => n + 1);
   };
 
-  const openFromFile = async (file, handle = null) => {
+  const openFromFile = async (file, handle = null, confirmed = false) => {
     if (!file || busyRef.current) return;
-    if (!canDiscard()) return;
+    if (!confirmed && !canDiscard()) return;
     const origin = getWorkspace();
     const epoch = fileEpochRef.current;
     busyRef.current = true;
@@ -111,7 +120,7 @@ export function ProjectFileControls({
       };
       // The source is verified; compilation is deliberately NOT restored.
       onReplace(next);
-      resetAssociation(next, projectFilename(file.name), handle);
+      resetAssociation(next, projectFilename(file.name), handle, content.fileSha256);
       setMessage("Opened editable source; recompile to verify Engine truth.");
       setDiagnostics([diag("PROJECT_SOURCE_OPENED", "Project reopened as editable source. Archived runtime and Engine PASS were not restored.", "warning")]);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
@@ -119,11 +128,12 @@ export function ProjectFileControls({
   };
 
   const openNative = async () => {
-    if (busy || busyRef.current || !canDiscard()) return;
+    if (busy || busyRef.current) return;
     if (typeof window.showOpenFilePicker !== "function") {
       inputRef.current?.click();
       return;
     }
+    if (!canDiscard()) return;
     const origin = getWorkspace();
     try {
       const handles = await window.showOpenFilePicker({
@@ -134,7 +144,7 @@ export function ProjectFileControls({
       const file = await handle.getFile();
       if (getWorkspace() !== origin)
         throw new Error("PROJECT_WORKSPACE_CHANGED_DURING_PICKER");
-      await openFromFile(file, handle);
+      await openFromFile(file, handle, true);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
   };
 
@@ -180,11 +190,27 @@ export function ProjectFileControls({
         setDiagnostics([diag("PROJECT_DOWNLOAD_UNVERIFIED", "Save As downloaded a file, but browser restrictions prevent verifying its durable bytes.", "warning")]);
         return;
       }
-      await writeProjectFile(handle, data);
+      // Never overwrite a file changed by another tab or external editor.
+      const writingKnownFile = handleRef.current === handle;
+      if (writingKnownFile && !fileFingerprintRef.current)
+        throw new Error("PROJECT_EXPECTED_DIGEST_MISSING");
+      try {
+        await writeProjectFile(handle, data, {
+          ...(writingKnownFile ? { expectedFileSha256: fileFingerprintRef.current } : {}),
+        });
+      } catch (error) {
+        // After a failed native write/readback, the disk state is uncertain.
+        // Detach the handle; a subsequent Save must use an explicit picker.
+        handleRef.current = null;
+        fileFingerprintRef.current = null;
+        throw error;
+      }
       // Association still follows the written file even if edits occurred during I/O.
       handleRef.current = handle;
+      fileFingerprintRef.current = await digestProjectText(data);
       nameState(projectFilename(handle.name || filename));
       baselineRef.current = original;
+      lastBuilderSnapshotRef.current = projectSnapshot(getWorkspace());
       setRevision(n => n + 1);
       if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch) {
         setMessage("File saved, but the workspace changed during writing: newer edits remain unsaved.");

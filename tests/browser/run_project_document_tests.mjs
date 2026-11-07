@@ -63,7 +63,21 @@ const handle={
 };
 assert.equal(await writeProjectFile(handle,text),true);
 assert.equal(stored,text);
-assert.deepEqual(await readProjectFile(await handle.getFile(),opts),restored);
+const fromDisk = await readProjectFile(await handle.getFile(),opts);
+assert.deepEqual(fromDisk.source,restored.source);
+assert.deepEqual(fromDisk.layoutOverrides,restored.layoutOverrides);
+assert.match(fromDisk.fileSha256,/^[0-9a-f]{64}$/);
+const firstWrite = stored;
+await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:"bad"}),/PROJECT_EXPECTED_DIGEST_INVALID/);
+await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:(fromDisk.fileSha256[0] === "0" ? "1" : "0")+fromDisk.fileSha256.slice(1)}),
+  /PROJECT_EXTERNAL_FILE_CHANGED/);
+assert.equal(stored,firstWrite,"External modification conflict must never overwrite bytes");
+stored += "\\n"; // Existing document's exact bytes changed externally.
+await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:fromDisk.fileSha256}),
+  /PROJECT_EXTERNAL_FILE_CHANGED/);
+assert.equal(stored,firstWrite+"\\n","Refused overwrite must leave external modification intact");
+stored=firstWrite;
+assert.equal(await writeProjectFile(handle,text,{expectedFileSha256:fromDisk.fileSha256}),true);
 await assert.rejects(writeProjectFile({ ...handle, async getFile() {
   return file("network.yadilab",stored+"CORRUPT");
 }}, text),/PROJECT_READBACK_MISMATCH/);
