@@ -259,6 +259,31 @@ def main():
             require(page.locator(".app-frame").get_attribute("data-runtime-scenario-id")
                     == "foundation_acceptance",
                     "Corrupt file mutated active Builder workspace")
+            # A file whose SHA-256 was legitimately recomputed can still
+            # contain a structurally invalid zone hierarchy. Reject it before
+            # mutating Builder, not merely on checksum mismatch.
+            page.evaluate("""async (saved) => {
+                const forged = JSON.parse(saved);
+                const zone = forged.content.source.zones[0];
+                zone.parent = zone.id;
+                const raw = new TextEncoder().encode(JSON.stringify(forged.content));
+                const hash = await crypto.subtle.digest("SHA-256", raw);
+                forged.contentSha256 = [...new Uint8Array(hash)]
+                    .map(n => n.toString(16).padStart(2, "0")).join("");
+                window.__yadilabProjectStore.text = JSON.stringify(forged);
+            }""", saved_after_ctrl)
+            writes_before_cycle = page.evaluate("window.__yadilabProjectStore.writes")
+            page.locator('[data-project-action="open"]').click()
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_ZONE_PARENT_CYCLE", timeout=20000)
+            require(page.locator(".app-frame").get_attribute("data-runtime-scenario-id")
+                    == "foundation_acceptance",
+                    "Cyclic zone file changed active Builder workspace")
+            require(page.evaluate("window.__yadilabProjectStore.writes") == writes_before_cycle,
+                    "Rejected cyclic project unexpectedly wrote to disk")
+            expect(controls).to_have_attribute("data-project-dirty", "false")
+            page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
+                          saved_after_ctrl)
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)
