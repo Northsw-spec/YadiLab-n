@@ -1122,6 +1122,53 @@ def main():
             require("PROJECT-001 unsaved after external file change" in
                     page.locator(".mission-strip").inner_text(),
                     "Runtime→Builder lost the user's unsaved editable source")
+            # PROJECT-021: Runtime Preview from a verified, unchanged
+            # compiled Builder must invalidate an older in-flight compile.
+            # Launch recompile and preview in the SAME browser event task,
+            # before React can commit the recompilation's busy state.
+            # Otherwise its later async completion may return to Builder and
+            # silently displace the explicitly requested Runtime session.
+            race_before_writes = page.evaluate(
+                "window.__yadilabProjectStore.writes")
+            preview_race = page.evaluate("""() => {
+                const menus = [...document.querySelectorAll('.workspace-menu')];
+                const menu = name => menus.find(item =>
+                    item.querySelector('summary')?.textContent.trim() === name);
+                const builder = menu('Builder');
+                const run = menu('Run & Preview');
+                const recompile = [...(builder?.querySelectorAll('button') || [])]
+                    .find(button => button.textContent.trim() === 'Kompilera + layout');
+                const preview = [...(run?.querySelectorAll('button') || [])]
+                    .find(button => button.textContent.trim() === 'Förhandsvisa körläge');
+                if (!recompile || !preview || recompile.disabled || preview.disabled)
+                    throw new Error('PROJECT-021 needs compiled Builder with idle compile and Preview');
+                recompile.click();
+                preview.click();
+                return { recompileTriggered: true, previewTriggered: true };
+            }""")
+            require(preview_race == {
+                "recompileTriggered": True, "previewTriggered": True,
+            }, "PROJECT-021 did not exercise synchronous recompile/Preview")
+            expect(page.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=20000)
+            # An old compile has sufficient time to complete on the runner;
+            # this separately detects late Builder resurrection.
+            page.wait_for_timeout(1200)
+            expect(page.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-hash", "builder")
+            require(page.evaluate(
+                "window.__yadilabProjectStore.writes") == race_before_writes,
+                "Preview/recompile race unexpectedly wrote a .yadilab project")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            if run_menu.get_attribute("open") is None:
+                run_menu.locator("summary").click()
+            run_menu.get_by_role("button", name="Tillbaka till byggläget").click()
+            expect(page.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=15000)
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            require("PROJECT-001 unsaved after external file change" in
+                    page.locator(".mission-strip").inner_text(),
+                    "PROJECT-021 lost editable source after preview/compile transition")
             # Cancelled native Open must not discard an unsaved project.
             page.evaluate("window.__yadilabProjectStore.cancelOpen = true")
             def accept(dialog):
