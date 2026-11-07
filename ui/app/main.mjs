@@ -5120,7 +5120,9 @@ function App() {
       e(ProjectFileControls, {
         workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
         setWorkspace, onReplace: replaceProjectDocument,
-        validateSource: source => validateContract("source", source),
+        // Manual project documents may contain an intentionally empty New
+        // draft. Compilation still uses the stricter runnable "source" schema.
+        validateSource: source => validateContract("editableSource", source),
         setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
         getScenarioTransitionId: () => scenarioTransitionRef.current,
       }),
