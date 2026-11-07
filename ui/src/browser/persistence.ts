@@ -64,11 +64,37 @@ export class IndexedDbProgressStore implements ProgressStore {
     const db = await this.open();
     try {
       return await new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(this.storeName, mode);
-        const store = tx.objectStore(this.storeName);
-        run(store, resolve, reject);
+        // An individual IDBRequest can succeed and the surrounding transaction
+        // can STILL abort. Never report a durable put/delete or successful read
+        // until the transaction's oncomplete event has fired.
+        let tx: IDBTransaction;
+        try {
+          tx = db.transaction(this.storeName, mode);
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        let receivedResult = false;
+        let result!: T;
+        tx.oncomplete = () => {
+          if (!receivedResult) {
+            reject(new Error("IndexedDB transaction completed without a request result."));
+            return;
+          }
+          resolve(result);
+        };
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed."));
         tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted."));
+        const stageResult = (value: T) => {
+          result = value;
+          receivedResult = true;
+        };
+        try {
+          run(tx.objectStore(this.storeName), stageResult, reject);
+        } catch (error) {
+          try { tx.abort(); } catch { /* Transaction may already be inactive. */ }
+          reject(error);
+        }
       });
     } finally {
       db.close();
