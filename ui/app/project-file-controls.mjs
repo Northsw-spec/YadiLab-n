@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
-  sameProjectFileEntry, projectFilename, projectSnapshot, projectHasUnsavedChanges,
+  sameProjectFileEntry, assertSafeRecoveryTarget,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -31,6 +32,9 @@ export function ProjectFileControls({
   const inputRef = useRef(null);
   const busyRef = useRef(false);
   const handleRef = useRef(null);
+  // Keep failed target identities even after a successful Save As to a
+  // different file. Reopening a file is the explicit recovery boundary.
+  const quarantinedHandlesRef = useRef([]);
   const fileFingerprintRef = useRef(null);
   const unpersistedRef = useRef(false); // welcome sample is not an unsaved user-created project
   const baselineRef = useRef(projectSnapshot(workspace));
@@ -91,6 +95,7 @@ export function ProjectFileControls({
       // current editable project. Do not retain its file handle or dirty flag.
       fileEpochRef.current++;
       handleRef.current = null;
+      quarantinedHandlesRef.current = [];
       fileFingerprintRef.current = null;
       unpersistedRef.current = false;
       baselineRef.current = null;
@@ -118,6 +123,7 @@ export function ProjectFileControls({
     baselineRef.current = projectSnapshot(next);
     lastBuilderSnapshotRef.current = baselineRef.current;
     handleRef.current = handle;
+    quarantinedHandlesRef.current = [];
     fileFingerprintRef.current = fileFingerprint;
     nameState(filename);
     setRevision(n => n + 1);
@@ -211,6 +217,9 @@ export function ProjectFileControls({
         setDiagnostics([diag("PROJECT_DOWNLOAD_UNVERIFIED", "Save As downloaded a file, but browser restrictions prevent verifying its durable bytes.", "warning")]);
         return;
       }
+      // A failed write leaves its target quarantined. Re-selecting that same
+      // physical file through Save As must NOT bypass the conflict warning.
+      await assertSafeRecoveryTarget(quarantinedHandlesRef.current, handle);
       // Never overwrite a file changed by another tab or external editor.
       const writingKnownFile = await sameProjectFileEntry(handleRef.current, handle);
       if (writingKnownFile && !fileFingerprintRef.current)
@@ -220,12 +229,16 @@ export function ProjectFileControls({
           ...(writingKnownFile ? { expectedFileSha256: fileFingerprintRef.current } : {}),
         });
       } catch (error) {
-        // After a failed native write/readback, the disk state is uncertain.
-        // Detach the handle; a subsequent Save must use an explicit picker.
-        handleRef.current = null;
-        fileFingerprintRef.current = null;
-        unpersistedRef.current = true;
-        setRevision(n => n + 1);
+        // A failed native write may have modified the file. Quarantine this
+        // physical target even if it is selected again via a new JS handle.
+        // Never corrupt another project's association after async I/O.
+        if (fileEpochRef.current === epoch) {
+          quarantinedHandlesRef.current = [...quarantinedHandlesRef.current, handle];
+          handleRef.current = null;
+          fileFingerprintRef.current = null;
+          unpersistedRef.current = true;
+          setRevision(n => n + 1);
+        }
         throw error;
       }
       // A different project may have been activated during asynchronous I/O.

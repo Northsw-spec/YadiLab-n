@@ -7,6 +7,7 @@ import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
   projectFilename, projectSnapshot, projectHasUnsavedChanges, sameProjectFileEntry,
+  assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
 const validateSource = new Ajv2020({ strict: true }).compile(schema);
@@ -98,6 +99,19 @@ assert.equal(await sameProjectFileEntry(handle,samePhysicalFile),true,
 assert.equal(await sameProjectFileEntry(null,samePhysicalFile),false);
 const differentFile = { ...handle, isSameEntry:async()=>false };
 assert.equal(await sameProjectFileEntry(handle,differentFile),false);
+// The file stays unsafe even after its previous object handle was detached,
+// and even if Save As returns an alias for the very same physical path.
+await assert.rejects(assertSafeRecoveryTarget([handle],handle),
+  /PROJECT_FILE_REQUIRES_REOPEN/);
+await assert.rejects(assertSafeRecoveryTarget([handle],samePhysicalFile),
+  /PROJECT_FILE_REQUIRES_REOPEN/);
+await assert.doesNotReject(assertSafeRecoveryTarget([handle],differentFile));
+await assert.rejects(assertSafeRecoveryTarget([handle,differentFile],samePhysicalFile),
+  /PROJECT_FILE_REQUIRES_REOPEN/,
+  "Saving to a different file must not forget previously failed targets");
+await assert.rejects(assertSafeRecoveryTarget(Array(33).fill(handle),differentFile),
+  /PROJECT_QUARANTINE_LIMIT_REOPEN/,
+  "Too many unverified file handles must fail closed");
 await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:null}),
   /PROJECT_FILE_IDENTITY_UNAVAILABLE/,
   "Lack of identity comparison must block potentially destructive Save As");
