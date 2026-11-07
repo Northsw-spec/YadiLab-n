@@ -142,6 +142,87 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-018: browsers without File System Access still need a
+            # discard guard and a pinned origin while a normal file-input
+            # chooser is open. Test the real Chromium file chooser (not a
+            # simulated file-input onChange event) against the compiled app.
+            fallback_open = context.new_page()
+            fallback_open.add_init_script(MOCK)
+            fallback_open.on("pageerror", lambda error: errors.append(str(error)))
+            fallback_open.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            foc = fallback_open.locator('[data-project-file-controls="ready"]')
+            expect(foc).to_be_visible(timeout=45000)
+            require(fallback_open.evaluate("""() => {
+                delete window.showOpenFilePicker;
+                return typeof window.showOpenFilePicker !== 'function' &&
+                    'oncancel' in document.querySelector('[data-project-input]');
+            }"""), "PROJECT-018 requires input cancel support in pinned Chromium")
+            fallback_open.locator('[data-project-action="save-as"]').click()
+            expect(fallback_open.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            fallback_bytes = fallback_open.evaluate(
+                "window.__yadilabProjectStore.text")
+            fallback_writes = fallback_open.evaluate(
+                "window.__yadilabProjectStore.writes")
+            chooser_events = []
+            fallback_open.on("filechooser", lambda chooser: chooser_events.append(chooser))
+            with fallback_open.expect_file_chooser() as fc_info:
+                fallback_open.locator('[data-project-action="open"]').click()
+            chooser = fc_info.value
+            fallback_open.evaluate("""() => {
+                document.querySelector('[data-project-action="new"]').click();
+                document.querySelector('[data-project-action="save-as"]').click();
+                document.querySelector('[data-project-action="open"]').click();
+            }""")
+            require(fallback_open.locator(".app-frame").get_attribute(
+                "data-runtime-scenario-id") == "foundation_acceptance",
+                "New replaced Builder while fallback Open chooser was pending")
+            require(len(chooser_events) == 1,
+                    "A competing action launched a second fallback chooser")
+            require(fallback_open.evaluate(
+                "window.__yadilabProjectStore.writes") == fallback_writes,
+                "Fallback Open chooser allowed an implicit or competing Save")
+            chooser.set_files({
+                "name": "fallback-selected.yadilab",
+                "mimeType": "application/json",
+                "buffer": fallback_bytes.encode("utf-8"),
+            })
+            expect(fallback_open.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(foc).to_have_attribute(
+                "data-project-filename", "fallback-selected.yadilab")
+            expect(foc).to_have_attribute("data-project-dirty", "false")
+            require(fallback_open.evaluate(
+                "window.__yadilabProjectStore.writes") == fallback_writes,
+                "Fallback Open wrote to a project file")
+            # Cancel must release the pending chooser's exclusive lock.
+            with fallback_open.expect_file_chooser() as cancel_info:
+                fallback_open.locator('[data-project-action="open"]').click()
+            cancel_info.value
+            fallback_open.evaluate("""() => document.querySelector(
+                '[data-project-input]').dispatchEvent(
+                  new Event('cancel', { bubbles: true }))""")
+            fallback_open.locator('[data-project-action="new"]').click()
+            expect(fallback_open.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(foc).to_have_attribute("data-project-dirty", "true")
+            chooser_count = len(chooser_events)
+            declined = []
+            def reject_fallback(dialog):
+                declined.append(dialog.type)
+                dialog.dismiss()
+            fallback_open.once("dialog", reject_fallback)
+            fallback_open.locator('[data-project-action="open"]').click()
+            require(declined == ["confirm"],
+                    "Fallback Open showed picker before unsaved-change guard")
+            require(len(chooser_events) == chooser_count,
+                    "Declined fallback Open still launched a file chooser")
+            expect(fallback_open.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            require(fallback_open.evaluate(
+                "window.__yadilabProjectStore.writes") == fallback_writes,
+                "Fallback cancel or declined discard performed implicit disk writes")
+            fallback_open.close()
             # PROJECT-016: beforeunload must request a browser warning when
             # the source is clean but an explicit native Save remains in flight.
             # This test uses a controlled pending writable open, not a timer.
