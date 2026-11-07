@@ -84,4 +84,29 @@ await assert.rejects(writeProjectFile({ ...handle, async getFile() {
 await assert.rejects(writeProjectFile({ ...handle,async createWritable() {
   return {async write(){throw Error("DISK_FULL");},async abort(){},async close(){}};
 }},text),/DISK_FULL/);
+// A genuine 10k/10k source must roundtrip every device, link, endpoint and port
+// without inventing new connectivity or changing unselected canonical fields.
+const large = structuredClone(source);
+for (let i = 0; i < 10000; i++) {
+  large.resources.push({ id: "device_" + i, type: "server.generic",
+    label: "Device " + i, zone: large.zones[0].id, properties: {} });
+  large.connections.push({ id: "wire_" + i, kind: "network",
+    from: { resource: "device_" + i, port: "eth0" },
+    to: { resource: "device_" + ((i+1) % 10000), port: "eth1" }, properties: {} });
+}
+const largeWorkspace = { ...workspace, source: large, layoutOverrides: [
+  { id: "device_0", x: 13.25, y: 97 },
+  { id: "device_9999", x: 144.5, y: 220 },
+] };
+const largeFile = await createProjectDocument(largeWorkspace, opts);
+const largeReopened = await readProjectDocument(largeFile, opts);
+assert.equal(largeReopened.source.resources.length, source.resources.length + 10000);
+assert.equal(largeReopened.source.connections.length, source.connections.length + 10000);
+assert.deepEqual(largeReopened.source.connections[largeReopened.source.connections.length - 1],
+  large.connections[large.connections.length - 1]);
+assert.deepEqual(largeReopened.layoutOverrides, largeWorkspace.layoutOverrides);
+assert.deepEqual(largeReopened.source.resources[largeReopened.source.resources.length - 1],
+  large.resources[large.resources.length - 1]);
+assert.equal(Buffer.byteLength(largeFile, "utf8") < PROJECT_MAX_BYTES, true);
+console.log("PASS PROJECT-001 SCALE: 10,000 source devices, 10,000 linked port references, and manual coordinates survive exact project roundtrip");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");

@@ -17,10 +17,12 @@ def require(condition, message):
 
 MOCK = r"""
 (() => {
-  const store = { text: "", writes: 0, fail: false, reads: 0 };
+  const store = { text: "", writes: 0, fail: false, reads: 0,
+    permissionDenied: false, cancelSave: false, cancelOpen: false };
   const handle = {
     name: "verified-network.yadilab",
     async createWritable() {
+      if (store.permissionDenied) throw new DOMException("Permission denied", "NotAllowedError");
       let pending = "";
       return {
         async write(blob) {
@@ -37,10 +39,16 @@ MOCK = r"""
     },
   };
   Object.defineProperty(window, "showSaveFilePicker", {
-    configurable: true, value: async () => handle,
+    configurable: true, value: async () => {
+      if (store.cancelSave) throw new DOMException("Save cancelled", "AbortError");
+      return handle;
+    },
   });
   Object.defineProperty(window, "showOpenFilePicker", {
-    configurable: true, value: async () => [handle],
+    configurable: true, value: async () => {
+      if (store.cancelOpen) throw new DOMException("Open cancelled", "AbortError");
+      return [handle];
+    },
   });
   window.__yadilabProjectStore = store;
 })();
@@ -63,7 +71,7 @@ def main():
             flags.append("--no-sandbox")
         browser = playwright.chromium.launch(headless=True, args=flags)
         try:
-            context = browser.new_context(service_workers="block")
+            context = browser.new_context(service_workers="block", accept_downloads=True)
             page = context.new_page()
             page.add_init_script(MOCK)
             page.on("pageerror", lambda error: errors.append(str(error)))
@@ -121,6 +129,7 @@ def main():
             require("PROJECT-001 edited in Chromium" in
                     page.evaluate("window.__yadilabProjectStore.text"),
                     "Ctrl+S lost edited Builder metadata")
+            saved_after_ctrl = page.evaluate("window.__yadilabProjectStore.text")
             writes = page.evaluate("window.__yadilabProjectStore.writes")
             page.locator('[data-project-action="new"]').click()
             expect(page.locator(".app-frame")).to_have_attribute(
@@ -148,6 +157,90 @@ def main():
             require(page.locator(".app-frame").get_attribute("data-runtime-scenario-id")
                     == "foundation_acceptance",
                     "Corrupt file mutated active Builder workspace")
+            # An external file modification must never be overwritten by Ctrl+S.
+            page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
+                          saved_after_ctrl)
+            inspector = page.locator('[data-builder-inspector="mission"]')
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-001 unsaved after external file change")
+            inspector.get_by_role("button", name="Verkställ inspektörsändringar").click()
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            page.evaluate("window.__yadilabProjectStore.text += ' '")
+            expected_external = page.evaluate("window.__yadilabProjectStore.text")
+            writes_before_conflict = page.evaluate("window.__yadilabProjectStore.writes")
+            page.keyboard.press("Control+s")
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_conflict,
+                    "External edit was overwritten despite optimistic conflict check")
+            require(page.evaluate("window.__yadilabProjectStore.text")
+                    == expected_external, "File bytes were altered on conflict")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            # Native permission denial and picker cancellation remain fail-closed.
+            page.evaluate("window.__yadilabProjectStore.permissionDenied = true")
+            page.locator('[data-project-action="save-as"]').click()
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "Permission denied", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_conflict,
+                    "Permission denial unexpectedly modified existing file")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            page.evaluate("""() => {
+                window.__yadilabProjectStore.permissionDenied = false;
+                window.__yadilabProjectStore.cancelSave = true;
+            }""")
+            page.locator('[data-project-action="save-as"]').click()
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "Cancelled", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_conflict,
+                    "Save-picker cancellation wrote to disk")
+            # A non-native browser may download, but must not claim durable success.
+            page.evaluate("""() => {
+                window.__yadilabProjectStore.cancelSave = false;
+                Object.defineProperty(window, "showSaveFilePicker",
+                    {configurable:true, value:undefined});
+            }""")
+            with page.expect_download(timeout=15000) as pending_download:
+                page.locator('[data-project-action="save-as"]').click()
+            require(pending_download.value.suggested_filename.endswith(".yadilab"),
+                    "Fallback download did not use the actual project extension")
+            expect(page.locator("[data-project-message]")).to_contain_text(
+                "Download initiated", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes")
+                    == writes_before_conflict,
+                    "Fallback download wrote through a native file handle")
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            # Runtime preview must preserve the unsaved state, and returning to
+            # Builder must restore the actual source, not reconstruct defaults.
+            scenario_section = page.locator("details.control-section").filter(
+                has_text="Scenario & Builder")
+            expect(scenario_section).to_have_count(1)
+            if scenario_section.get_attribute("open") is None:
+                scenario_section.locator("summary").first.click()
+            compile_button = page.locator('[data-studio-action="validate-compile"]')
+            expect(compile_button).to_be_visible(timeout=15000)
+            compile_button.click()
+            expect(compile_button).to_be_disabled(timeout=30000)
+            run_menu = page.locator(".workspace-menu", has=page.locator(
+                "summary", has_text="Run & Preview"))
+            expect(run_menu).to_have_count(1)
+            if run_menu.get_attribute("open") is None:
+                run_menu.locator("summary").click()
+            run_menu.get_by_role("button", name="Förhandsvisa körläge").click()
+            expect(page.locator(".app-frame")).not_to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=30000)
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            if run_menu.get_attribute("open") is None:
+                run_menu.locator("summary").click()
+            run_menu.get_by_role("button", name="Tillbaka till byggläget").click()
+            expect(page.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder", timeout=15000)
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            require("PROJECT-001 unsaved after external file change" in
+                    page.locator(".mission-strip").inner_text(),
+                    "Runtime→Builder lost the user's unsaved editable source")
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -155,12 +248,16 @@ def main():
                 "openRestoresEditableCanonicalSource": True,
                 "tamperedSourceRejectedWithoutMutation": True,
                 "unsavedNewCancellation": True, "ctrlSSaveReadback": True,
+                "externalModificationDenied": True, "permissionDenied": True,
+                "pickerCancelNoWrite": True, "fallbackDownloadUnverified": True,
+                "runtimeBuilderUnsavedRetained": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
                 json.dumps(report, indent=2) + "\n")
-            print("PASS PROJECT-001 compiled Chromium: Save As native write/readback,"
-                  " New no autosave, Open original topology, tamper denied")
+            print("PASS PROJECT-001 compiled Chromium: native Save/readback, dirty New, Ctrl+S,"
+                  " external conflict blocked, permission denial, cancel, fallback download,"
+                  " runtime→Builder unsaved restore, tampered file denied")
         finally:
             browser.close()
 if __name__ == "__main__":
