@@ -333,9 +333,13 @@ export async function readProjectDocument(text, { validateSource } = {}) {
       typeof document.contentSha256 !== "string" ||
       !/^[0-9a-f]{64}$/.test(document.contentSha256))
     blocked("FORMAT_UNSUPPORTED");
-  checkedPayload(document.content, validateSource);
+  // The file is untrusted until its content digest matches. Avoid running
+  // potentially expensive source/schema/reference validation on modified
+  // bytes; a matching digest is integrity only, not permission to skip
+  // canonical semantic checks.
   const digest = await sha256(JSON.stringify(document.content));
   if (digest !== document.contentSha256) blocked("CHECKSUM_MISMATCH");
+  checkedPayload(document.content, validateSource);
   // Never restore compile, Engine state, runtime evaluation or external file handles.
   return { source: document.content.source, layoutOverrides: document.content.layoutOverrides };
 }
