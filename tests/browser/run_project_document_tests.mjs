@@ -483,5 +483,124 @@ await assert.rejects(createProjectDocument(
   /PROJECT_SOURCE_SCHEMA_INVALID/,
   "Accepting valid hints must not weaken schema validation");
 console.log("PASS PROJECT-008: schema-valid hint arrays Save/Open without fake IDs; text/order/layout preserved and malformed hint rejected");
+// PROJECT-009: compiler-known test types require resolvable resource
+// selectors and valid basic parameters, and troubleshooting evidence must
+// refer to a real resource with unambiguous local requirement identities.
+// JSON schema permits these dangling semantics; Save/Open must fail closed.
+const badTestResource = structuredClone(source);
+badTestResource.tests.push({
+  id: "port_scan_missing_source", type: "network.port_scan",
+  params: { from: "missing_device", to: "rds01", port: 443 },
+});
+assert.equal(validateSource(badTestResource), true);
+await assert.rejects(createProjectDocument({ ...workspace, source: badTestResource }, opts),
+  /PROJECT_UNKNOWN_TEST_RESOURCE/, "Save must reject unknown test source resources");
+const badTestParam = structuredClone(source);
+badTestParam.tests.push({
+  id: "bad_port_scan", type: "network.port_scan",
+  params: { from: "attacker", to: "rds01", port: 0 },
+});
+assert.equal(validateSource(badTestParam), true);
+await assert.rejects(createProjectDocument({ ...workspace, source: badTestParam }, opts),
+  /PROJECT_TEST_PARAM_REQUIRED/, "Save must reject invalid required scan port");
+const badTestTarget = structuredClone(source);
+badTestTarget.tests.push({
+  id: "missing_audit_target", type: "identity.password_audit",
+  params: { target: "not_a_device" },
+});
+assert.equal(validateSource(badTestTarget), true);
+await assert.rejects(createProjectDocument({ ...workspace, source: badTestTarget }, opts),
+  /PROJECT_UNKNOWN_TEST_RESOURCE/, "Save must reject missing known test target");
+const badTestOption = structuredClone(source);
+badTestOption.tests.push({
+  id: "bad_optional_type", type: "logging.visibility_test",
+  params: { target: "rds01", equals: "true" },
+});
+assert.equal(validateSource(badTestOption), true);
+await assert.rejects(createProjectDocument({ ...workspace, source: badTestOption }, opts),
+  /PROJECT_TEST_PARAM_INVALID/, "Save must reject invalid known test option");
+
+const troubleshootingFixture = () => ({
+  id: "troubleshooting_network", title: "Review network signals",
+  required: true, evidenceOrder: "ordered",
+  requirements: [
+    { id: "route_observation", label: "Observe interface",
+      kind: "observation", targetId: "firewall01" },
+    { id: "reachability_probe", label: "Check reachability",
+      kind: "active_probe", sourceId: "attacker", destinationId: "rds01" },
+  ],
+});
+const invalidTroubleshooting = structuredClone(source);
+invalidTroubleshooting.troubleshootingObjectives = [troubleshootingFixture()];
+invalidTroubleshooting.troubleshootingObjectives[0].requirements[1].sourceId = "missing_device";
+assert.equal(validateSource(invalidTroubleshooting), true);
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: invalidTroubleshooting }, opts),
+  /PROJECT_UNKNOWN_TROUBLESHOOTING_RESOURCE/,
+  "Save must reject active probe against an absent source resource");
+const invalidObservation = structuredClone(source);
+invalidObservation.troubleshootingObjectives = [troubleshootingFixture()];
+invalidObservation.troubleshootingObjectives[0].requirements[0].targetId = "missing_device";
+assert.equal(validateSource(invalidObservation), true);
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: invalidObservation }, opts),
+  /PROJECT_UNKNOWN_TROUBLESHOOTING_RESOURCE/,
+  "Save must reject observation targeting absent resource");
+const duplicateRequirement = structuredClone(source);
+duplicateRequirement.troubleshootingObjectives = [troubleshootingFixture()];
+duplicateRequirement.troubleshootingObjectives[0].requirements[1].id = "route_observation";
+assert.equal(validateSource(duplicateRequirement), true);
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: duplicateRequirement }, opts),
+  /PROJECT_DUPLICATE_TROUBLESHOOTING_REQUIREMENT_ID/,
+  "Save must reject ambiguous requirement identity within one objective");
+const emptyRequirement = structuredClone(source);
+emptyRequirement.troubleshootingObjectives = [troubleshootingFixture()];
+emptyRequirement.troubleshootingObjectives[0].requirements[0] = {
+  id: "route_observation", label: "Missing selector", kind: "observation",
+};
+assert.equal(validateSource(emptyRequirement), true);
+await assert.rejects(createProjectDocument(
+  { ...workspace, source: emptyRequirement }, opts),
+  /PROJECT_TROUBLESHOOTING_REQUIREMENT_EMPTY/,
+  "Save must reject evidence requirements with no selectors");
+
+const validTestTroubleshooting = structuredClone(source);
+validTestTroubleshooting.tests.push(
+  { id: "valid_scan", type: "network.port_scan",
+    params: { from: "attacker", to: "rds01", ports: [80, 443], protocol: "tcp" } },
+  { id: "valid_audit", type: "identity.password_audit",
+    params: { target: "rds01", equals: false } },
+);
+validTestTroubleshooting.troubleshootingObjectives = [troubleshootingFixture()];
+assert.equal(validateSource(validTestTroubleshooting), true);
+const validTestFile = await createProjectDocument(
+  { ...workspace, source: validTestTroubleshooting }, opts);
+assert.deepEqual((await readProjectDocument(validTestFile, opts)).source,
+  validTestTroubleshooting, "Valid test selectors and evidence requirements must roundtrip exactly");
+
+for (const [caseName, corrupt, expected] of [
+  ["test reference", p => p.source.tests.push({
+    id: "forged_audit", type: "identity.password_audit",
+    params: { target: "missing_device" },
+  }), /PROJECT_UNKNOWN_TEST_RESOURCE/],
+  ["troubleshooting probe", p => {
+    p.source.troubleshootingObjectives = [troubleshootingFixture()];
+    p.source.troubleshootingObjectives[0].requirements[1].destinationId = "missing_device";
+  }, /PROJECT_UNKNOWN_TROUBLESHOOTING_RESOURCE/],
+  ["duplicate troubleshooting IDs", p => {
+    p.source.troubleshootingObjectives = [troubleshootingFixture()];
+    p.source.troubleshootingObjectives[0].requirements[1].id = "route_observation";
+  }, /PROJECT_DUPLICATE_TROUBLESHOOTING_REQUIREMENT_ID/],
+]) {
+  const forged = structuredClone(doc);
+  corrupt(forged.content);
+  forged.contentSha256 = Buffer.from(await webcrypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(JSON.stringify(forged.content))
+  )).toString("hex");
+  await assert.rejects(readProjectDocument(JSON.stringify(forged), opts),
+    expected, "Open must reject correctly hashed " + caseName);
+}
+console.log("PASS PROJECT-009: test params and troubleshooting evidence fail closed on Save/Open, valid selectors and source roundtrip");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");
