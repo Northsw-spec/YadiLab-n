@@ -90,6 +90,37 @@ def main():
                     "Native Save reported success without reading back saved file")
             require("engineState" not in stored and "compile" not in stored,
                     "Serialized project falsely includes runtime/Engine truth")
+            # Change the actual Builder mission title via its real inspector.
+            inspector_section = page.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            expect(inspector_section).to_have_count(1)
+            if inspector_section.get_attribute("open") is None:
+                inspector_section.locator("summary").first.click()
+            inspector = page.locator('[data-builder-inspector="mission"]')
+            expect(inspector).to_be_visible(timeout=15000)
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-001 edited in Chromium")
+            inspector.get_by_role("button", name="Verkställ inspektörsändringar").click()
+            expect(controls).to_have_attribute("data-project-dirty", "true")
+            # New must refuse to discard unsaved changes when the operator cancels.
+            denied = []
+            def decline(dialog):
+                denied.append(dialog.type)
+                dialog.dismiss()
+            page.once("dialog", decline)
+            page.locator('[data-project-action="new"]').click()
+            require(denied == ["confirm"], "New discarded unsaved changes without consent")
+            require(page.locator(".app-frame").get_attribute("data-runtime-scenario-id")
+                    == "foundation_acceptance", "Cancelled New lost current project")
+            # Ctrl+S must update the associated native file and verify its readback.
+            before_ctrl = page.evaluate("window.__yadilabProjectStore.writes")
+            page.keyboard.press("Control+s")
+            expect(controls).to_have_attribute("data-project-dirty", "false", timeout=15000)
+            require(page.evaluate("window.__yadilabProjectStore.writes") == before_ctrl + 1,
+                    "Ctrl+S failed to write the existing project file")
+            require("PROJECT-001 edited in Chromium" in
+                    page.evaluate("window.__yadilabProjectStore.text"),
+                    "Ctrl+S lost edited Builder metadata")
             writes = page.evaluate("window.__yadilabProjectStore.writes")
             page.locator('[data-project-action="new"]').click()
             expect(page.locator(".app-frame")).to_have_attribute(
@@ -101,6 +132,8 @@ def main():
                 "data-runtime-scenario-id", "foundation_acceptance")
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Opened editable source", timeout=20000)
+            require("PROJECT-001 edited in Chromium" in page.locator(".mission-strip").inner_text(),
+                    "Open lost the user's saved Builder edits")
             require(page.locator('[data-project-status="unchanged"]').count() == 1,
                     "Opened project unexpectedly dirty")
             # A tampered stored file is not allowed to mutate the current workspace.
@@ -121,6 +154,7 @@ def main():
                 "nativeHandleWriteAndReadback": True, "newNoAutosave": True,
                 "openRestoresEditableCanonicalSource": True,
                 "tamperedSourceRejectedWithoutMutation": True,
+                "unsavedNewCancellation": True, "ctrlSSaveReadback": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(

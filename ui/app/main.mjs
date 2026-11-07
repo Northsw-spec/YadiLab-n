@@ -5526,6 +5526,7 @@ function App() {
         const sourceModelHash=Array.from(new Uint8Array(sourceDigest),
           b=>b.toString(16).padStart(2,"0")).join("");
         current(); // no await between final live/consent gate and activation
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         setScaledTenThousandSessionActive(true);
         setScaledTenThousandFocus({
@@ -5654,6 +5655,7 @@ function App() {
            JSON.stringify(verified.origins)!==JSON.stringify(candidate.origins))
           blocked("SCALE_P3C2_SOURCE_CHANGED");
         current(); // Never await between last workspace check and replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         scaledOfficeFiveThousandFocusEpoch.current++;
         setImportedProbeAutoOpen(false);
@@ -5785,6 +5787,7 @@ function App() {
            JSON.stringify(verified.origins)!==JSON.stringify(candidate.origins))
           blocked("SCALE_P2B1_SOURCE_CHANGED");
         current(); // Never await between last workspace check and replacement.
+        if (!projectGuardRef.current()) return;
         beginScenarioTransition();
         scaledOfficeThousandFocusEpoch.current++;
         setImportedProbeAutoOpen(false);
