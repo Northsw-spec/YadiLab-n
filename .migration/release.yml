@@ -1,0 +1,43 @@
+name: YadiLab independent Linux release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-attested:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build independent attested Linux distribution
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npm run test:release-identity
+          go test ./launcher/...
+          npm run build:launcher
+          node scripts/verify_browser_release.mjs
+          node scripts/verify_release_identity.mjs
+          test -x distribution/linux-x86_64/app-launcher
+          ( cd distribution/linux-x86_64 && sha256sum -c SHA256SUMS.txt )
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Publish exact-SHA Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yadilab-linux-${{ github.sha }}
+          path: distribution/linux-x86_64/
+          if-no-files-found: error

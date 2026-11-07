@@ -1,0 +1,66 @@
+name: YadiLab required CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: yadilab-required-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  source-and-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install exact locked npm dependencies
+        run: npm ci
+      - name: Focused Engine, import, dependency and release provenance regressions
+        run: |
+          set -Eeuo pipefail
+          node tests/dependencies/run_dependency_tests.mjs
+          node tests/dependencies/run_dependency_adversarial.mjs
+          npm run test:engine
+          npm run test:enterprise-import
+          npm run test:import-helper
+          npm run test:release-identity
+          go test ./launcher/...
+      - name: Build and attest source-controlled browser release
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          npm run build:browser
+          node scripts/verify_browser_release.mjs
+          node scripts/verify_release_identity.mjs
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+  browser-regressions:
+    uses: ./.github/workflows/browser-tests.yml
+  yadilab-required-ci:
+    if: ${{ always() }}
+    needs: [source-and-security, browser-regressions]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail closed unless source and Chromium both succeed
+        env:
+          SOURCE_RESULT: ${{ needs.source-and-security.result }}
+          BROWSER_RESULT: ${{ needs.browser-regressions.result }}
+        run: |
+          set -Eeuo pipefail
+          test "$SOURCE_RESULT" = success
+          test "$BROWSER_RESULT" = success
+          echo "PASS: exact-commit Ubuntu source, security and Chromium."

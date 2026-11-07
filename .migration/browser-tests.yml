@@ -1,0 +1,61 @@
+name: YadiLab actual Chromium
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  compiled-chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies and build actual app
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npm run build:browser
+          node scripts/verify_browser_release.mjs
+      - name: Install one pinned Chromium
+        run: |
+          set -Eeuo pipefail
+          python3 -m venv "$RUNNER_TEMP/yadilab-playwright"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m pip install --disable-pip-version-check 'playwright==1.55.0'
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m playwright install --with-deps chromium
+      - name: Mounted UI identity, import truth and reviewed graph
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18981 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null
+          mkdir -p "$RUNNER_TEMP/yadilab-evidence"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_release_identity_real_browser.py \
+            --url http://127.0.0.1:18981/ --expected-commit "$YADILAB_EXPECTED_COMMIT" \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/identity"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_ic020_p2c5_truth_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/import-truth"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_ic030_p2b_drawio_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/drawio"
+      - name: Persist Chromium evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yadilab-chromium-evidence
+          path: ${{ runner.temp }}/yadilab-evidence/
+          if-no-files-found: ignore
