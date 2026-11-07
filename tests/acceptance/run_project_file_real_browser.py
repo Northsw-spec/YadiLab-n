@@ -155,14 +155,15 @@ def main():
             expect(wec).to_have_attribute("data-project-dirty", "true")
             wrong_extension.evaluate("""() => {
                 window.__originalSavePicker = window.showSaveFilePicker;
-                window.showSaveFilePicker = async () => ({
+                Object.defineProperty(window, 'showSaveFilePicker', {
+                    configurable: true, value: async () => ({
                     name: 'misleading-project.json',
                     async createWritable() {
                         window.__yadilabProjectStore.writes++;
                         throw Error('UNEXPECTED_INVALID_EXTENSION_WRITE');
                     },
                     async getFile() { return new File([], 'misleading-project.json'); },
-                });
+                }) });
             }""")
             wrong_extension.locator('[data-project-action="save-as"]').click()
             expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
@@ -172,7 +173,9 @@ def main():
             expect(wec).to_have_attribute("data-project-dirty", "true")
             expect(wec).to_have_attribute("data-project-filename", "Untitled.yadilab")
             wrong_extension.evaluate("""() => {
-                window.showSaveFilePicker = window.__originalSavePicker;
+                Object.defineProperty(window, 'showSaveFilePicker', {
+                    configurable: true, value: window.__originalSavePicker,
+                });
             }""")
             wrong_extension.locator('[data-project-action="save-as"]').click()
             expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
