@@ -37,6 +37,8 @@ jobs:
           npm run test:import-helper
           npm run test:release-identity
           node tests/browser/run_project_document_tests.mjs
+          ./node_modules/.bin/tsc -p tests/tsconfig.persistence.json
+          node tests/persistence/run_indexeddb_commit_tests.mjs
           go test ./launcher/...
       - name: Build and attest source-controlled browser release
         env:
