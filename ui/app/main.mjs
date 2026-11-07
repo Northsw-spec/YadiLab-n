@@ -4460,6 +4460,12 @@ function App() {
     return transitionId;
   };
   const isCurrentScenarioTransition = (transitionId) => scenarioTransitionRef.current === transitionId;
+  // Runtime imports/restores may await files or IndexedDB. Their results may
+  // mutate only the exact Runtime generation that launched the operation.
+  const isCurrentRuntimeOperation = (startingWorkspace, transitionId) =>
+    startingWorkspace?.mode === "runtime" &&
+    scenarioTransitionRef.current === transitionId &&
+    latestDrawioWorkspaceRef.current === startingWorkspace;
   const replaceProjectDocument = (value) => {
     const next = value ?? createScenarioDraftWorkspace({
       scenarioId: "new_project", title: "New YadiLab project",
@@ -4612,7 +4618,9 @@ function App() {
 
   const exportTroubleshootingSession = async () => {
     if (workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     const result = await createTroubleshootingSessionDownload(workspace, notebook ?? undefined);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(result.diagnostics);
     if (result.ok) {
       if (result.notebook) setNotebook(result.notebook);
@@ -4622,7 +4630,9 @@ function App() {
 
   const loadTroubleshootingSession = async (file) => {
     if (!file || workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     const result = await loadTroubleshootingSessionFile(workspace, file, sessionValidators);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(result.diagnostics);
     if (result.ok) {
       setWorkspace(result.workspace);
@@ -4633,7 +4643,9 @@ function App() {
 
   const loadProgress = async (file) => {
     if (!file || workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     const result = await loadRuntimeProgressFile(workspace, file, packageValidator("save"));
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(result.diagnostics);
     if (result.ok) setWorkspace(result.workspace);
   };
@@ -4646,13 +4658,16 @@ function App() {
 
   const autosaveProgress = async () => {
     if (workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     if (!progressStore || !troubleshootingSessionStore) {
       setDiagnostics([{ severity: "error", code: "PROGRESS_AUTOSAVE_UNAVAILABLE", message: "IndexedDB is unavailable in this browser context. Export progress and notebook files for portable backup instead." }]);
       return;
     }
     const progressResult = await autosaveRuntimeProgress(workspace, progressStore);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     if (!progressResult.ok) { setDiagnostics(progressResult.diagnostics); return; }
     const sessionResult = await autosaveTroubleshootingSession(workspace, notebook ?? undefined, troubleshootingSessionStore);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(sessionResult.diagnostics);
     if (sessionResult.ok) {
       if (sessionResult.notebook) setNotebook(sessionResult.notebook);
@@ -4662,11 +4677,13 @@ function App() {
 
   const restoreAutosave = async () => {
     if (workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     if (!progressStore || !troubleshootingSessionStore) {
       setDiagnostics([{ severity: "error", code: "PROGRESS_AUTOSAVE_UNAVAILABLE", message: "IndexedDB is unavailable in this browser context." }]);
       return;
     }
     const sessionResult = await restoreAutosavedTroubleshootingSession(workspace, troubleshootingSessionStore, sessionValidators);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     if (sessionResult.ok) {
       setWorkspace(sessionResult.workspace);
       setNotebook(sessionResult.notebook ?? null);
@@ -4676,19 +4693,23 @@ function App() {
     const sessionMissing = sessionResult.diagnostics.some((item) => item.code === "TROUBLESHOOTING_SESSION_AUTOSAVE_NOT_FOUND");
     if (!sessionMissing) { setDiagnostics(sessionResult.diagnostics); return; }
     const result = await restoreAutosavedRuntimeProgress(workspace, progressStore, packageValidator("save"));
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(result.diagnostics);
     if (result.ok) { setWorkspace(result.workspace); setNotebook(null); }
   };
 
   const clearAutosave = async () => {
     if (workspace.mode !== "runtime") return;
+    const origin = workspace, transition = scenarioTransitionRef.current;
     if (!progressStore || !troubleshootingSessionStore) {
       setDiagnostics([{ severity: "error", code: "PROGRESS_AUTOSAVE_UNAVAILABLE", message: "IndexedDB is unavailable in this browser context." }]);
       return;
     }
     const progressResult = await clearAutosavedRuntimeProgress(workspace, progressStore);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     if (!progressResult.ok) { setDiagnostics(progressResult.diagnostics); return; }
     const sessionResult = await clearAutosavedTroubleshootingSession(workspace, troubleshootingSessionStore);
+    if (!isCurrentRuntimeOperation(origin, transition)) return;
     setDiagnostics(sessionResult.diagnostics);
     if (sessionResult.ok) setDiagnostics([{ severity: "warning", code: "TROUBLESHOOTING_SESSION_AUTOSAVE_CLEARED", message: "Local Runtime progress and persisted Evidence Notebook session cleared for this scenario hash." }]);
   };
