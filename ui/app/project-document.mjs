@@ -58,12 +58,27 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
     }
     for (const id of visiting) cleared.add(id);
   }
+  const interfacesByResource = new Map();
   for (const resource of source.resources) {
     if (resource.zone && !zoneIds.has(resource.zone)) blocked("UNKNOWN_RESOURCE_ZONE");
+    // Every physical/logical port is identified within its resource. The
+    // source schema validates syntax, but does not enforce uniqueness.
+    const portIds = new Set();
+    for (const iface of resource.interfaces ?? []) {
+      if (portIds.has(iface.id)) blocked("DUPLICATE_INTERFACE_ID");
+      portIds.add(iface.id);
+    }
+    interfacesByResource.set(resource.id, portIds);
   }
   for (const edge of source.connections) {
     if (!resourceIds.has(edge.from?.resource) || !resourceIds.has(edge.to?.resource))
       blocked("DANGLING_CONNECTION");
+    // A declared endpoint port must refer to an actual interface. Do not
+    // invent a port on Save or reopen a link that cannot be compiled.
+    for (const side of [edge.from, edge.to]) {
+      if (side.port !== undefined && !interfacesByResource.get(side.resource).has(side.port))
+        blocked("UNKNOWN_CONNECTION_PORT");
+    }
   }
   if (!Array.isArray(layoutOverrides) || layoutOverrides.length > 20_000)
     blocked("LAYOUT_INVALID");
