@@ -20,14 +20,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build independent attested Linux distribution
-        env:
-          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+      - name: Validate release source contracts and native launcher
         run: |
           set -Eeuo pipefail
           npm ci
           npm run test:release-identity
           go test ./launcher/...
+      - name: Build independent attested Linux distribution
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
           npm run build:launcher
           node scripts/verify_browser_release.mjs
           node scripts/verify_release_identity.mjs
