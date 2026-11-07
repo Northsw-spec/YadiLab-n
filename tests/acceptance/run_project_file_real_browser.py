@@ -922,6 +922,56 @@ def main():
             expect(scontrols).to_have_attribute("data-project-dirty", "false")
             stale.close()
 
+            # PROJECT-013: replacing a saved Builder scenario through the
+            # actual Scenario Studio UI must detach the old native file.
+            # Ctrl+S must not silently overwrite the prior scenario file.
+            different_scenario = context.new_page()
+            different_scenario.add_init_script(MOCK)
+            different_scenario.on("pageerror", lambda error: errors.append(str(error)))
+            different_scenario.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            different_controls = different_scenario.locator(
+                '[data-project-file-controls="ready"]')
+            expect(different_controls).to_be_visible(timeout=45000)
+            different_scenario.locator('[data-project-action="save-as"]').click()
+            expect(different_scenario.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            previous_bytes = different_scenario.evaluate(
+                "window.__yadilabProjectStore.text")
+            previous_writes = different_scenario.evaluate(
+                "window.__yadilabProjectStore.writes")
+            different_scenario.evaluate("""() => {
+                const input = document.querySelector('[data-studio-scenario-id]');
+                const studio = document.querySelector('[data-scenario-studio]');
+                if (!input || !studio)
+                    throw new Error('PROJECT-013 Scenario Studio missing');
+                let parent = studio.closest('details');
+                while (parent) {
+                    parent.open = true;
+                    parent = parent.parentElement?.closest('details') ?? null;
+                }
+            }""")
+            different_scenario.locator(
+                '[data-studio-scenario-id]').fill("project_013_unrelated")
+            different_scenario.locator('[data-studio-action="create"]').click()
+            expect(different_scenario.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "project_013_unrelated")
+            expect(different_controls).to_have_attribute(
+                "data-project-filename", "project_013_unrelated.yadilab")
+            expect(different_controls).to_have_attribute("data-project-dirty", "true")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.text") == previous_bytes,
+                "Loading another scenario changed the previous project file")
+            different_scenario.keyboard.press("Control+s")
+            expect(different_scenario.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.text") == previous_bytes,
+                "New scenario overwrote the original .yadilab through inherited handle")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.writes") == previous_writes,
+                "New scenario performed an unintended write to the old project")
+            expect(different_controls).to_have_attribute("data-project-dirty", "true")
+            different_scenario.close()
             # Asynchronous Validate & Compile cannot resurrect a previous
             # canonical source after New has replaced it. Trigger both actions
             # within one JS task so compilation is still suspended at await.
