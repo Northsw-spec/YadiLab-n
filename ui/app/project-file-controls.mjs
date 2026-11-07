@@ -129,6 +129,11 @@ export function ProjectFileControls({
     previousTransitionRef.current = getScenarioTransitionId();
     baselineRef.current = projectSnapshot(next);
     lastBuilderSnapshotRef.current = baselineRef.current;
+    // New/Open commit synchronously, but React may batch the next render.
+    // A second user action in the same JS task must see the new project's
+    // unsaved status immediately, before it can discard or replace the source.
+    changedRef.current = projectHasUnsavedChanges(
+      lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
     handleRef.current = handle;
     quarantinedHandlesRef.current = [];
     fileFingerprintRef.current = fileFingerprint;
