@@ -101,6 +101,21 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
     if (note.target !== undefined && !noteTargets.has(note.target))
       blocked("UNKNOWN_NOTE_TARGET");
   }
+  // Canonical solutions identify specific resources to mutate. A valid
+  // document digest cannot legitimize a repair operation against a deleted
+  // device; keep the same reference constraints as Compiler validation.
+  for (const operation of source.canonicalSolution?.operations ?? []) {
+    if (!resourceIds.has(operation.target)) blocked("UNKNOWN_SOLUTION_TARGET");
+  }
+  // These are source-defined layout hints, distinct from the separately
+  // validated editable layout overrides. Targets may be zones or resources,
+  // while a parent must be an actual zone.
+  const layoutTargets = new Set([...zoneIds, ...resourceIds]);
+  for (const hint of source.layoutHints ?? []) {
+    if (!layoutTargets.has(hint.target)) blocked("UNKNOWN_LAYOUT_TARGET");
+    if (hint.parent !== undefined && !zoneIds.has(hint.parent))
+      blocked("UNKNOWN_LAYOUT_PARENT");
+  }
   if (!Array.isArray(layoutOverrides) || layoutOverrides.length > 20_000)
     blocked("LAYOUT_INVALID");
   const movable = new Set([...zoneIds, ...resourceIds]);
