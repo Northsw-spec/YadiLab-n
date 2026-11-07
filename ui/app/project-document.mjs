@@ -167,11 +167,11 @@ export async function sameProjectFileEntry(previous, selected) {
 export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");
-  // Optimistic conflict check: refuse an overwrite when the file no longer
-  // contains the bytes that were opened or last successfully saved.
-  if (expectedFileSha256 !== undefined) {
-    if (typeof expectedFileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedFileSha256))
-      blocked("EXPECTED_DIGEST_INVALID");
+  // Native File System Access does not provide a compare-and-swap write.
+  // Check both BEFORE opening the writable and AGAIN immediately before write.
+  // This closes the race while createWritable resolves; it cannot guarantee
+  // atomic exclusion against another OS process modifying the file afterwards.
+  const assertOriginalDiskBytes = async () => {
     const before = await handle.getFile();
     if (!before || typeof before.arrayBuffer !== "function") blocked("CONFLICT_READ_UNAVAILABLE");
     const buffer = await before.arrayBuffer();
@@ -181,10 +181,16 @@ export async function writeProjectFile(handle, text, { expectedFileSha256 } = {}
     try { earlier = decoder.decode(buffer); }
     catch { blocked("EXTERNAL_FILE_CHANGED"); }
     if (await sha256(earlier) !== expectedFileSha256) blocked("EXTERNAL_FILE_CHANGED");
+  };
+  if (expectedFileSha256 !== undefined) {
+    if (typeof expectedFileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedFileSha256))
+      blocked("EXPECTED_DIGEST_INVALID");
+    await assertOriginalDiskBytes();
   }
   let writable;
   try {
     writable = await handle.createWritable({ keepExistingData: false });
+    if (expectedFileSha256 !== undefined) await assertOriginalDiskBytes();
     await writable.write(new Blob([text], { type: "application/json;charset=utf-8" }));
     await writable.close();
     writable = null;
