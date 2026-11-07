@@ -1518,8 +1518,11 @@ def main():
                 "window.__yadilabProjectStore.text") == prior_file_bytes,
                 "Same-ID scenario replacement unexpectedly modified prior disk bytes")
             reused_id.keyboard.press("Control+s")
+            # Same public scenario ID does not authorize overwriting the
+            # previous native file. An editable blank draft remains valid,
+            # but the detached Save As target is already nonempty.
             expect(reused_id.locator('[data-project-message]')).to_contain_text(
-                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
             require(reused_id.evaluate(
                 "window.__yadilabProjectStore.writes") == prior_file_writes,
                 "Same-ID Studio draft overwrote the previous native project")
