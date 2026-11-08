@@ -61,12 +61,12 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
     });
     for (const record of metadataRows) {
       const declaredVersion = text(record, "schemaVersion");
-      if (declaredVersion && declaredVersion !== YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION)
+      if (!blank(value(record, "schemaVersion")) && declaredVersion !== YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION)
         diagnostics.push(diagnostic("WORKBOOK_SCHEMA_VERSION_UNSUPPORTED",
           "Metadata.schemaVersion is not supported; the imported structure was not reinterpreted.",
           "Metadata", record.recordIndex, "schemaVersion"));
       const scenarioId = text(record, "scenarioId");
-      if (scenarioId && !ID.test(scenarioId))
+      if (!blank(value(record, "scenarioId")) && (!scenarioId || !ID.test(scenarioId)))
         diagnostics.push(diagnostic("WORKBOOK_SCENARIO_ID_INVALID",
           "Metadata.scenarioId must be a stable canonical ID.",
           "Metadata", record.recordIndex, "scenarioId"));
@@ -83,6 +83,10 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
     if (!text(record, "displayName"))
       diagnostics.push(diagnostic("WORKBOOK_NODE_LABEL_MISSING",
         "Nodes.displayName is required.", "Nodes", record.recordIndex, "displayName"));
+    if (!blank(value(record, "zoneId")) && !text(record, "zoneId"))
+      diagnostics.push(diagnostic("WORKBOOK_NODE_ZONE_INVALID",
+        "Nodes.zoneId must identify an explicitly declared zone; an invalid typed value cannot be discarded.",
+        "Nodes", record.recordIndex, "zoneId"));
     if (!type)
       diagnostics.push(diagnostic("WORKBOOK_NODE_TYPE_MISSING",
         "Nodes.type is required.", "Nodes", record.recordIndex, "type"));
@@ -103,7 +107,11 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
     const nodeId = text(record, "nodeId");
     const id = text(record, "interfaceId") ?? text(record, "name");
     if (!nodeId || !nodeIds.has(nodeId)) diagnostics.push(diagnostic("WORKBOOK_INTERFACE_NODE_UNKNOWN", `Interface references unknown node '${nodeId ?? ""}'.`, "Interfaces", record.recordIndex, "nodeId"));
-    if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_INTERFACE_ID_INVALID", "Interfaces.interfaceId must be a stable canonical ID.", "Interfaces", record.recordIndex, "interfaceId"));
+    if (!id || !ID.test(id) ||
+        (!blank(value(record, "interfaceId")) && !text(record, "interfaceId")))
+      diagnostics.push(diagnostic("WORKBOOK_INTERFACE_ID_INVALID",
+        "Interfaces.interfaceId must be a stable canonical ID; an invalid typed value cannot fall back to name.",
+        "Interfaces", record.recordIndex, "interfaceId"));
     if (nodeId && id && nodeIds.has(nodeId) && ID.test(id)) {
       const declared = interfacesByNode.get(nodeId) ?? new Set<string>();
       if (declared.has(id)) diagnostics.push(diagnostic("WORKBOOK_DUPLICATE_INTERFACE_ID",
@@ -117,7 +125,7 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       diagnostics.push(diagnostic("WORKBOOK_MTU_INVALID",
         "Interfaces.MTU must be a positive integer.", "Interfaces", record.recordIndex, "MTU"));
     const mac = text(record, "MAC");
-    if (mac && !MAC_ADDRESS.test(mac))
+    if (!blank(value(record, "MAC")) && (!mac || !MAC_ADDRESS.test(mac)))
       diagnostics.push(diagnostic("WORKBOOK_MAC_INVALID",
         "Interfaces.MAC must contain six colon-separated hexadecimal octets.",
         "Interfaces", record.recordIndex, "MAC"));
@@ -162,7 +170,7 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
           "Zone and node IDs must be distinct canonical identifiers.", "Zones", record.recordIndex, "zoneId"));
       zoneIds.add(id);
     }
-    if (kind && !KINDS.has(kind))
+    if (!blank(value(record, "kind")) && (!kind || !KINDS.has(kind)))
       diagnostics.push(diagnostic("WORKBOOK_ZONE_KIND_INVALID",
         "Unknown zone kind.", "Zones", record.recordIndex, "kind"));
   }
@@ -190,10 +198,18 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
     const id = text(record, "linkId"), a = text(record, "nodeA"), b = text(record, "nodeB");
     const portA = text(record, "interfaceA"), portB = text(record, "interfaceB");
     const kind = text(record, "kind");
-    if (kind && !LINK_KINDS.has(kind))
+    if (!blank(value(record, "kind")) && (!kind || !LINK_KINDS.has(kind)))
       diagnostics.push(diagnostic("WORKBOOK_LINK_KIND_INVALID",
         "Links.kind is not a canonical scenario connection kind.",
         "Links", record.recordIndex, "kind"));
+    if (!blank(value(record, "interfaceA")) && !portA)
+      diagnostics.push(diagnostic("WORKBOOK_LINK_PORT_INVALID",
+        "Links.interfaceA must name a declared source port; an invalid typed value cannot be omitted.",
+        "Links", record.recordIndex, "interfaceA"));
+    if (!blank(value(record, "interfaceB")) && !portB)
+      diagnostics.push(diagnostic("WORKBOOK_LINK_PORT_INVALID",
+        "Links.interfaceB must name a declared source port; an invalid typed value cannot be omitted.",
+        "Links", record.recordIndex, "interfaceB"));
     if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_LINK_ID_INVALID", "Links.linkId must be a stable canonical ID.", "Links", record.recordIndex, "linkId"));
     // Zone, node and link IDs share one canonical source namespace. A
     // link colliding with an existing object cannot be saved or compiled,
