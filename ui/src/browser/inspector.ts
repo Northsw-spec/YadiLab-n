@@ -235,9 +235,21 @@ export function applyResourceInspector(workspace: BuilderWorkspace, resourceId: 
   const profile = trimOptional(input.profile);
   const vendor = trimOptional(input.vendor);
   const product = trimOptional(input.product);
+  // Earlier versions parsed these visible asset fields but omitted the asset
+  // from the replacement object. An unrelated label edit then erased the
+  // canonical asset binding (including imported catalog provenance).
+  // Omitted pair means a programmatic caller isn't editing the asset.
+  // Explicitly empty pair means the user intentionally removed it.
+  const assetSupplied = input.assetId !== undefined || input.assetVersion !== undefined;
   const assetId = trimOptional(input.assetId);
   const assetVersion = trimOptional(input.assetVersion);
-  if ((assetId && !assetVersion) || (!assetId && assetVersion)) return fail(workspace, diagnostic("BUILDER_INSPECTOR_ASSET_PAIR", "Asset ID and version must either both be set or both be empty.", resourceId));
+  if (assetSupplied && (input.assetId === undefined ||
+      input.assetVersion === undefined || Boolean(assetId) !== Boolean(assetVersion)))
+    return fail(workspace, diagnostic("BUILDER_INSPECTOR_ASSET_PAIR",
+      "Asset ID and version must either both be set or both be empty.", resourceId));
+  const asset = assetSupplied
+    ? (assetId && assetVersion ? { id: assetId, version: assetVersion } : undefined)
+    : current.asset;
   const resource: Scenariosourceresource = {
     id: resourceId,
     type,
@@ -248,6 +260,7 @@ export function applyResourceInspector(workspace: BuilderWorkspace, resourceId: 
     ...(profile ? { profile } : {}),
     ...(vendor ? { vendor } : {}),
     ...(product ? { product } : {}),
+    ...(asset ? { asset } : {}),
   };
   return replaceResource(workspace, resource);
 }
@@ -297,6 +310,13 @@ export function createResourceFromInspector(workspace: BuilderWorkspace, id: str
   const profile = trimOptional(input.profile);
   const vendor = trimOptional(input.vendor);
   const product = trimOptional(input.product);
+  const assetSupplied = input.assetId !== undefined || input.assetVersion !== undefined;
+  const assetId = trimOptional(input.assetId);
+  const assetVersion = trimOptional(input.assetVersion);
+  if (assetSupplied && (input.assetId === undefined ||
+      input.assetVersion === undefined || Boolean(assetId) !== Boolean(assetVersion)))
+    return fail(workspace, diagnostic("BUILDER_INSPECTOR_ASSET_PAIR",
+      "Asset ID and version must either both be set or both be empty.", normalizedId));
   return addResource(workspace, {
     id: normalizedId,
     label,
@@ -307,12 +327,19 @@ export function createResourceFromInspector(workspace: BuilderWorkspace, id: str
     ...(profile ? { profile } : {}),
     ...(vendor ? { vendor } : {}),
     ...(product ? { product } : {}),
+    ...(assetId && assetVersion ? { asset: { id: assetId, version: assetVersion } } : {}),
   });
 }
 
 export function createConnectionFromInspector(workspace: BuilderWorkspace, id: string, input: ConnectionInspectorInput): BrowserCommandResult<BuilderWorkspace> {
   const normalizedId = id.trim();
   if (!normalizedId) return fail(workspace, diagnostic("BUILDER_INSPECTOR_ID_REQUIRED", "Connection id must not be empty."));
+  // An explicit *create* is not an upsert. Previously reusing a connection
+  // ID silently rewired the old topology edge through applyConnectionInspector.
+  // Fail before any mutation, while keeping the edit-existing pathway intact.
+  if (workspace.source.connections.some((connection) => connection.id === normalizedId))
+    return fail(workspace, diagnostic("BUILDER_DUPLICATE_ID",
+      `Connection '${normalizedId}' already exists. Choose a new ID.`, normalizedId));
   return applyConnectionInspector(workspace, normalizedId, input);
 }
 
