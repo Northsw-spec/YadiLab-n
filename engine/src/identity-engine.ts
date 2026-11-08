@@ -13,6 +13,14 @@ interface MembershipGraph {
   readonly complete: ReadonlySet<string>;
 }
 
+// Canonical IDs such as "constructor" are valid scenario names. Lookup must
+// never interpret Object.prototype entries as runtime identities. This also
+// handles external/reloaded EngineState objects with a plain object map.
+function ownResource(state: EngineState, id: string) {
+  return Object.prototype.hasOwnProperty.call(state.resources, id)
+    ? state.resources[id] : undefined;
+}
+
 function buildMembershipGraph(state: EngineState): MembershipGraph {
   const mutable = new Map<string, Set<string>>();
   const complete = new Set<string>();
@@ -38,7 +46,7 @@ function buildMembershipGraph(state: EngineState): MembershipGraph {
 }
 
 export function queryMembership(state: EngineState, subject: string, group: string): EngineQueryResult<MembershipDetails> {
-  if (!state.resources[subject] || !state.resources[group]) {
+  if (!ownResource(state, subject) || !ownResource(state, group)) {
     return { truth: "UNKNOWN", explanation: [`Membership endpoint is absent from runtime state: '${subject}' -> '${group}'.`] };
   }
   if (subject === group) return { truth: "TRUE", value: { subject, group, path: [subject] }, explanation: [`'${subject}' equals the requested identity group.`] };
@@ -80,7 +88,7 @@ interface PermissionEntry {
 }
 
 function readPermissions(state: EngineState, resourceId: string): readonly PermissionEntry[] | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return undefined;
   const raw = resource.properties.permissions;
   if (!Array.isArray(raw)) return undefined;
@@ -99,7 +107,7 @@ function permissionMatches(entry: PermissionEntry, requested: string): boolean {
 }
 
 export function queryPermission(state: EngineState, subject: string, resourceId: string, permission: string): EngineQueryResult<PermissionDetails> {
-  if (!state.resources[subject] || !state.resources[resourceId]) {
+  if (!ownResource(state, subject) || !ownResource(state, resourceId)) {
     return { truth: "UNKNOWN", explanation: [`Permission endpoint is absent from runtime state: '${subject}' -> '${resourceId}'.`] };
   }
   const permissions = readPermissions(state, resourceId);
@@ -133,8 +141,8 @@ export function queryPermission(state: EngineState, subject: string, resourceId:
 }
 
 export function queryAuthentication(state: EngineState, subject: string, target: string): EngineQueryResult<AuthenticationDetails> {
-  const subjectResource = state.resources[subject];
-  const targetResource = state.resources[target];
+  const subjectResource = ownResource(state, subject);
+  const targetResource = ownResource(state, target);
   if (!subjectResource || !targetResource) return { truth: "UNKNOWN", explanation: [`Authentication endpoint is absent from runtime state: '${subject}' -> '${target}'.`] };
   const raw = targetResource.properties.authentication;
   if (!isRecord(raw)) return { truth: "UNKNOWN", explanation: [`Target '${target}' has no declared authentication policy.`] };
