@@ -12,7 +12,7 @@ import {
   projectFilename, projectSnapshot, projectHasUnsavedChanges, projectHasLiveUnsavedChanges,
   projectNeedsUnloadWarning,
   projectFilePickerStillCurrent, sameEditableProjectRevision,
-  sameProjectFileEntry,
+  projectFileAssociationStillCurrent, sameProjectFileEntry,
   assertSafeRecoveryTarget,
 } from "../../ui/app/project-document.mjs";
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
@@ -1048,6 +1048,51 @@ assert.equal(sameEditableProjectRevision(savedScenario, {
   ...genuineEdit, sourceRevision: 13, source: { scenarioId: "another_project" },
 }, true), false,
   "Cross-project replacement stays detached even when the scenario differs");
+// PROJECT-048: React may not have painted a new authored scenario when the
+// user presses Save. The old native handle must NEVER survive that pending
+// project-transition generation, including with a reused canonical public ID.
+const attachedProject = {
+  mode: "builder", source: { scenarioId: "shared_project", metadata: { title: "Previously saved" } },
+  sourceRevision: 12, dirty: false, layoutOverrides: [],
+};
+const sameSourceSelection = { ...attachedProject, selection: { ids: [] } };
+const attachedEdit = {
+  ...attachedProject, sourceRevision: 13, dirty: true,
+  source: { scenarioId: "shared_project", metadata: { title: "Newly edited" } },
+};
+const replacedSameId = {
+  ...attachedEdit, sourceRevision: 999, dirty: true,
+  source: { scenarioId: "shared_project", metadata: { title: "Different project" } },
+};
+const replacedDifferentId = {
+  ...attachedEdit, source: { scenarioId: "different_project" },
+};
+for (const [name, previous, live, originGeneration, liveGeneration, expected] of [
+  ["unchanged workspace", attachedProject, attachedProject, 17, 17, true],
+  ["selection-only", attachedProject, sameSourceSelection, 17, 17, true],
+  ["ordinary same-project edit", attachedProject, attachedEdit, 17, 17, true],
+  ["source edit after generation switch", attachedProject, attachedEdit, 17, 18, false],
+  ["new project with reused scenario ID", attachedProject, replacedSameId, 17, 18, false],
+  ["new project with different scenario ID", attachedProject, replacedDifferentId, 17, 18, false],
+  ["different identity with no generation", attachedProject, replacedDifferentId, 17, 17, false],
+  ["equal revision is not an edit", attachedProject,
+    { ...attachedEdit, sourceRevision: 12 }, 17, 17, false],
+  ["unmarked replacement is not an edit", attachedProject,
+    { ...attachedEdit, dirty: false }, 17, 17, false],
+  ["source change from untracked runtime", { mode: "runtime", source: attachedProject.source },
+    { mode: "runtime", source: replacedDifferentId.source }, 17, 17, false],
+  ["rendered runtime may remain current", { mode: "runtime", source: attachedProject.source },
+    { mode: "runtime", source: attachedProject.source }, 17, 17, true],
+  ["builder-runtime mode changes are different", attachedProject,
+    { mode: "runtime", source: attachedProject.source }, 17, 17, false],
+  ["malformed origin generation", attachedProject, attachedProject, -1, -1, false],
+  ["fractional generation", attachedProject, attachedProject, 1.5, 1.5, false],
+  ["missing current source", attachedProject, null, 17, 17, false],
+]) assert.equal(projectFileAssociationStillCurrent(previous, live,
+    originGeneration, liveGeneration), expected,
+    "PROJECT-048 file association policy: " + name);
+console.log("PASS PROJECT-048: Save association distinguishes same-turn project replacement from valid Builder edits");
+
 console.log("PASS PROJECT-014: explicit scenario transition invalidates native file association even for reused scenario ID");
 console.log("PASS PROJECT-013: native project association retained only for same-scenario Builder edits");
 // PROJECT-016: an in-flight explicit project operation requires a closing
