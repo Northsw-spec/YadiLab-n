@@ -208,4 +208,61 @@ assert.equal(mapNetworkWorkbookToScenario(noVersion).ok, true);
 
 console.log("PASS IMPORT-036: truthful row totals, metadata identity and version validation");
 
+// IMPORT-037: an explicit IPv4/CIDR is one documented address, even if
+// a spreadsheet also declares the same prefix in the separate column.
+// Malformed or conflicting IP assertions must fail closed before activation.
+const ifaceOn = document => document.tables.find(t => t.tableId === "Interfaces").records[0].fields;
+const inlineCidr = workbook(2);
+ifaceOn(inlineCidr).IPv4 = cell("10.0.0.1/24");
+ifaceOn(inlineCidr).prefix = cell("24");
+const inlineResult = mapNetworkWorkbookToScenario(inlineCidr);
+assert.equal(inlineResult.ok, true, JSON.stringify(inlineResult.diagnostics));
+assert.deepEqual(inlineResult.source.resources[0].interfaces[0].addresses,
+  ["10.0.0.1/24"], "Do not write duplicate /24/24 for the same declared prefix");
+assert.equal(inlineResult.source.connections.length, 1,
+  "A prefix may not create inferred physical network links");
+
+const inlineOnly = workbook(2);
+ifaceOn(inlineOnly).IPv4 = cell("10.0.0.1/24");
+delete ifaceOn(inlineOnly).prefix;
+assert.deepEqual(mapNetworkWorkbookToScenario(inlineOnly).source.resources[0].interfaces[0].addresses,
+  ["10.0.0.1/24"], "Preserve explicit IPv4/CIDR with no second prefix column");
+
+const zeroPrefix = workbook(2);
+ifaceOn(zeroPrefix).prefix = cell(0);
+assert.deepEqual(mapNetworkWorkbookToScenario(zeroPrefix).source.resources[0].interfaces[0].addresses,
+  ["10.0.0.1/0"], "A declared /0 is a valid prefix, not a missing value");
+
+const macOnlyAddress = workbook(2);
+delete ifaceOn(macOnlyAddress).IPv4;
+delete ifaceOn(macOnlyAddress).prefix;
+ifaceOn(macOnlyAddress).MAC = cell("AA:BB:CC:DD:EE:01");
+const macOnlyResult = mapNetworkWorkbookToScenario(macOnlyAddress);
+assert.equal(macOnlyResult.ok, true, JSON.stringify(macOnlyResult.diagnostics));
+assert.equal(macOnlyResult.source.resources[0].interfaces[0].mac, "AA:BB:CC:DD:EE:01");
+assert.equal(macOnlyResult.source.resources[0].interfaces[0].addresses, undefined,
+  "Do not invent an IP for a documented MAC-only interface");
+
+for (const { ip, prefix, code, field } of [
+  { ip: "999.0.0.1", prefix: "24", code: "WORKBOOK_IPV4_INVALID", field: "IPv4" },
+  { ip: "10.0.0", prefix: "24", code: "WORKBOOK_IPV4_INVALID", field: "IPv4" },
+  { ip: "10.0.0.1/33", prefix: undefined, code: "WORKBOOK_IPV4_INVALID", field: "IPv4" },
+  { ip: "10.0.0.1/24/25", prefix: undefined, code: "WORKBOOK_IPV4_INVALID", field: "IPv4" },
+  { ip: "10.0.0.1", prefix: "33", code: "WORKBOOK_IPV4_PREFIX_INVALID", field: "prefix" },
+  { ip: "10.0.0.1", prefix: "24.5", code: "WORKBOOK_IPV4_PREFIX_INVALID", field: "prefix" },
+  { ip: "10.0.0.1/24", prefix: "23", code: "WORKBOOK_IPV4_PREFIX_CONFLICT", field: "prefix" },
+  { ip: undefined, prefix: "24", code: "WORKBOOK_IPV4_PREFIX_WITHOUT_ADDRESS", field: "prefix" },
+]) {
+  const invalid = workbook(2);
+  if (ip === undefined) delete ifaceOn(invalid).IPv4; else ifaceOn(invalid).IPv4 = cell(ip);
+  if (prefix === undefined) delete ifaceOn(invalid).prefix; else ifaceOn(invalid).prefix = cell(prefix);
+  const result = mapNetworkWorkbookToScenario(invalid);
+  assert.equal(result.ok, false, `Invalid address ${JSON.stringify({ ip, prefix })} must fail closed`);
+  assert.ok(result.diagnostics.some(d => d.code === code && d.table === "Interfaces" &&
+    d.row === 1 && d.field === field), `Expected source-localized ${code}`);
+  assert.ok(result.preview.errors > 0);
+  assert.equal(result.source, undefined, "Invalid declarations must never produce an importable source");
+}
+console.log("PASS IMPORT-037: explicit IPv4/CIDR preserved, conflicting or malformed source rejected");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
