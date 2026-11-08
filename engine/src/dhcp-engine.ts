@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { parseIpAddress } from "./ip.js";
 import { queryLayer2BroadcastReachability } from "./network-engine.js";
@@ -77,7 +78,7 @@ function serverAttempt(
 }
 
 export function queryDhcpDora(scenario: NormalizedScenario, state: EngineState, clientId: string): EngineQueryResult<DhcpDoraDecisionTrace> {
-  const client = state.resources[clientId];
+  const client = ownResource(state, clientId);
   if (!client) return { truth: "UNKNOWN", explanation: [`DHCP client '${clientId}' does not exist in Engine state.`] };
   const clientState = clientDhcpState(client);
   const base = { clientId, clientState: clientState.state } as const;

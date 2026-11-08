@@ -20,6 +20,7 @@ import {
   queryDhcpDora,
   queryDnsChain,
   queryReachability,
+  queryLayer2BroadcastReachability,
   queryServiceEnabled,
 } from "../../dist-engine-test/engine/src/index.js";
 
@@ -1166,5 +1167,50 @@ if (ownRestored061.ok) {
     "restored special-name resource resolves to its own record");
 }
 console.log("PASS ENGINE-061: save-state immutable envelope, interface identity and valid mutable restore");
+
+// ENGINE-062: external/JSON-reconstructed EngineState dictionaries can have
+// Object.prototype despite newly created and restored states being null-
+// prototype. All direct network/probe/identity lookups must require own IDs.
+const legacyPlain062 = { ...initial, resources: { ...initial.resources } };
+eq(Object.getPrototypeOf(legacyPlain062.resources), Object.prototype,
+  "legacy JSON-rehydrated EngineState is intentionally a plain object");
+for (const absentId of ["constructor", "toString", "__proto__"]) {
+  eq(Object.hasOwn(legacyPlain062.resources, absentId), false,
+    "special-name endpoint is genuinely absent: " + absentId);
+  eq(queryReachability(scenario, legacyPlain062, absentId, "rds01", "tcp", 3389).truth,
+    "UNKNOWN", "missing inherited-name endpoint never yields false network evidence");
+  eq(queryLayer2BroadcastReachability(scenario, legacyPlain062, absentId, "rds01").truth,
+    "UNKNOWN", "missing inherited-name L2 endpoint is UNKNOWN");
+  eq(queryHostStackView(legacyPlain062, absentId, "tcp", 3389).truth,
+    "UNKNOWN", "host stack query requires an actual own resource");
+  eq(queryServiceEnabled(legacyPlain062, absentId, "rdp").truth,
+    "UNKNOWN", "service check cannot use Object.prototype function as a host");
+  eq(queryDnsChain(scenario, legacyPlain062, absentId, "example.com").truth,
+    "UNKNOWN", "DNS source cannot be an inherited JavaScript key");
+  eq(queryDhcpDora(scenario, legacyPlain062, absentId).truth,
+    "UNKNOWN", "DHCP client cannot be an inherited JavaScript key");
+  eq(queryTcpStateMachine(legacyPlain062, absentId, "rds01", 3389).truth,
+    "UNKNOWN", "TCP state-machine source must be a declared own resource");
+  eq(evaluateRule({ op: "equals", target: absentId,
+    path: "properties.nla", value: true }, {
+      scenario, state: legacyPlain062, testResults: {},
+    }).truth, "UNKNOWN", "property rule cannot resolve inherited ID");
+}
+eq(queryReachability(scenario, legacyPlain062, "attacker", "rds01", "tcp", 3389).truth,
+  "TRUE", "real resources in a rehydrated object still produce modeled reachability");
+
+const ownScenario062 = structuredClone(scenario);
+ownScenario062.resources.push({
+  ...structuredClone(scenario.resources[0]), id: "constructor", label: "Own constructor",
+});
+const ownEngine062 = createInitialEngineState(ownScenario062);
+const ownPlain062 = { ...ownEngine062, resources: { ...ownEngine062.resources } };
+ok(Object.hasOwn(ownPlain062.resources, "constructor"),
+  "declared constructor resource is owned in plain JSON state");
+eq(queryReachability(ownScenario062, ownPlain062, "constructor", "rds01", "tcp", 3389).truth,
+  "FALSE", "real constructor-named resource is allowed and its unconnected topology is FALSE");
+eq(queryLayer2BroadcastReachability(ownScenario062, ownPlain062, "constructor", "rds01").truth,
+  "FALSE", "real constructor-named L2 endpoint can prove declared path absence");
+console.log("PASS ENGINE-062: no inherited-resource truths, crashes, or phantom endpoints");
 
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);

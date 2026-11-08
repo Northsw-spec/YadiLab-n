@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import { isRecord } from "./json.js";
 import type {
   EngineQueryResult,
@@ -124,7 +125,7 @@ export function queryHostStackView(
   protocol: "tcp" | "udp" | "icmp" | "any" = "any",
   port?: number,
 ): EngineQueryResult<HostStackDecisionTrace> {
-  const resource = state.resources[target];
+  const resource = ownResource(state, target);
   if (!resource) return { truth: "UNKNOWN", explanation: [`Resource '${target}' is absent from runtime state.`] };
   const services = baseServices(resource.properties);
   const selectedServices = selectedServiceNames(services, protocol, port);
@@ -253,7 +254,7 @@ export function queryHostStackView(
 }
 
 export function queryServiceEnabled(state: EngineState, target: string, service: string): EngineQueryResult<undefined> {
-  const resource = state.resources[target];
+  const resource = ownResource(state, target);
   if (!resource) return { truth: "UNKNOWN", explanation: [`Resource '${target}' is absent from runtime state.`] };
   const candidates = collectServices(resource.properties).filter((item) => item.name === service);
   if (candidates.length === 0) return { truth: "UNKNOWN", explanation: [`Service '${service}' is not declared on '${target}'.`] };
@@ -302,7 +303,7 @@ export function queryListenerServiceState(
     };
   }
 
-  const resource = state.resources[target];
+  const resource = ownResource(state, target);
   if (!resource) {
     const explanation = [`Resource '${target}' is absent from runtime state.`];
     return {

@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import type { EngineState, L2PropagationCounters, L2PropagationEvent, L2PropagationResult, TruthValue } from "./types.js";
 
@@ -13,7 +14,7 @@ function counters(events:readonly L2PropagationEvent[],limit:number):L2Propagati
 export function simulateL2RepeatedPropagation(scenario:NormalizedScenario,state:EngineState,sourceResourceId:string,frameId="frame_1",options:L2PropagationOptions={maxEvents:128,maxDepth:32}):L2PropagationResult {
   const explanation:string[]=[];
   if (!Number.isInteger(options.maxEvents)||options.maxEvents<1||!Number.isInteger(options.maxDepth)||options.maxDepth<1) return {truth:"UNKNOWN",outcome:"UNKNOWN",events:[],counters:counters([],Math.max(0,options.maxEvents)),explanation:["Safety limits must be positive integers."]};
-  if (!state.resources[sourceResourceId]||!scenario.resources.some(r=>r.id===sourceResourceId)) return {truth:"UNKNOWN",outcome:"UNKNOWN",events:[],counters:counters([],options.maxEvents),explanation:[`Source resource '${sourceResourceId}' is absent.`]};
+  if (!ownResource(state, sourceResourceId)||!scenario.resources.some(r=>r.id===sourceResourceId)) return {truth:"UNKNOWN",outcome:"UNKNOWN",events:[],counters:counters([],options.maxEvents),explanation:[`Source resource '${sourceResourceId}' is absent.`]};
   const events:L2PropagationEvent[]=[]; const queue:Work[]=[{resourceId:sourceResourceId,parentEventId:"",depth:0,path:[sourceResourceId]}];
   const emit=(event:Omit<L2PropagationEvent,"eventId"|"provenance">):L2PropagationEvent=>{ const e={...event,eventId:eventId(events.length+1),provenance:"ENGINE_L2_PROPAGATION" as const}; events.push(e); return e; };
   emit({frameId,kind:"FRAME_GENERATED",currentResourceId:sourceResourceId,propagationDepth:0,repetitionCount:0,forwardingReason:"source frame generated"});
@@ -25,8 +26,8 @@ export function simulateL2RepeatedPropagation(scenario:NormalizedScenario,state:
     for(const edge of edges){
       if(edge.id===work.ingressConnectionId) continue;
       const fromCurrent=edge.from.resource===work.resourceId; const egress=fromCurrent?edge.from.port:edge.to.port; const ingress=fromCurrent?edge.to.port:edge.from.port; const next=fromCurrent?edge.to.resource:edge.from.resource;
-      if(!egress||!ingress||!state.resources[next]) { explanation.push(`Connection '${edge.id}' has incomplete endpoints.`); return {truth:"UNKNOWN",outcome:"UNKNOWN",events,counters:counters(events,options.maxEvents),explanation}; }
-    const current=state.resources[work.resourceId]; if(!current) { explanation.push(`Resource '${work.resourceId}' is absent from Engine state.`); return {truth:"UNKNOWN",outcome:"UNKNOWN",events,counters:counters(events,options.maxEvents),explanation}; } let stpState:L2PropagationEvent["stpState"];
+      if(!egress||!ingress||!ownResource(state, next)) { explanation.push(`Connection '${edge.id}' has incomplete endpoints.`); return {truth:"UNKNOWN",outcome:"UNKNOWN",events,counters:counters(events,options.maxEvents),explanation}; }
+    const current=ownResource(state, work.resourceId); if(!current) { explanation.push(`Resource '${work.resourceId}' is absent from Engine state.`); return {truth:"UNKNOWN",outcome:"UNKNOWN",events,counters:counters(events,options.maxEvents),explanation}; } let stpState:L2PropagationEvent["stpState"];
       if(current.type==="network.switch") {
         const raw=current.properties.stpPorts;
         if(!Array.isArray(raw)) { explanation.push(`Switch '${current.id}' has no canonical stpPorts model.`); return {truth:"UNKNOWN",outcome:"UNKNOWN",events,counters:counters(events,options.maxEvents),explanation}; }

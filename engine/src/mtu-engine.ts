@@ -1,9 +1,10 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import type { EngineState, MtuEvaluationRequest, MtuEvaluationTrace } from "./types.js";
 
 function positiveInteger(value:unknown):value is number { return typeof value === "number" && Number.isInteger(value) && value > 0; }
 function resourceInterface(state:EngineState,resourceId:string,interfaceId:string):Readonly<Record<string,unknown>>|undefined {
-  const resource=state.resources[resourceId]; return resource?.interfaces.find(item=>item.id===interfaceId);
+  const resource=ownResource(state, resourceId); return resource?.interfaces.find(item=>item.id===interfaceId);
 }
 function connectionFor(scenario:NormalizedScenario,resourceId:string,interfaceId:string):NormalizedScenario["connections"][number]|undefined {
   return [...scenario.connections].filter(connection=>{
@@ -18,7 +19,7 @@ function base(request:MtuEvaluationRequest,comparison:MtuEvaluationTrace["compar
 }
 
 export function evaluateMtuAtEgress(scenario:NormalizedScenario,state:EngineState,request:MtuEvaluationRequest):MtuEvaluationTrace {
-  const resource=state.resources[request.resourceId];
+  const resource=ownResource(state, request.resourceId);
   if(!resource||!scenario.resources.some(item=>item.id===request.resourceId)) return base(request,"UNKNOWN","UNKNOWN",[`Resource '${request.resourceId}' is absent from the scenario or Engine state.`]);
   if(!resourceInterface(state,request.resourceId,request.egressInterface)||!scenario.resources.find(item=>item.id===request.resourceId)?.interfaces.some(item=>item.id===request.egressInterface)) return base(request,"UNKNOWN","UNKNOWN",[`Egress interface '${request.resourceId}.${request.egressInterface}' is absent or ambiguous.`]);
   if(request.packetSize===undefined) return base(request,"UNMODELED","UNKNOWN",["Packet size is not modeled; the Engine does not infer it from protocol."]);

@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { isRecord } from "./json.js";
 import { queryAuthentication, queryMembership, queryPermission } from "./identity-engine.js";
@@ -49,7 +50,7 @@ function evaluateBooleanAudit(
     return make(test, "UNKNOWN", [`Test '${test.id}' has an invalid declared params.path.`]);
   if (!target) return make(test, "UNKNOWN", [`Test '${test.id}' requires params.target.`]);
   if (typeof expected !== "boolean") return make(test, "UNKNOWN", [`Test '${test.id}' params.equals must be boolean when supplied.`]);
-  const resource = state.resources[target];
+  const resource = ownResource(state, target);
   if (!resource) return make(test, "UNKNOWN", [`Test target '${target}' is absent from runtime state.`]);
   const read = readPath(resource, path);
   if (!read.found) return make(test, "UNKNOWN", [`${label} evidence path '${path}' is not declared on '${target}'.`]);
@@ -117,7 +118,7 @@ function evaluatePropertyTest(test: ScenarioTest, state: EngineState): TestEvalu
   const target = paramString(test.params, "target");
   const path = paramString(test.params, "path");
   if (!target || !path || !("equals" in test.params)) return make(test, "UNKNOWN", [`Test '${test.id}' requires params.target, params.path, and params.equals.`]);
-  const resource = state.resources[target];
+  const resource = ownResource(state, target);
   if (!resource) return make(test, "UNKNOWN", [`Test target '${target}' is absent from runtime state.`]);
   const read = readPath(resource, path);
   if (!read.found) return make(test, "UNKNOWN", [`Path '${path}' is not declared on '${target}'.`]);
