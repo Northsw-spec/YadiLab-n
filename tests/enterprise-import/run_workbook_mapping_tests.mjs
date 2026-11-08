@@ -140,4 +140,72 @@ console.log("PASS IMPORT-035: blank optional MTU accepted; signed layout rank pr
 
 
 
+// IMPORT-036: preview row counts are physical source rows, not the count of
+// diagnostics. Multiple field errors on one row reject that row just once.
+const multipleErrorsInOneRow = workbook(2);
+const firstNode = multipleErrorsInOneRow.tables.find(t => t.tableId === "Nodes").records[0];
+firstNode.fields.nodeId.value = "INVALID NODE!";
+firstNode.fields.displayName.value = "";
+firstNode.fields.type.value = "Bad Type";
+const rowResult = mapNetworkWorkbookToScenario(multipleErrorsInOneRow);
+assert.equal(rowResult.ok, false);
+assert.equal(rowResult.preview.rowsPerSheet.Nodes, 2);
+assert.equal(rowResult.preview.rejectedRows.Nodes, 1,
+  "Three field errors on a node are not three rejected source rows");
+assert.equal(rowResult.preview.mappedRows.Nodes, 1,
+  "Remaining valid source row must not disappear from the preview");
+assert.ok(rowResult.preview.errors >= 3,
+  "Count actual distinct diagnostics separately from rejected rows");
+
+// Previously scenarioId was checked only *after* the preview was built:
+// return value said import failed but preview misleadingly reported zero errors.
+const badMetadataId = workbook(2);
+badMetadataId.tables[0].records[0].fields.scenarioId = cell("Invalid Scenario!");
+const badMetadataResult = mapNetworkWorkbookToScenario(badMetadataId);
+assert.equal(badMetadataResult.ok, false);
+assert.equal(badMetadataResult.source, undefined);
+assert.ok(badMetadataResult.diagnostics.some(d =>
+  d.code === "WORKBOOK_SCENARIO_ID_INVALID" &&
+  d.table === "Metadata" && d.row === 1 && d.field === "scenarioId"));
+assert.equal(badMetadataResult.preview.errors, 1,
+  "An invalid scenario ID must appear in the same preview shown to the operator");
+assert.equal(badMetadataResult.preview.rejectedRows.Metadata, 1);
+
+// The version field is source evidence, not a hint to silently import a
+// future workbook with potentially different semantics as current schema.
+const futureWorkbook = workbook(2);
+futureWorkbook.tables[0].records[0].fields.schemaVersion = cell("2.0.0");
+const futureResult = mapNetworkWorkbookToScenario(futureWorkbook);
+assert.equal(futureResult.ok, false);
+assert.equal(futureResult.source, undefined);
+assert.ok(futureResult.diagnostics.some(d =>
+  d.code === "WORKBOOK_SCHEMA_VERSION_UNSUPPORTED" &&
+  d.table === "Metadata" && d.row === 1 && d.field === "schemaVersion"));
+assert.ok(futureResult.preview.errors > 0);
+
+const emptyMetadata = workbook(2);
+emptyMetadata.tables[0].records = [];
+const emptyMetadataResult = mapNetworkWorkbookToScenario(emptyMetadata);
+assert.equal(emptyMetadataResult.ok, false,
+  "A required Metadata sheet with no record cannot be silently synthesized");
+assert.ok(emptyMetadataResult.diagnostics.some(d => d.code === "WORKBOOK_METADATA_EMPTY"));
+assert.ok(emptyMetadataResult.preview.errors > 0);
+
+const ambiguousMetadata = workbook(2);
+ambiguousMetadata.tables[0].records.push(record(2,
+  { schemaVersion: "1.0.0", scenarioId: "other_scenario", title: "Other Scenario" }));
+const ambiguousResult = mapNetworkWorkbookToScenario(ambiguousMetadata);
+assert.equal(ambiguousResult.ok, false,
+  "An extra competing Metadata record cannot silently be discarded");
+assert.ok(ambiguousResult.diagnostics.some(d => d.code === "WORKBOOK_METADATA_MULTIPLE"));
+assert.ok(ambiguousResult.preview.errors > 0);
+
+// Inventory-normalized workbooks may omit version metadata; absence must
+// remain compatible while an explicitly unsupported version is rejected.
+const noVersion = workbook(2);
+delete noVersion.tables[0].records[0].fields.schemaVersion;
+assert.equal(mapNetworkWorkbookToScenario(noVersion).ok, true);
+
+console.log("PASS IMPORT-036: truthful row totals, metadata identity and version validation");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
