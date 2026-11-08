@@ -10,6 +10,7 @@
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectFileControls } from "./project-file-controls.mjs";
+import { liveCanvasWorkspace, liveBuilderCanvasMutationWorkspace } from "./topology-workspace-guard.mjs";
 import { markApplicationReady, markApplicationStopped } from "../src/browser/runtime-readiness.mjs";
 import { createRoot } from "react-dom/client";
 import {
@@ -632,11 +633,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // from a render that predates an inspector Apply, New/Open, or source import.
   // Never publish the closed-over workspace: it may silently restore a stale
   // canonical source and falsely clear the project's unsaved state.
-  const liveTopologyWorkspace = () => {
-    if (getScenarioTransitionId() !== projectGeneration) return null;
-    const current = getWorkspace();
-    return current?.mode === workspace.mode ? current : null;
-  };
+  const liveTopologyWorkspace = () =>
+    liveCanvasWorkspace(workspace, getWorkspace(), projectGeneration, getScenarioTransitionId());
+  const liveTopologyMutationWorkspace = () =>
+    liveBuilderCanvasMutationWorkspace(workspace, getWorkspace(), projectGeneration, getScenarioTransitionId());
   const flowApi = useRef(null);
   const topologyPanelRef = useRef(null);
   const topologyViewportRef = useRef(null);
@@ -985,11 +985,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
             ...node.data,
             builderEditable: true,
             onResizeEnd: (params) => {
-              const active = liveTopologyWorkspace();
-              // Geometry from an obsolete source projection is not an
-              // operator-authorized resize of the newest canonical graph.
-              if (!active || active.mode !== "builder" ||
-                  active.source !== workspace.source) return;
+              const active = liveTopologyMutationWorkspace();
+              // A geometry callback from a retired projection cannot edit a
+              // newer canonical graph, even within the same project.
+              if (!active) return;
               const result = resizeBuilderZone(active, {
                 id: node.id,
                 x: params.x,
@@ -1107,9 +1106,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }
   };
   const onNodeDragStop = (_event, node) => {
-    const active = liveTopologyWorkspace();
-    if (!active || active.mode !== "builder" ||
-        active.source !== workspace.source ||
+    const active = liveTopologyMutationWorkspace();
+    if (!active ||
         validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
     setWorkspace(setLayoutOverride(active, {
       id: node.id,
@@ -1120,9 +1118,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }));
   };
   const onConnect = (connection) => {
-    const active = liveTopologyWorkspace();
-    if (!active || active.mode !== "builder" ||
-        active.source !== workspace.source ||
+    const active = liveTopologyMutationWorkspace();
+    if (!active ||
         validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
     const result = createBuilderConnectionFromCanvas(active, connection);
     setDiagnostics(result.diagnostics);
