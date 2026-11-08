@@ -185,6 +185,10 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   // zone. No missing object may be invented merely to satisfy a layout hint.
   for (const record of rows(tables, "Layout")) {
     const target = text(record, "nodeId");
+    if (!blank(value(record, "nodeId")) && !target)
+      diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_INVALID",
+        "Layout.nodeId must be a declared node or zone identifier; an invalid typed value cannot be discarded.",
+        "Layout", record.recordIndex, "nodeId"));
     if (target && !nodeIds.has(target) && !zoneIds.has(target))
       diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_UNKNOWN",
         "Layout.nodeId references no declared node or zone.",
