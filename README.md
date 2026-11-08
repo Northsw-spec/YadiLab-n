@@ -47,8 +47,9 @@ only when both visible fields are cleared. Incomplete asset pairs are rejected
 without changing the canonical source. The Builder's separate Create Connection
 action rejects an already-used connection ID rather than silently overwriting
 the existing topology link. Its Edit Connection action remains available for
-deliberate updates. These semantics are regression-tested in required source
-CI and actual compiled Chromium. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
+deliberate updates. The asset semantics are regression-tested by the
+mandatory Builder Inspector TypeScript/Node suite; duplicate link creation is
+also rejected by an actual source-built Chromium UI acceptance. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports
 
