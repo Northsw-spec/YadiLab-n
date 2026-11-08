@@ -1099,6 +1099,40 @@ def main():
                 page.evaluate(
                     "(saved) => { window.__yadilabProjectStore.text = saved; }",
                     saved_after_ctrl)
+            # PROJECT-028: UTF-8 decoder drops a leading BOM, so a file
+            # changed on disk by adding BOM still decodes to the same project.
+            # The real compiled app must compare physical bytes, not text.
+            bom_conflict = context.new_page()
+            bom_conflict.add_init_script(MOCK)
+            bom_conflict.on("pageerror", lambda error: errors.append(str(error)))
+            bom_conflict.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            bcontrols = bom_conflict.locator('[data-project-file-controls="ready"]')
+            expect(bcontrols).to_be_visible(timeout=45000)
+            bom_conflict.locator('[data-project-action="save-as"]').click()
+            expect(bom_conflict.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            bom_conflict.evaluate("""() => new Promise(resolve =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve)))""")
+            bom_conflict.evaluate("""() => {
+                const disk = window.__yadilabProjectStore;
+                disk.text = '\\uFEFF' + disk.text;
+            }""")
+            bom_before = bom_conflict.evaluate("""() => ({
+                text: window.__yadilabProjectStore.text,
+                writes: window.__yadilabProjectStore.writes,
+            })""")
+            bom_conflict.keyboard.press("Control+s")
+            expect(bom_conflict.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_EXTERNAL_FILE_CHANGED", timeout=20000)
+            bom_after = bom_conflict.evaluate("""() => ({
+                text: window.__yadilabProjectStore.text,
+                writes: window.__yadilabProjectStore.writes,
+            })""")
+            require(bom_after == bom_before,
+                    "BOM-only external edit was overwritten by Save")
+            expect(bcontrols).to_have_attribute("data-project-dirty", "true")
+            bom_conflict.close()
+
             # An external file modification must never be overwritten by Ctrl+S.
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)

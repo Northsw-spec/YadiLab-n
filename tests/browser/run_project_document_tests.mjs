@@ -151,6 +151,40 @@ const fromDisk = await readProjectFile(await handle.getFile(),opts);
 assert.deepEqual(fromDisk.source,restored.source);
 assert.deepEqual(fromDisk.layoutOverrides,restored.layoutOverrides);
 assert.match(fromDisk.fileSha256,/^[0-9a-f]{64}$/);
+// PROJECT-028: exact native disk identity must be based on raw File bytes,
+// not TextDecoder's normalized text. UTF-8 BOM is discarded by TextDecoder,
+// so adding the three BOM bytes changes the physical file while preserving
+// the decoded JSON text. Open and Save must still detect the byte change.
+const bomBytes = new Uint8Array(3 + new TextEncoder().encode(text).byteLength);
+bomBytes.set([0xef, 0xbb, 0xbf]);
+bomBytes.set(new TextEncoder().encode(text), 3);
+const bomFile = () => ({
+  name: "network.yadilab", size: bomBytes.byteLength,
+  async arrayBuffer() { return bomBytes.buffer.slice(0); },
+});
+assert.equal(new TextDecoder("utf-8", { fatal: true }).decode(bomBytes), text,
+  "BOM test must prove different physical bytes decode to identical JSON text");
+const withBom = await readProjectFile(bomFile(), opts);
+assert.deepEqual(withBom.source, fromDisk.source, "BOM file remains valid JSON");
+assert.notEqual(withBom.fileSha256, fromDisk.fileSha256,
+  "Native file fingerprint must change when BOM bytes are added");
+await assert.rejects(assertProjectOpenDiskUnchanged(
+  { async getFile() { return bomFile(); } }, fromDisk.fileSha256),
+  /PROJECT_EXTERNAL_FILE_CHANGED_DURING_OPEN/,
+  "Open must not attach a verified handle if external bytes gained a BOM");
+let bomSaveWriteAttempts = 0;
+await assert.rejects(writeProjectFile({
+  async getFile() { return bomFile(); },
+  async createWritable() { bomSaveWriteAttempts++; throw Error("must not write"); },
+}, text, { expectedFileSha256: fromDisk.fileSha256 }),
+/PROJECT_EXTERNAL_FILE_CHANGED/,
+"Save must reject byte-changed existing file before a writable is opened");
+assert.equal(bomSaveWriteAttempts, 0);
+assert.equal(await assertProjectOpenDiskUnchanged(
+  { async getFile() { return bomFile(); } }, withBom.fileSha256), true,
+  "An explicitly opened BOM-bearing file must recognize the same exact bytes");
+console.log("PASS PROJECT-028: exact native Open/Save SHA-256 tracks physical bytes including UTF-8 BOM");
+
 const firstWrite = stored;
 await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:"bad"}),/PROJECT_EXPECTED_DIGEST_INVALID/);
 await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:(fromDisk.fileSha256[0] === "0" ? "1" : "0")+fromDisk.fileSha256.slice(1)}),
