@@ -135,6 +135,9 @@ Topology selection, canvas edits, Compile, Runtime Preview and canonical
 JSON Export are blocked while staged Builder form text remains; the
 operator must explicitly Apply or revert it. A blocked action preserves
 the visible draft instead of silently saving or compiling older source.
+A confirmed project transition clears old pending drafts synchronously;
+late editor callbacks and React unmounts from the superseded project
+cannot mark the newly opened document dirty or erase its fresh edits.
 Real compiled Chromium tests cover the Save/New, cross-editor and canvas
 boundaries; neither form tracking nor a discarded draft constitutes autosave.
 
