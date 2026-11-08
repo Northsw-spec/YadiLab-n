@@ -503,8 +503,10 @@ for (const [type,params,code,field] of invalidFoundationCases) {
   const result = await compileScenario(source,contextFor());
   assert.equal(result.ok,false,
     "Compiler incorrectly accepted malformed Foundation test " + type);
+  const expectedPath = "tests[" + index + "].params" +
+    (field === "params" ? "" : "." + field);
   assert.ok(result.diagnostics.some(d => d.code === code &&
-    d.path === ("tests[" + index + "].params." + field)),
+    d.path === expectedPath),
     "Compiler must locate the original invalid param " + type + "." + field +
     ", got " + JSON.stringify(result.diagnostics));
   assertions += 2;
