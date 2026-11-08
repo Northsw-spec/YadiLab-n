@@ -61,6 +61,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_builder_late_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/builder-late-draft"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_async_lab_draft_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/async-lab-drafts"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

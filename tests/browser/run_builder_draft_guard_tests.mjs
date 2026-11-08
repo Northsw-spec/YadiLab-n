@@ -78,4 +78,30 @@ for (const marker of [
 ]) {
   eq(controls.includes(marker), true, "native project workflow protects staged text: " + marker);
 }
+// An async lab may compile/layout while the original Inspector is still
+// mounted. Its draft generation must advance only on a real project handoff.
+const launchGuard = ui.slice(ui.indexOf("const reserveGuardedScenarioLaunch = () =>"),
+  ui.indexOf("// Runtime imports/restores may await files"));
+eq(launchGuard.includes("PROJECT_LAB_LATE_UNAPPLIED_DRAFT"), true,
+  "late Inspector/JSON typing vetoes pending lab replacement");
+eq(launchGuard.includes("scenarioLaunchRequestRef.current !== launchToken"), true,
+  "a superseded lab launch cannot publish after a new request");
+eq(launchGuard.includes("beginScenarioTransition();"), true,
+  "a committed lab replacement advances the draft generation");
+for (const [name, nextName] of [
+  ["openGuidedLab", "openEnterpriseScenario"],
+  ["openEnterpriseScenario", "openVerifiedDeliveryScenario"],
+  ["openVerifiedDeliveryScenario", "exportPackage"],
+]) {
+  const code = ui.slice(ui.indexOf("const " + name + " = async"),
+    ui.indexOf("const " + nextName + " = async"));
+  eq(code.includes("reserveGuardedScenarioLaunch()"), true,
+    name + " starts a guarded launch without clearing the current drafts");
+  eq(code.includes("const isLiveLaunch = launch.isLive;") && code.includes("isLiveLaunch()"), true,
+    name + " checks live draft owners after awaited work");
+  eq(code.includes("launch.publish("), true,
+    name + " advances generation only at the commit boundary");
+  eq(code.includes("beginScenarioTransition()"), false,
+    name + " never advances generation before asynchronous work");
+}
 console.log(`PASS PROJECT-065: ${checks} staged Inspector/JSON and native Save/New assertions`);
