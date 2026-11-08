@@ -20,14 +20,15 @@ MOCK = r"""
   const store = { text: "", writes: 0, fail: false, reads: 0,
     permissionDenied: false, cancelSave: false, cancelOpen: false,
     aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0,
-    injectBomAfterClose: false,
+    injectBomAfterClose: false, nativeName: "verified-network.yadilab",
+    suggestedName: null,
     chooseAlternative: false, otherText: "", otherWrites: 0,
     pauseIdentity: false, pendingIdentity: false, releaseIdentity: null,
     pauseOpenPicker: false, pendingOpenPicker: false, releaseOpenPicker: null,
     openPickerCalls: 0, editAfterOpenSnapshot: false,
     pauseWritableOpen: false, pendingWritableOpen: false, releaseWritableOpen: null };
   const handle = {
-    name: "verified-network.yadilab",
+    get name() { return store.nativeName; },
     async createWritable() {
       if (store.permissionDenied) throw new DOMException("Permission denied", "NotAllowedError");
       if (store.pauseWritableOpen) {
@@ -95,7 +96,8 @@ MOCK = r"""
     },
   };
   Object.defineProperty(window, "showSaveFilePicker", {
-    configurable: true, value: async () => {
+    configurable: true, value: async (options) => {
+      store.suggestedName = options?.suggestedName;
       if (store.cancelSave) throw new DOMException("Save cancelled", "AbortError");
       return store.chooseAlternative ? alternate :
              store.aliasSameEntryOnSaveAs ? alias : handle;
@@ -188,8 +190,43 @@ def main():
                 "Saved and read back", timeout=20000)
             require(wrong_extension.evaluate("window.__yadilabProjectStore.writes") == 1,
                     "PROJECT-025 valid .yadilab recovery did not write exactly once")
+            require(wrong_extension.evaluate(
+                "window.__yadilabProjectStore.suggestedName") == "Untitled.yadilab",
+                "PROJECT-031 New -> Save As proposed a filename different from the displayed Untitled project")
             expect(wec).to_have_attribute("data-project-dirty", "false")
             wrong_extension.close()
+            # PROJECT-031: Open must display the ACTUAL filename from the
+            # selected native File, including long basenames. The normal
+            # filename helper truncates to 100 chars for newly suggested
+            # names and must never be applied to an existing disk identity.
+            long_open = context.new_page()
+            long_open.add_init_script(MOCK)
+            long_open.on("pageerror", lambda error: errors.append(str(error)))
+            long_open.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            loc = long_open.locator('[data-project-file-controls="ready"]')
+            expect(loc).to_be_visible(timeout=45000)
+            long_open.locator('[data-project-action="save-as"]').click()
+            expect(long_open.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            real_name = "long_project_" + "n" * 112 + ".yadilab"
+            long_open.evaluate("""(name) => {
+                window.__yadilabProjectStore.nativeName = name;
+            }""", real_name)
+            long_open.locator('[data-project-action="open"]').click()
+            expect(long_open.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source", timeout=20000)
+            expect(loc).to_have_attribute("data-project-filename", real_name)
+            expect(loc).to_have_attribute("data-project-dirty", "false")
+            # The original bound native handle must remain usable even when
+            # its name exceeds the suggested-name sanitization limit.
+            long_open.keyboard.press("Control+s")
+            expect(long_open.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(loc).to_have_attribute("data-project-filename", real_name)
+            require(long_open.evaluate("window.__yadilabProjectStore.writes") == 2,
+                    "PROJECT-031 long-name Open lost its associated native Save handle")
+            long_open.close()
+
             # PROJECT-018: browsers without File System Access still need a
             # discard guard and a pinned origin while a normal file-input
             # chooser is open. Test the real Chromium file chooser (not a
