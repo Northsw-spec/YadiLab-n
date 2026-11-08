@@ -2113,7 +2113,8 @@ def main():
             # Even a no-op inspector Apply must not request unnecessary Save,
             # and a second pending edit may never overwrite the verified file.
             atomic.locator(
-                '[data-builder-inspector="mission"] button').click()
+                '[data-builder-inspector="mission"]').get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
             expect(ac).to_have_attribute("data-project-dirty", "false")
             require(atomic.evaluate("window.__yadilabProjectStore.writes") == 4,
                     "A no-op Apply triggered a hidden native save")
