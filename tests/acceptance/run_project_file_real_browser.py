@@ -872,6 +872,16 @@ def main():
                 has_text="Builder Inspector & Authoring")
             if asset_section.get_attribute("open") is None:
                 asset_section.locator("summary").first.click()
+            # The welcome source starts as an uncompiled Builder draft,
+            # with no ReactFlow node projection. Explicitly compile first.
+            asset_studio = asset_page.locator("details.control-section").filter(
+                has_text="Scenario & Builder")
+            if asset_studio.get_attribute("open") is None:
+                asset_studio.locator("summary").first.click()
+            asset_compile = asset_page.locator(
+                '[data-studio-action="validate-compile"]')
+            asset_compile.click()
+            expect(asset_compile).to_be_disabled(timeout=30000)
             # Select a real ReactFlow node so this tests the mounted app,
             # not a direct call to the underlying TypeScript command.
             resource_node = asset_page.locator(
