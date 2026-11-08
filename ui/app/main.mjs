@@ -4049,7 +4049,11 @@ function App() {
   // just-applied canonical Builder edit *in that same event turn*. All callers
   // currently submit concrete workspaces, never updater callbacks.
   const setWorkspace = React.useCallback((next) => {
+    // A subsequent Runtime Preview can be requested in the same JavaScript
+    // task as an Apply. Keep the latest editable Builder source for Back even
+    // before React commits the next render.
     latestDrawioWorkspaceRef.current = next;
+    if (next.mode === "builder") lastBuilderWorkspaceRef.current = next;
     commitWorkspaceState(next);
   }, []);
   const [importWorkbench, setImportWorkbench] = useState(() => emptyImportWorkbench());
@@ -4575,6 +4579,16 @@ function App() {
   };
 
   const preview = () => {
+    // Inspector Apply and Runtime Preview can fire in the same JS event.
+    // The rendered callback then still refers to the pre-Apply compiled
+    // source while the live Builder is already dirty. Do not activate a
+    // stale Engine/Runtime or silently replace the newer editable source.
+    if (latestDrawioWorkspaceRef.current !== workspace) {
+      setDiagnostics([{ severity: "error",
+        code: "PROJECT_RUNTIME_PREVIEW_STALE_WORKSPACE",
+        message: "Builder source changed before Runtime Preview. Validate and compile the current source before previewing it." }]);
+      return;
+    }
     if (workspace.mode !== "builder") return;
     const largeGuard=classifyScaledOfficeFiveThousandView({
       mode:"builder",resources:workspace.source.resources.length,
@@ -4645,13 +4659,17 @@ function App() {
   };
 
   const exportSource = () => {
-    if (workspace.mode !== "builder") return;
-    downloadJson(createScenarioSourceDownload(workspace.source, `${workspace.source.scenarioId}.json`));
+    // Export must reflect the latest committed source even if React has not
+    // painted an Inspector Apply yet. Never silently download older JSON.
+    const active = latestDrawioWorkspaceRef.current;
+    if (active.mode !== "builder") return;
+    downloadJson(createScenarioSourceDownload(active.source, `${active.source.scenarioId}.json`));
   };
 
   const exportProgress = () => {
-    if (workspace.mode !== "runtime") return;
-    downloadJson(createProgressDownload(workspace));
+    const active = latestDrawioWorkspaceRef.current;
+    if (active.mode !== "runtime") return;
+    downloadJson(createProgressDownload(active));
   };
 
   const exportTroubleshootingSession = async () => {
@@ -4892,24 +4910,34 @@ function App() {
   };
 
   const exportPackage = async (distribution) => {
-    if (workspace.mode !== "builder") return;
-    const result = await buildBuilderPackageExport(workspace, {
+    const origin = latestDrawioWorkspaceRef.current;
+    if (origin.mode !== "builder") return;
+    const result = await buildBuilderPackageExport(origin, {
       packageIO,
       distribution,
       scenarioExtension: branding.scenarioExtension,
     });
+    // Package building suspends at async I/O. A newer edit or replacement must
+    // not yield a download which falsely appears to include that new source.
+    if (latestDrawioWorkspaceRef.current !== origin) {
+      setDiagnostics([{ severity: "error",
+        code: "PROJECT_PACKAGE_EXPORT_STALE_WORKSPACE",
+        message: "Builder changed while exporting; no outdated package was downloaded. Retry from the current source." }]);
+      return;
+    }
     setDiagnostics(result.diagnostics);
     if (result.ok) downloadBlob(result.descriptor.blob, result.descriptor.filename);
   };
 
   const backToBuilder = () => {
-    if (workspace.mode !== "runtime") return;
-    const source = workspace.source ?? welcomeScenario;
+    const active = latestDrawioWorkspaceRef.current;
+    if (active.mode !== "runtime") return;
+    const source = active.source ?? welcomeScenario;
     const previous = lastBuilderWorkspaceRef.current;
     // Preserve editable topology, manual position overrides and the dirty flag
     // when returning from a preview of THIS exact Builder source.
-    const resume = workspace.source && previous?.mode === "builder" &&
-      previous.source === workspace.source
+    const resume = active.source && previous?.mode === "builder" &&
+      previous.source === active.source
       ? previous : createBuilderWorkspace(source);
     // React can batch this state update. Invalidate in-flight Runtime file,
     // IndexedDB and evidence restores NOW, before their pending promises may
