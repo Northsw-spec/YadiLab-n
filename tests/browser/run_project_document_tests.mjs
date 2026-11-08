@@ -145,7 +145,33 @@ const handle={
   },
   async getFile() { return file("network.yadilab", stored); },
 };
-assert.equal(await writeProjectFile(handle,text),true);
+// PROJECT-038: the exported writer is a disk-trust boundary, not just an
+// internal helper. An omitted destination policy would otherwise allow
+// unchecked overwrite of arbitrary existing .yadilab files.
+let unguardedReadCalls = 0;
+let unguardedWriteCalls = 0;
+const unguardedExistingFile = {
+  async getFile() {
+    unguardedReadCalls++;
+    return file("other-project.yadilab", "IRREPLACEABLE OTHER PROJECT");
+  },
+  async createWritable() {
+    unguardedWriteCalls++;
+    throw Error("A write without destination policy must never open a stream");
+  },
+};
+await assert.rejects(writeProjectFile(unguardedExistingFile, text),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "Omitting the write policy must be rejected before inspecting/touching the disk");
+await assert.rejects(writeProjectFile(unguardedExistingFile, text, { requireEmptyTarget: false }),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "Explicit false is not permission to overwrite an unassociated file");
+assert.equal(unguardedReadCalls, 0,
+  "Missing write policy must fail before any native file handle interaction");
+assert.equal(unguardedWriteCalls, 0,
+  "Missing write policy must never create a writable stream");
+assert.equal(await writeProjectFile(handle,text,{requireEmptyTarget:true}),true,
+  "A verified empty destination remains available for first Save As");
 assert.equal(stored,text);
 const fromDisk = await readProjectFile(await handle.getFile(),opts);
 assert.deepEqual(fromDisk.source,restored.source);
@@ -196,6 +222,11 @@ await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:fromDisk.f
 assert.equal(stored,firstWrite+"\\n","Refused overwrite must leave external modification intact");
 stored=firstWrite;
 assert.equal(await writeProjectFile(handle,text,{expectedFileSha256:fromDisk.fileSha256}),true);
+await assert.rejects(writeProjectFile(handle, "MUST_NOT_REPLACE_REAL_FILE"),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "A caller must not overwrite an associated non-empty file without exact disk fingerprint");
+assert.equal(stored, firstWrite, "Unchecked native write must preserve the existing project");
+console.log("PASS PROJECT-038: native writer fails closed unless empty-target or exact SHA-256 policy is explicit");
 const samePhysicalFile = { ...handle };
 handle.isSameEntry = async other => other === handle || other === samePhysicalFile;
 samePhysicalFile.isSameEntry = async other => other === handle || other === samePhysicalFile;
