@@ -6,6 +6,8 @@ import {
   applyOperation,
   applyOperations,
   createInitialEngineState,
+  createSaveState,
+  restoreSaveState,
   evaluateEngine,
   evaluateRule,
   evaluateTest,
@@ -1055,5 +1057,114 @@ for (const [field, value] of [
   }
 }
 console.log("PASS ENGINE-059: runtime operation identity, interface integrity and atomicity");
+
+// ENGINE-061: a hash-matching save is not authoritative proof that its
+// runtime resources still have the scenario's canonical type, zone, asset,
+// interface IDs, or a valid runtime data shape.
+const baselineSave061 = createSaveState(scenario, initial, evaluateEngine(scenario, initial));
+eq(Object.getPrototypeOf(baselineSave061.resourceState), null,
+  "runtime saves use a prototype-free resource identity namespace");
+const restored061 = restoreSaveState(scenario, baselineSave061);
+ok(restored061.ok, "unaltered saved runtime restores successfully");
+if (restored061.ok) {
+  eq(Object.getPrototypeOf(restored061.state.resources), null,
+    "restored Engine resource dictionary remains prototype-free");
+  eq(Object.keys(restored061.state.resources).sort(),
+    Object.keys(initial.resources).sort(),
+    "valid save preserves every expected resource key");
+  for (const id of Object.keys(initial.resources))
+    eq(restored061.state.resources[id], initial.resources[id],
+      "valid save roundtrips the exact resource content for " + id);
+}
+const invalidSave061 = [
+  ["changed resource type", save => { save.resourceState.rds01.type = "network.firewall"; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
+  ["changed resource zone", save => { save.resourceState.rds01.zone = "wan"; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
+  ["changed resource label", save => { save.resourceState.rds01.label = "Forged device"; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
+  ["changed catalog asset", save => { save.resourceState.rds01.asset.id = "network.firewall"; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
+  ["injected immutable field", save => { save.resourceState.rds01.forgedTopology = true; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
+  ["missing properties object", save => { delete save.resourceState.rds01.properties; }, "SAVE_RESOURCE_SHAPE_INVALID"],
+  ["array as properties", save => { save.resourceState.rds01.properties = []; }, "SAVE_RESOURCE_SHAPE_INVALID"],
+  ["missing interface list", save => { delete save.resourceState.rds01.interfaces; }, "SAVE_RESOURCE_SHAPE_INVALID"],
+  ["extra interface", save => { save.resourceState.rds01.interfaces = [{id:"phantom",label:"Phantom",addresses:[]}]; }, "SAVE_INTERFACE_SET_MISMATCH"],
+];
+for (const [label, change, expectedCode] of invalidSave061) {
+  const forged = structuredClone(baselineSave061);
+  change(forged);
+  const outcome = restoreSaveState(scenario, forged);
+  eq(outcome.ok, false, "corrupted save is rejected: " + label);
+  eq(outcome.code, expectedCode, "corrupted save returns precise integrity diagnostic: " + label);
+  eq(JSON.stringify(baselineSave061.resourceState), JSON.stringify(initial.resources),
+    "forged save did not mutate genuine source-backed save: " + label);
+}
+const editedState061 = applyOperation(initial, {
+  op: "set", target: "rds01", path: "properties.nla", value: true,
+});
+ok(editedState061.ok, "legitimate Runtime property mutation succeeds");
+if (editedState061.ok) {
+  const save061 = createSaveState(scenario, editedState061.state,
+    evaluateEngine(scenario, editedState061.state));
+  const restoredEdit = restoreSaveState(scenario, save061);
+  ok(restoredEdit.ok, "valid changed Runtime properties survive a save/restore");
+  if (restoredEdit.ok) {
+    eq(restoredEdit.state.resources.rds01.properties.nla, true,
+      "save/restore preserves explicitly edited configuration");
+    eq(restoredEdit.state.stateRevision, initial.stateRevision + 1,
+      "save/restore preserves legitimate Runtime revision");
+  }
+}
+const interfaceSource061 = structuredClone(scenario);
+interfaceSource061.resources.find(resource => resource.id === "rds01").interfaces = [
+  { id: "eth0", label: "LAN", addresses: ["192.0.2.8/24"], mtu: 1500 },
+];
+const interfaceState061 = createInitialEngineState(interfaceSource061);
+const interfaceSave061 = createSaveState(interfaceSource061, interfaceState061,
+  evaluateEngine(interfaceSource061, interfaceState061));
+for (const [label, change, expectedCode] of [
+  ["interface ID rewrite", save => { save.resourceState.rds01.interfaces[0].id = "eth1"; }, "SAVE_INTERFACE_IDENTITY_MISMATCH"],
+  ["interface label rewrite", save => { save.resourceState.rds01.interfaces[0].label = "Forged"; }, "SAVE_INTERFACE_IDENTITY_MISMATCH"],
+  ["removed interface", save => { save.resourceState.rds01.interfaces = []; }, "SAVE_INTERFACE_SET_MISMATCH"],
+  ["malformed interface", save => { save.resourceState.rds01.interfaces[0] = null; }, "SAVE_INTERFACE_INVALID"],
+]) {
+  const forged = structuredClone(interfaceSave061);
+  change(forged);
+  const outcome = restoreSaveState(interfaceSource061, forged);
+  eq(outcome.ok, false, "corrupted interface declaration rejected: " + label);
+  eq(outcome.code, expectedCode, "corrupted interface returns stable error: " + label);
+}
+const changedAddress061 = applyOperation(interfaceState061, {
+  op: "set", target: "rds01", path: "interfaces.0.addresses",
+  value: ["192.0.2.9/24"],
+});
+ok(changedAddress061.ok, "legitimate address operation succeeds");
+if (changedAddress061.ok) {
+  const resumed = restoreSaveState(interfaceSource061,
+    createSaveState(interfaceSource061, changedAddress061.state,
+      evaluateEngine(interfaceSource061, changedAddress061.state)));
+  ok(resumed.ok, "mutable interface address survives restore");
+  if (resumed.ok) {
+    eq(resumed.state.resources.rds01.interfaces[0].addresses, ["192.0.2.9/24"],
+      "saved mutable address remains available after restore");
+    eq(resumed.state.resources.rds01.interfaces[0].id, "eth0",
+      "restored interface retains its exact canonical identity");
+  }
+}
+const ownName061 = structuredClone(scenario);
+ownName061.resources.push({
+  ...structuredClone(scenario.resources[0]), id: "constructor", label: "Real constructor",
+});
+const ownState061 = createInitialEngineState(ownName061);
+const ownSave061 = createSaveState(ownName061, ownState061,
+  evaluateEngine(ownName061, ownState061));
+ok(Object.hasOwn(ownSave061.resourceState, "constructor"),
+  "valid own canonical name constructor is preserved in the save");
+const ownRestored061 = restoreSaveState(ownName061, ownSave061);
+ok(ownRestored061.ok, "legitimately named constructor resource can restore");
+if (ownRestored061.ok) {
+  eq(Object.getPrototypeOf(ownRestored061.state.resources), null,
+    "special-name restore cannot reintroduce inherited resources");
+  eq(ownRestored061.state.resources.constructor.id, "constructor",
+    "restored special-name resource resolves to its own record");
+}
+console.log("PASS ENGINE-061: save-state immutable envelope, interface identity and valid mutable restore");
 
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);
