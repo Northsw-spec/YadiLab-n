@@ -3,7 +3,9 @@ import { compileBuilderWorkspace } from "./builder.js";
 import type { BrowserDiagnostic, BrowserFoundationOptions, BuilderWorkspace } from "./types.js";
 import { createBuilderWorkspace } from "./builder.js";
 
-export type ImportWorkbenchStatus = "UNPARSED" | "PARSED" | "INVALID" | "VALID" | "COMPILED" | "READY_TO_ACTIVATE" | "ACTIVE";
+// READING and COMPILING are non-activatable transitional states. They
+// invalidate an older preview as soon as a newer file/compile is requested.
+export type ImportWorkbenchStatus = "UNPARSED" | "READING" | "PARSED" | "COMPILING" | "INVALID" | "VALID" | "COMPILED" | "READY_TO_ACTIVATE" | "ACTIVE";
 
 export interface ImportWorkbenchPreview {
   readonly scenarioId: string;
