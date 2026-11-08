@@ -24,7 +24,7 @@ function parseIPv4(source: string): { host: string; mask?: string } | undefined 
   const host = pieces[0];
   const mask = pieces[1];
   if (!host || !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) ||
-      host.split(".").some(octet => Number(octet) > 255) ||
+      host.split(".").some(octet => Number(octet) > 255 || (octet.length > 1 && octet.startsWith("0"))) ||
       (mask !== undefined && !validPrefix(mask))) return undefined;
   return { host, ...(mask === undefined ? {} : { mask }) };
 }

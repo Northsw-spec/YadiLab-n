@@ -212,6 +212,24 @@ console.log("PASS IMPORT-036: truthful row totals, metadata identity and version
 // a spreadsheet also declares the same prefix in the separate column.
 // Malformed or conflicting IP assertions must fail closed before activation.
 const ifaceOn = document => document.tables.find(t => t.tableId === "Interfaces").records[0].fields;
+
+// IMPORT-041: reject ambiguous leading-zero IPv4 octets instead of
+// presenting a potentially reinterpreted address as trusted source topology.
+const ordinaryIPv4 = workbook(2);
+ifaceOn(ordinaryIPv4).IPv4 = cell("10.0.0.1/24");
+assert.equal(mapNetworkWorkbookToScenario(ordinaryIPv4).ok, true,
+  "Ordinary explicit IPv4/CIDR must remain importable");
+for (const ambiguous of ["010.0.0.1", "10.00.0.1", "10.0.0.001/24"]) {
+  const malformed = workbook(2);
+  ifaceOn(malformed).IPv4 = cell(ambiguous);
+  const result = mapNetworkWorkbookToScenario(malformed);
+  assert.equal(result.ok, false, `Ambiguous IPv4 ${ambiguous} must fail closed`);
+  assert.ok(result.diagnostics.some(d => d.code === "WORKBOOK_IPV4_INVALID" &&
+    d.table === "Interfaces" && d.row === 1 && d.field === "IPv4"));
+  assert.equal(result.source, undefined, "No ambiguous address may enter Builder");
+}
+console.log("PASS IMPORT-041: canonical IPv4 accepted, leading-zero octets rejected");
+
 const inlineCidr = workbook(2);
 ifaceOn(inlineCidr).IPv4 = cell("10.0.0.1/24");
 ifaceOn(inlineCidr).prefix = cell("24");
