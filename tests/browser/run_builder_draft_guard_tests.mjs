@@ -104,4 +104,21 @@ for (const [name, nextName] of [
   eq(code.includes("beginScenarioTransition()"), false,
     name + " never advances generation before asynchronous work");
 }
+const exportHandler = ui.slice(
+  ui.indexOf("const exportPackage = async (distribution) =>"),
+  ui.indexOf("const backToBuilder = () =>"));
+for (const marker of [
+  "PROJECT_PACKAGE_EXPORT_UNAPPLIED_DRAFT",
+  "PROJECT_PACKAGE_EXPORT_LATE_UNAPPLIED_DRAFT",
+  "scenarioTransitionRef.current !== startedTransition",
+  "latestDrawioWorkspaceRef.current !== origin",
+  "hasPendingBuilderDrafts()",
+]) eq(exportHandler.includes(marker), true,
+  "package export must guard stale canonical downloads: " + marker);
+eq(exportHandler.indexOf("hasPendingBuilderDrafts()") <
+  exportHandler.indexOf("await buildBuilderPackageExport("), true,
+  "pending draft must be rejected before package-building I/O");
+eq(exportHandler.lastIndexOf("hasPendingBuilderDrafts()") >
+  exportHandler.indexOf("await buildBuilderPackageExport("), true,
+  "late draft must be rejected after awaited package-building I/O");
 console.log(`PASS PROJECT-065: ${checks} staged Inspector/JSON and native Save/New assertions`);
