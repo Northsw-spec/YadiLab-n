@@ -1233,4 +1233,118 @@ assert.equal(mapNetworkWorkbookToScenario(blankDetails.document).source.connecti
   "Genuinely blank optional link details do not invent a connection");
 console.log("PASS IMPORT-048: real CSV inline link IDs/endpoint ports/kinds, orphan and inferred-port denial");
 
+// IMPORT-049: shorthand Devices previously warned about populated unknown
+// columns, yet still marked the same inventory READY and offered Builder and
+// Runtime with lost VLAN/port/site/security details. Canonical and Links
+// columns already fail closed. Enforce source fidelity consistently.
+for (const { column, populated } of [
+  { column: "VLAN ID", populated: 100 },
+  { column: "Switch Port", populated: "Gi1/0/22" },
+  { column: "Rack", populated: "Building C" },
+  { column: "Security Zone", populated: "OT" },
+  { column: "Route", populated: "0.0.0.0/0" },
+  { column: "Host OS", populated: "Windows 11" },
+  { column: "IPAM Owner", populated: "Network team" },
+  { column: "Unnamed Col", populated: false },
+  { column: "UnexpectedFlag", populated: true },
+  { column: "ZeroVlan", populated: 0 },
+  { column: "ExtraObject", populated: { rack: "2" } },
+  { column: "ExtraArray", populated: ["wan0"] },
+  { column: "ExtraNegative", populated: -7 },
+]) {
+  const doc = deviceInventory({ [column]: populated });
+  const normalized = normalizeNetworkInventoryDocument(doc);
+  assert.equal(normalized.unmappedColumnCount, 1,
+    "One normalized unknown source header must be counted: " + column);
+  assert.ok(normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED" &&
+    d.severity === "error" && d.table === "Devices" &&
+    d.row === 1 && d.field === column),
+    "Every nonblank unsupported Devices field needs a source locator: " + column);
+  assert.ok(normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_COLUMNS_UNMAPPED"),
+    "Existing UI summary count must still disclose unknown columns");
+  assert.ok(mapNetworkWorkbookToScenario(normalized.document).source?.resources[0],
+    "Source normalization must keep genuine supported facts for review");
+}
+const multipleDeviceUnknowns = deviceInventory({
+  "VLAN ID": 55, "Switch Port": "Gi0/1",
+});
+multipleDeviceUnknowns.tables[0].records.push(record(7, {
+  "Asset ID": "device_7", Hostname: "Seven", "Device Type": "Router",
+  "VLAN ID": 80, "Switch Port": "Gi0/7",
+}));
+const repeatedUnknowns = normalizeNetworkInventoryDocument(multipleDeviceUnknowns);
+assert.equal(repeatedUnknowns.unmappedColumnCount, 2,
+  "Distinct unknown source headers counted once across all physical rows");
+assert.deepEqual(
+  repeatedUnknowns.diagnostics.filter(d =>
+    d.code === "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED")
+    .map(d => [d.row,d.field]),
+  [[1,"VLAN ID"],[1,"Switch Port"],[7,"VLAN ID"],[7,"Switch Port"]],
+  "All populated original rows and original header names retained");
+for (const empty of [null, undefined, "", "   ", "\n\t"]) {
+  const doc = deviceInventory({ "Rack": empty, "SLA": empty });
+  const normalized = normalizeNetworkInventoryDocument(doc);
+  assert.equal(normalized.unmappedColumnCount, 0,
+    "Truly empty optional unmodeled columns establish no source fact");
+  assert.equal(normalized.diagnostics.some(d => d.severity === "error"), false,
+    JSON.stringify(normalized.diagnostics));
+  const mapped = mapNetworkWorkbookToScenario(normalized.document);
+  assert.equal(mapped.ok, true, JSON.stringify(mapped.diagnostics));
+  assert.equal(mapped.source.resources[0].id, "device_1");
+  assert.equal(mapped.source.connections.length, 0,
+    "Empty optional columns cannot infer physical cables");
+}
+// Positive: all supported declarations still map exactly even when the
+// producer includes blank extra template columns.
+const knownWithBlankExtra = deviceInventory({
+  "IP Address": "10.20.30.4", "Prefix Length": "24",
+  "Interface ID": "eth0", "MAC Address": "AA:BB:CC:DD:EE:01",
+  "Rack": " ", "VLAN ID": null,
+});
+const knownNormalized = normalizeNetworkInventoryDocument(knownWithBlankExtra);
+assert.equal(knownNormalized.diagnostics.some(d => d.severity === "error"), false);
+assert.equal(knownNormalized.unmappedColumnCount, 0);
+const knownMapped = mapNetworkWorkbookToScenario(knownNormalized.document);
+assert.equal(knownMapped.ok,true,JSON.stringify(knownMapped.diagnostics));
+assert.deepEqual(knownMapped.source.resources[0].interfaces[0].addresses,
+  ["10.20.30.4/24"]);
+assert.equal(knownMapped.source.resources[0].interfaces[0].mac,
+  "AA:BB:CC:DD:EE:01");
+
+// Test real adapters; no hand-written ImportRecord assumptions for CSV/JSON.
+const unknownCsv = [
+  "Asset ID,Hostname,Device Type,IP Address,Access VLAN,Rack",
+  "edge01,Edge Router,Router,192.0.2.3,110,Site A",
+  "host01,Host,Server,192.0.2.4,,",
+].join("\n") + "\n";
+const parsedUnknownCsv = await csvImportAdapter.parse({
+  bytes: new TextEncoder().encode(unknownCsv), mediaType: "text/csv",
+}, { options: { tableName: "Devices" } });
+const csvUnknown = normalizeNetworkInventoryDocument(parsedUnknownCsv.document);
+assert.equal(csvUnknown.unmappedColumnCount, 2);
+assert.deepEqual(csvUnknown.diagnostics.filter(d =>
+  d.code === "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED")
+  .map(d => [d.table,d.row,d.field]),
+  [["Devices",1,"Access VLAN"],["Devices",1,"Rack"]],
+  "CSV physical source headers, row and populated values must survive review");
+const jsonUnknown = JSON.stringify({ Devices: [
+  { "Asset ID":"edge01",Hostname:"Edge", "Device Type":"Router",
+    "VLAN":0, "Port":{"id":"gi1/0/1"} },
+  { "Asset ID":"host01",Hostname:"Host","Device Type":"Server" },
+]});
+const parsedUnknownJson = await jsonImportAdapter.parse({
+  bytes: new TextEncoder().encode(jsonUnknown),mediaType:"application/json",
+}, { options: { tableName: "Devices" } });
+const jsonUnknownNormalized = normalizeNetworkInventoryDocument(parsedUnknownJson.document);
+assert.ok(jsonUnknownNormalized.diagnostics.some(d =>
+  d.code === "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED" &&
+  d.table === "Devices" && d.row === 1 && d.field === "VLAN"));
+assert.ok(jsonUnknownNormalized.diagnostics.some(d =>
+  d.code === "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED" &&
+  d.table === "Devices" && d.row === 1 && d.field === "Port"));
+assert.equal(jsonUnknownNormalized.unmappedColumnCount,2);
+console.log("PASS IMPORT-049: nonblank unknown Devices CSV/JSON fields block source loss; real blank templates and documented network facts preserved");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
