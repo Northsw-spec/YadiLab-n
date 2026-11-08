@@ -859,6 +859,89 @@ def main():
                 "data-project-dirty", "false")
             isolated.close()
 
+            # BUILDER-052: real rendered resource Inspector must preserve
+            # source-backed asset requirements, including through a subsequent
+            # unrelated label edit and verified native .yadilab Save.
+            asset_page = context.new_page()
+            asset_page.add_init_script(MOCK)
+            asset_page.on("pageerror", lambda error: errors.append(str(error)))
+            asset_page.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            asset_controls = asset_page.locator('[data-project-file-controls="ready"]')
+            expect(asset_controls).to_be_visible(timeout=45000)
+            asset_section = asset_page.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            if asset_section.get_attribute("open") is None:
+                asset_section.locator("summary").first.click()
+            # Select a real ReactFlow node so this tests the mounted app,
+            # not a direct call to the underlying TypeScript command.
+            resource_node = asset_page.locator(
+                '.react-flow__node[data-id="rds01"]')
+            expect(resource_node).to_be_visible(timeout=30000)
+            resource_node.click(force=True)
+            resource_inspector = asset_page.locator(
+                '[data-builder-inspector="resource"]')
+            expect(resource_inspector).to_be_visible(timeout=20000)
+            resource_inspector.locator(
+                'label.inspector-field', has_text="Asset ID").locator(
+                    "input").fill("endpoint.windows")
+            resource_inspector.locator(
+                'label.inspector-field', has_text="Asset version/range").locator(
+                    "input").fill("1.0.0")
+            resource_inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(asset_controls).to_have_attribute("data-project-dirty", "true")
+            # Apply changes inspector key/sourceRevision; use the fresh
+            # resource editor to make an unrelated change.
+            resource_inspector.locator(
+                'label.inspector-field', has_text="Label").locator(
+                    "input").fill("RDS with retained asset")
+            resource_inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(asset_controls).to_have_attribute("data-project-dirty", "true")
+            asset_page.locator('[data-project-action="save-as"]').click()
+            expect(asset_page.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            saved_asset_source = json.loads(asset_page.evaluate(
+                "window.__yadilabProjectStore.text"))["content"]["source"]
+            saved_asset = next(resource for resource in saved_asset_source["resources"]
+                               if resource["id"] == "rds01")
+            require(saved_asset["asset"] == {
+                "id": "endpoint.windows", "version": "1.0.0"},
+                "BUILDER-052 visual unrelated resource edit lost asset in .yadilab")
+            require(saved_asset["label"] == "RDS with retained asset",
+                    "BUILDER-052 Save omitted the requested resource label")
+            expect(asset_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            # The Create button is not an Edit/Upsert. An existing Link ID
+            # must not silently rewire the topology.
+            create_panel = asset_page.locator(
+                '[data-builder-inspector="resource"] + .create-panel')
+            # Inspector and create panel are sibling sections.
+            if create_panel.count() != 1:
+                create_panel = asset_page.locator(".create-panel")
+            expect(create_panel).to_be_visible()
+            create_panel.locator("select").first.select_option("connection")
+            create_panel.locator(
+                'label.inspector-field', has_text="ID").locator(
+                    "input").fill("fw_rds")
+            create_panel.locator(
+                'label.inspector-field', has_text="From").locator(
+                    "select").select_option("rds01")
+            create_panel.locator(
+                'label.inspector-field', has_text="To").locator(
+                    "select").select_option("firewall01")
+            writes_before_duplicate = asset_page.evaluate(
+                "window.__yadilabProjectStore.writes")
+            create_panel.get_by_role("button", name="Skapa objekt").click()
+            expect(asset_page.locator(".diagnostic")).to_contain_text(
+                "BUILDER_DUPLICATE_ID")
+            expect(asset_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            require(asset_page.evaluate(
+                "window.__yadilabProjectStore.writes") == writes_before_duplicate,
+                "Duplicate Create initiated an unexpected native file write")
+            asset_page.close()
+
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
