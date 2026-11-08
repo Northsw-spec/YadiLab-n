@@ -49,7 +49,17 @@ action rejects an already-used connection ID rather than silently overwriting
 the existing topology link. Its Edit Connection action remains available for
 deliberate updates. The asset semantics are regression-tested by the
 mandatory Builder Inspector TypeScript/Node suite; duplicate link creation is
-also rejected by an actual source-built Chromium UI acceptance. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
+also rejected by an actual source-built Chromium UI acceptance.
+
+Builder Delete Resource and cascading Delete Zone do not silently orphan
+Foundation test selectors, nested findings/objectives/completion rules,
+troubleshooting requirements, canonical solution operations, targeted notes,
+layout hints, recorded neighbors/conntrack, or fault-origin bindings.
+The action is rejected with the dependency category and the original source
+remains unchanged; explicitly update the dependent declarations before
+deleting their targets. An unreferenced resource or zone can still be
+deleted normally, and an explicit connection cascade still removes only
+the chosen topology edges, never unrelated test or evidence declarations. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports
 

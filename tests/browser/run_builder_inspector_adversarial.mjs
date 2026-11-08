@@ -12,6 +12,8 @@ import {
   createResourceFromInspector,
   createZoneFromInspector,
   deleteSelectedBuilderObject,
+  deleteResource,
+  deleteZone,
   duplicateSelectedBuilderResource,
   setBuilderSelection,
 } from "../../dist-browser-test/ui/src/browser/index.js";
@@ -136,6 +138,134 @@ const editedLink = applyConnectionInspector(originalWorkspace, originalLink.id, 
   propertiesJson: JSON.stringify(originalLink.properties),
 });
 ok(editedLink.ok, "dedicated Edit connection path still supports updating existing connection");
+
+// BUILDER-053: deleting a selected resource or a whole zone must not leave
+// a canonical project which Save/Open then refuse because of dangling tests,
+// nested rules, solutions, notes, layout hints or modeled network evidence.
+const deletionBase = structuredClone(source);
+deletionBase.connections = [];
+deletionBase.tests = [];
+deletionBase.findings = [];
+deletionBase.objectives = [{
+  id: "keep_safe", title: "Retained", category: "validation", required: false,
+  condition: { op: "equals", target: "admin01", path: "properties.safe", value: true },
+}];
+deletionBase.completion = { op: "equals", target: "admin01", path: "properties.safe", value: true };
+deletionBase.canonicalSolution = { operations: [] };
+deletionBase.notes = [];
+deletionBase.layoutHints = [];
+deletionBase.troubleshootingObjectives = [];
+const assetBeforeDelete = JSON.stringify(deletionBase);
+const unreferenced = createBuilderWorkspace(deletionBase);
+const candidateDeleteCases = [
+  ["Foundation reachability test", "BUILDER_DELETE_TEST_REFERENCED", (value) => {
+    value.tests = [{
+      id: "delete_guard_test", type: "network.reachability",
+      params: { from: "admin01", to: "rds01", protocol: "tcp", port: 3389 },
+    }];
+  }],
+  ["Foundation membership selector", "BUILDER_DELETE_TEST_REFERENCED", (value) => {
+    value.tests = [{
+      id: "delete_guard_membership", type: "identity.membership",
+      params: { subject: "admin01", group: "rds01" },
+    }];
+  }],
+  ["nested finding rule", "BUILDER_DELETE_RULE_REFERENCED", (value) => {
+    value.findings = [{
+      id: "finding_keep", title: "Conditional", severity: "high",
+      when: { op: "all", rules: [
+        { op: "not", rule: { op: "reachable", from: "admin01", to: "rds01" } },
+      ] },
+    }];
+  }],
+  ["objective rule", "BUILDER_DELETE_RULE_REFERENCED", (value) => {
+    value.objectives[0].condition = {
+      op: "any", rules: [{ op: "member_of", subject: "admin01", group: "rds01" }],
+    };
+  }],
+  ["completion rule", "BUILDER_DELETE_RULE_REFERENCED", (value) => {
+    value.completion = {
+      op: "not", rule: { op: "has_permission",
+        subject: "admin01", resource: "rds01", permission: "admin" },
+    };
+  }],
+  ["canonical solution", "BUILDER_DELETE_SOLUTION_REFERENCED", (value) => {
+    value.canonicalSolution = {
+      operations: [{ op: "set", target: "rds01", path: "properties.enabled", value: true }],
+    };
+  }],
+  ["targeted note", "BUILDER_DELETE_NOTE_REFERENCED", (value) => {
+    value.notes = [{ id: "reference_note", text: "Retain target", target: "rds01" }];
+  }],
+  ["layout target", "BUILDER_DELETE_LAYOUT_REFERENCED", (value) => {
+    value.layoutHints = [{ target: "rds01", rank: 1 }];
+  }],
+  ["remaining neighbor", "BUILDER_DELETE_NEIGHBOR_REFERENCED", (value) => {
+    const owner = value.resources.find((item) => item.id === "admin01");
+    owner.properties.neighbors = [{
+      id: "known_neighbor", protocol: "ARP",
+      address: "10.0.0.1", state: "REACHABLE", targetResourceId: "rds01",
+    }];
+  }],
+  ["remaining conntrack", "BUILDER_DELETE_CONNTRACK_REFERENCED", (value) => {
+    const owner = value.resources.find((item) => item.id === "admin01");
+    owner.properties.conntrack = {
+      complete: true, entries: [{
+        id: "conn01", enabled: true, source: "admin01",
+        destination: "rds01", protocol: "tcp", port: 3389, state: "ESTABLISHED",
+      }],
+    };
+  }],
+];
+for (const [label, code, modify] of candidateDeleteCases) {
+  const candidate = structuredClone(deletionBase);
+  modify(candidate);
+  const before = createBuilderWorkspace(candidate);
+  const originalBytes = JSON.stringify(before.source);
+  for (const cascade of [false, true]) {
+    const denied = deleteResource(before, "rds01", cascade);
+    ok(!denied.ok, label + " cannot be orphaned by Delete Resource");
+    ok(denied.diagnostics.some((item) => item.code === code),
+      label + " reports original dependency category");
+    eq(denied.workspace, before, label + " denial leaves workspace object untouched");
+    eq(JSON.stringify(denied.workspace.source), originalBytes,
+      label + " denial preserves canonical bytes");
+  }
+}
+const zoneDeleteCases = [
+  ["Foundation test referring to child", "BUILDER_DELETE_TEST_REFERENCED", (value) => {
+    value.tests = [{
+      id: "child_test", type: "network.reachability",
+      params: { from: "admin01", to: "rds01", protocol: "tcp" },
+    }];
+  }],
+  ["zone note", "BUILDER_DELETE_NOTE_REFERENCED", (value) => {
+    value.notes = [{ id: "zone_note", target: "server", text: "Keep zone" }];
+  }],
+  ["zone layout parent", "BUILDER_DELETE_LAYOUT_REFERENCED", (value) => {
+    value.layoutHints = [{ target: "admin01", parent: "server" }];
+  }],
+  ["troubleshooting child resource", "BUILDER_DELETE_TROUBLESHOOTING_REFERENCED", (value) => {
+    value.troubleshootingObjectives = [{
+      id: "objective_evidence", title: "Investigate", required: true,
+      evidenceOrder: "ordered", requirements: [{
+        id: "observe_rds", label: "Observe RDS", kind: "observation", targetId: "rds01",
+      }],
+    }];
+  }],
+];
+for (const [label, code, modify] of zoneDeleteCases) {
+  const candidate = structuredClone(deletionBase);
+  modify(candidate);
+  const before = createBuilderWorkspace(candidate);
+  const denied = deleteZone(before, "server", true);
+  ok(!denied.ok, "cascading zone Delete must preserve " + label);
+  ok(denied.diagnostics.some((item) => item.code === code),
+    "cascading zone Delete reports " + label);
+  eq(denied.workspace, before, "rejected zone cascade does not mutate source");
+}
+eq(JSON.stringify(unreferenced.source), assetBeforeDelete,
+  "reference test fixtures do not mutate the unreferenced baseline");
 
 const ui = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(!ui.includes("dangerouslySetInnerHTML"), "Builder Inspector does not inject arbitrary HTML");
