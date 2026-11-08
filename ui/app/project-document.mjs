@@ -413,10 +413,16 @@ export async function sameProjectFileEntry(previous, selected) {
   if (typeof previous.isSameEntry !== "function" ||
       typeof selected.isSameEntry !== "function")
     blocked("FILE_IDENTITY_UNAVAILABLE");
-  let same;
-  try { same = await previous.isSameEntry(selected); }
-  catch { blocked("FILE_IDENTITY_UNAVAILABLE"); }
-  if (typeof same !== "boolean") blocked("FILE_IDENTITY_INVALID");
+  // The API promises physical-file identity, not merely a single handle's
+  // opinion. If either handle disagrees or gives a malformed result, fail
+  // closed: Save As must never silently rebind to an uncertain target.
+  let same, reciprocal;
+  try {
+    same = await previous.isSameEntry(selected);
+    reciprocal = await selected.isSameEntry(previous);
+  } catch { blocked("FILE_IDENTITY_UNAVAILABLE"); }
+  if (typeof same !== "boolean" || typeof reciprocal !== "boolean" ||
+      same !== reciprocal) blocked("FILE_IDENTITY_INVALID");
   return same;
 }
 

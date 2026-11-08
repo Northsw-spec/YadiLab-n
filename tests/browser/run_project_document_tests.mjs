@@ -255,6 +255,31 @@ await assert.rejects(sameProjectFileEntry(handle,{...handle,isSameEntry:null}),
 await assert.rejects(sameProjectFileEntry({...handle,isSameEntry:async()=>"true"},samePhysicalFile),
   /PROJECT_FILE_IDENTITY_INVALID/,
   "Malformed answer from the queried current handle must fail closed");
+// PROJECT-044: neither of two FileSystemHandle objects may unilaterally
+// decide that Save As points at a different file. A disagreement might
+// otherwise reset the expected SHA policy and allow writing an empty file
+// through a mismatched handle identity.
+const asymmetricSelected = { ...handle,
+  isSameEntry: async other => other === handle };
+await assert.rejects(sameProjectFileEntry(handle, asymmetricSelected),
+  /PROJECT_FILE_IDENTITY_INVALID/,
+  "Selected handle claims same entry while current handle claims different");
+await assert.rejects(assertSafeRecoveryTarget([handle], asymmetricSelected),
+  /PROJECT_FILE_IDENTITY_INVALID/,
+  "Quarantined file cannot be bypassed by an asymmetric handle");
+await assert.rejects(sameProjectFileEntry(
+  { isSameEntry: async () => true }, { isSameEntry: async () => false }),
+  /PROJECT_FILE_IDENTITY_INVALID/,
+  "Current handle claims same entry while selected handle claims different");
+await assert.rejects(sameProjectFileEntry(handle, {
+  ...handle, isSameEntry: async () => "false",
+}), /PROJECT_FILE_IDENTITY_INVALID/,
+  "Nonboolean reciprocal identity answers cannot be accepted");
+assert.equal(await sameProjectFileEntry(handle, samePhysicalFile), true,
+  "Matching reciprocal identity must preserve legitimate Save As");
+assert.equal(await sameProjectFileEntry(handle, differentFile), false,
+  "Two matching different-entry answers must still permit a new empty target");
+console.log("PASS PROJECT-044: reciprocal native file identity required for Save As and quarantine");
 stored += "EXTERNAL-EDIT";
 const conflictContent = stored;
 await assert.rejects(writeProjectFile(samePhysicalFile,text,
