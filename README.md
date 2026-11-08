@@ -30,6 +30,14 @@ explicitly invalid selectors are supplied, not a misleading defaulted TCP
 or portless result. This is source integrity, not evidence that any physical
 network probe has succeeded.
 
+Identity and permission queries require actual own resource entries in Engine
+state. JavaScript inherited names such as `constructor` cannot impersonate
+an absent group, permission endpoint, or authentication subject. Engine
+resource and test-result dictionaries are prototype-free, including after
+runtime state mutations; a legitimately declared resource with that name
+continues to work. UNKNOWN remains mandatory when the identity or evidence
+is absent, including when reading externally restored plain-object state.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the

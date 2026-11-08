@@ -8,7 +8,9 @@ function cloneResource(resource: NormalizedScenario["resources"][number]): Runti
 }
 
 export function createInitialEngineState(scenario: NormalizedScenario): EngineState {
-  const resources: Record<string, RuntimeResourceState> = {};
+  // A user-supplied scenario ID can legally be "constructor". A null-
+  // prototype map prevents an absent ID from resolving Object.prototype.
+  const resources: Record<string, RuntimeResourceState> = Object.create(null);
   for (const resource of scenario.resources) resources[resource.id] = cloneResource(resource);
   return {
     scenarioId: scenario.scenarioId,
@@ -19,7 +21,8 @@ export function createInitialEngineState(scenario: NormalizedScenario): EngineSt
 }
 
 export function applyOperation(state: EngineState, operation: ScenarioOperation): OperationResult {
-  const resource = state.resources[operation.target];
+  const resource = Object.prototype.hasOwnProperty.call(state.resources, operation.target)
+    ? state.resources[operation.target] : undefined;
   if (!resource) {
     return {
       ok: false,
@@ -55,10 +58,10 @@ export function applyOperation(state: EngineState, operation: ScenarioOperation)
     state: {
       ...state,
       stateRevision: state.stateRevision + 1,
-      resources: {
-        ...state.resources,
+      // Preserve the null-prototype identity namespace after each revision.
+      resources: Object.assign(Object.create(null), state.resources, {
         [operation.target]: write.value as unknown as RuntimeResourceState,
-      },
+      }) as Record<string, RuntimeResourceState>,
     },
   };
 }
