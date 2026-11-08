@@ -354,6 +354,10 @@ const invalidTypedWorkbook = (table, field, invalid) => {
 for (const { table, field, invalid, code } of [
   { table: "Links", field: "kind", invalid: true, code: "WORKBOOK_LINK_KIND_INVALID" },
   { table: "Links", field: "kind", invalid: false, code: "WORKBOOK_LINK_KIND_INVALID" },
+  { table: "Links", field: "interfaceA", invalid: true, code: "WORKBOOK_LINK_PORT_INVALID" },
+  { table: "Links", field: "interfaceB", invalid: false, code: "WORKBOOK_LINK_PORT_INVALID" },
+  { table: "Nodes", field: "zoneId", invalid: true, code: "WORKBOOK_NODE_ZONE_INVALID" },
+  { table: "Interfaces", field: "interfaceId", invalid: false, code: "WORKBOOK_INTERFACE_ID_INVALID" },
   { table: "Zones", field: "kind", invalid: false, code: "WORKBOOK_ZONE_KIND_INVALID" },
   { table: "Interfaces", field: "MAC", invalid: true, code: "WORKBOOK_MAC_INVALID" },
   { table: "Metadata", field: "scenarioId", invalid: true, code: "WORKBOOK_SCENARIO_ID_INVALID" },
