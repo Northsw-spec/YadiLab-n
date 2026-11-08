@@ -861,7 +861,7 @@ def main():
                   diagnostics: [...document.querySelectorAll('.diagnostic')].map(x => x.textContent),
                 })""")
                 raise AssertionError("BUILDER051_POST_NEW_APPLY_FAILED: " +
-                    repr(details)) from cause
+                    repr(details) + " | pageErrors=" + repr(errors[-12:])) from cause
             isolated.locator('[data-project-action="save-as"]').click()
             expect(isolated.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
