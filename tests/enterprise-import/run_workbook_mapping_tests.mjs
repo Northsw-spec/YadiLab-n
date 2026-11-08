@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
+import { csvImportAdapter, mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
 
 const cell = (value) => ({ value, locator: { kind: "record-row", table: "test", row: 1 } });
 const record = (recordIndex, fields) => ({ recordIndex, fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, cell(value)])) });
@@ -574,5 +574,187 @@ assert.equal(defaultLink.ok, true, JSON.stringify(defaultLink.diagnostics));
 assert.equal(defaultLink.source.connections[0].id, "link_sheet_row_1");
 assert.equal(defaultLink.source.connections[0].kind, "network");
 console.log("PASS IMPORT-043: typed network declarations rejected; valid, blank and explicit links preserved");
+
+// IMPORT-044: canonical workbook IPv6 must be valid before Builder activation.
+// The source schema itself only guarantees a nonempty address string.
+const ipv6Interface = book => book.tables.find(t => t.tableId === "Interfaces").records[0].fields;
+for (const address of [
+  "::", "::1", "fe80::", "2001:db8::1", "2001:db8::1/64",
+  "2001:0db8:0000:0000:0000:ff00:0042:8329", "::ffff:192.0.2.1",
+  "::ffff:192.0.2.1/128", "1:2:3:4:5:6:192.0.2.1",
+  "2001:db8::1/0", "1:2:3:4:5:6:7:8",
+]) {
+  const book = workbook(2);
+  const iface = ipv6Interface(book);
+  delete iface.IPv4;
+  delete iface.prefix;
+  iface.IPv6 = cell(address);
+  const mapped = mapNetworkWorkbookToScenario(book);
+  assert.equal(mapped.ok, true, JSON.stringify(mapped.diagnostics));
+  assert.deepEqual(mapped.source.resources[0].interfaces[0].addresses, [address],
+    "Exact documented IPv6 is retained without invented IPv4");
+}
+for (const address of [
+  "2001:db8", "2001:::1", "1::2::3", "2001:db8:zz::1",
+  "2001:db8:0:0:0:0:0:0:1", "1:2:3:4:5:6:7::8",
+  "2001:db8::1/129", "2001:db8::1/-1", "2001:db8::1/64/65",
+  "2001:db8::1/", "fe80::1%eth0", "10.0.0.1",
+  "::ffff:999.1.1.1", "::ffff:010.0.0.1", "[2001:db8::1]",
+  true, {}, 1234,
+]) {
+  const book = workbook(2);
+  ipv6Interface(book).IPv6 = cell(address);
+  const mapped = mapNetworkWorkbookToScenario(book);
+  assert.equal(mapped.ok, false, "Malformed IPv6 must fail: " + JSON.stringify(address));
+  assert.ok(mapped.diagnostics.some(d => d.code === "WORKBOOK_IPV6_INVALID" &&
+    d.table === "Interfaces" && d.row === 1 && d.field === "IPv6"));
+  assert.equal(mapped.preview.rejectedRows.Interfaces, 1);
+  assert.equal(mapped.source, undefined);
+}
+for (const [ipv6, prefix, expected] of [
+  ["2001:db8::10", 64, "2001:db8::10/64"],
+  ["2001:db8::10/64", 64, "2001:db8::10/64"],
+  ["::", 0, "::/0"],
+  ["fe80::2", 128, "fe80::2/128"],
+]) {
+  const book = workbook(2);
+  ipv6Interface(book).IPv6 = cell(ipv6);
+  ipv6Interface(book).IPv6Prefix = cell(prefix);
+  const mapped = mapNetworkWorkbookToScenario(book);
+  assert.equal(mapped.ok, true, JSON.stringify(mapped.diagnostics));
+  assert.deepEqual(mapped.source.resources[0].interfaces[0].addresses,
+    ["10.0.0.1/24", expected], "IPv4 and IPv6 declared masks must be preserved");
+}
+for (const { ipv6, prefix, code } of [
+  { ipv6: undefined, prefix: 64, code: "WORKBOOK_IPV6_PREFIX_WITHOUT_ADDRESS" },
+  { ipv6: "2001:db8::1", prefix: 129, code: "WORKBOOK_IPV6_PREFIX_INVALID" },
+  { ipv6: "2001:db8::1", prefix: false, code: "WORKBOOK_IPV6_PREFIX_INVALID" },
+  { ipv6: "2001:db8::1", prefix: "64.5", code: "WORKBOOK_IPV6_PREFIX_INVALID" },
+  { ipv6: "2001:db8::1/64", prefix: 65, code: "WORKBOOK_IPV6_PREFIX_CONFLICT" },
+]) {
+  const book = workbook(2);
+  if (ipv6 !== undefined) ipv6Interface(book).IPv6 = cell(ipv6);
+  ipv6Interface(book).IPv6Prefix = cell(prefix);
+  const mapped = mapNetworkWorkbookToScenario(book);
+  assert.equal(mapped.ok, false);
+  assert.ok(mapped.diagnostics.some(d => d.code === code && d.table === "Interfaces" &&
+    d.row === 1 && d.field === "IPv6Prefix"), "Missing invalid-prefix diagnostic " + code);
+  assert.equal(mapped.source, undefined);
+}
+// Actual CSV adapter => Devices normalization => canonical Builder source.
+// This checks source locators and the complete dual-stack interface identity.
+const dualStackHeaders = [
+  "Asset ID", "Hostname", "Device Type", "IP Address", "Prefix Length",
+  "IPv6 Address", "IPv6 Prefix", "Interface ID", "Interface Name",
+  "MTU", "MAC Address", "Connected To",
+];
+const dualStackRows = [
+  ["edge01", "Edge Router", "Router", "10.14.0.1", "24",
+    "2001:db8:14::1", "64", "eth0", "LAN Uplink", "1500",
+    "AA:BB:CC:DD:EE:01", "peer01"],
+  ["peer01", "Peer", "Server", "", "", "fe80::2", "", "eth1", "",
+    "9000", "", ""],
+];
+const dualStackCsv = [dualStackHeaders.join(","),
+  ...dualStackRows.map(row => row.join(","))].join("\n") + "\n";
+const csvParsed = await csvImportAdapter.parse({
+  bytes: new TextEncoder().encode(dualStackCsv), mediaType: "text/csv",
+}, { options: { tableName: "Devices" } });
+const csvPrepared = normalizeNetworkInventoryDocument(csvParsed.document);
+assert.equal(csvPrepared.unmappedColumnCount, 0,
+  "IPv6, port metadata and MTU must be recognized rather than ignored");
+assert.equal(csvPrepared.diagnostics.some(d => d.severity === "error"), false,
+  JSON.stringify(csvPrepared.diagnostics));
+assert.deepEqual(
+  csvPrepared.document.tables.find(t => t.tableId === "Interfaces").records[0].fields.IPv6.locator,
+  csvParsed.document.tables[0].records[0].fields["IPv6 Address"].locator,
+  "Preserve original IPv6 source cell locator");
+const dualStackMapped = mapNetworkWorkbookToScenario(csvPrepared.document);
+assert.equal(dualStackMapped.ok, true, JSON.stringify(dualStackMapped.diagnostics));
+const edge = dualStackMapped.source.resources.find(r => r.id === "edge01");
+const peer = dualStackMapped.source.resources.find(r => r.id === "peer01");
+assert.deepEqual(edge.interfaces[0], {
+  id: "eth0", label: "LAN Uplink", addresses: ["10.14.0.1/24", "2001:db8:14::1/64"],
+  mac: "AA:BB:CC:DD:EE:01", mtu: 1500,
+});
+assert.deepEqual(peer.interfaces[0], {
+  id: "eth1", label: "eth1", addresses: ["fe80::2"], mtu: 9000,
+});
+assert.equal(dualStackMapped.source.connections.length, 1);
+assert.deepEqual(dualStackMapped.source.connections[0].from, { resource: "edge01" });
+assert.deepEqual(dualStackMapped.source.connections[0].to, { resource: "peer01" });
+assert.equal(dualStackMapped.source.notes?.length ?? 0, 0,
+  "Addresses must not fabricate gateway notes or tested routes");
+const portDeclaredOnly = normalizeNetworkInventoryDocument(deviceInventory({
+  "Interface ID": "eth0", "Interface Name": "LAN uplink", MTU: 1500,
+}));
+assert.equal(portDeclaredOnly.diagnostics.some(d => d.severity === "error"), false);
+const portOnlyResult = mapNetworkWorkbookToScenario(portDeclaredOnly.document);
+assert.equal(portOnlyResult.ok, true, JSON.stringify(portOnlyResult.diagnostics));
+assert.deepEqual(portOnlyResult.source.resources[0].interfaces[0],
+  { id: "eth0", label: "LAN uplink", mtu: 1500 },
+  "An explicit interface identity/MTU without IP does not invent an address");
+const nameOnly = normalizeNetworkInventoryDocument(deviceInventory({
+  "Interface Name": "uplink0",
+}));
+assert.equal(mapNetworkWorkbookToScenario(nameOnly.document).source.resources[0].interfaces[0].id,
+  "uplink0", "Canonical declared interface name must survive as an ID");
+const literalPortLabel = normalizeNetworkInventoryDocument(deviceInventory({
+  "Interface Name": "GigabitEthernet0/1",
+}));
+const namedPort = mapNetworkWorkbookToScenario(literalPortLabel.document);
+assert.equal(namedPort.ok, true, JSON.stringify(namedPort.diagnostics));
+assert.deepEqual(namedPort.source.resources[0].interfaces[0],
+  { id: "primary", label: "GigabitEthernet0/1" },
+  "Noncanonical interface name may be a label, not a fabricated physical ID");
+for (const { values, code, origin, field } of [
+  { values: { "IPv6 Address": "2001:::1" }, code: "WORKBOOK_IPV6_INVALID",
+    origin: "Interfaces", field: "IPv6" },
+  { values: { "IPv6 Prefix": 64 }, code: "NETWORK_IMPORT_IPV6_PREFIX_WITHOUT_ADDRESS",
+    origin: "Devices", field: "ipv6Prefix" },
+  { values: { "IPv6 Address": "2001:db8::1", "IPv6 Prefix": 129 },
+    code: "WORKBOOK_IPV6_PREFIX_INVALID", origin: "Interfaces", field: "IPv6Prefix" },
+  { values: { "IPv6 Address": "2001:db8::1/64", "IPv6 Prefix": 65 },
+    code: "WORKBOOK_IPV6_PREFIX_CONFLICT", origin: "Interfaces", field: "IPv6Prefix" },
+  { values: { "IPv6 Address": true }, code: "NETWORK_IMPORT_FIELD_TYPE_INVALID",
+    origin: "Devices", field: "ipv6" },
+  { values: { "IPv6 Prefix": false }, code: "NETWORK_IMPORT_FIELD_TYPE_INVALID",
+    origin: "Devices", field: "ipv6Prefix" },
+  { values: { "Interface ID": "eth0/1" }, code: "WORKBOOK_INTERFACE_ID_INVALID",
+    origin: "Interfaces", field: "interfaceId" },
+  { values: { "Interface Name": true }, code: "NETWORK_IMPORT_FIELD_TYPE_INVALID",
+    origin: "Devices", field: "interfaceName" },
+  { values: { "Interface ID": true }, code: "NETWORK_IMPORT_FIELD_TYPE_INVALID",
+    origin: "Devices", field: "interfaceId" },
+  { values: { MTU: false }, code: "NETWORK_IMPORT_FIELD_TYPE_INVALID",
+    origin: "Devices", field: "mtu" },
+  { values: { MTU: "0" }, code: "WORKBOOK_MTU_INVALID",
+    origin: "Interfaces", field: "MTU" },
+  { values: { MTU: "1500.5" }, code: "WORKBOOK_MTU_INVALID",
+    origin: "Interfaces", field: "MTU" },
+]) {
+  const normalized = normalizeNetworkInventoryDocument(deviceInventory(values));
+  const mapped = mapNetworkWorkbookToScenario(normalized.document);
+  const diagnostics = [...normalized.diagnostics, ...mapped.diagnostics];
+  assert.ok(diagnostics.some(d => d.code === code && d.table === origin &&
+    d.row === 1 && d.field === field),
+    "Missing source-field diagnostic " + code + ": " + JSON.stringify(diagnostics));
+  assert.ok(!mapped.ok || normalized.diagnostics.some(d => d.severity === "error"),
+    "Malformed IPv6, MTU or port must block activation");
+}
+const competingIPv6 = normalizeNetworkInventoryDocument(deviceInventory({
+  IPv6: "2001:db8::1", "IPv6 Address": "2001:db8::2",
+}));
+assert.ok(competingIPv6.diagnostics.some(d => d.code === "NETWORK_IMPORT_FIELD_AMBIGUOUS"),
+  "Competing IPv6 columns must not silently prefer one source truth");
+const blankNewFields = normalizeNetworkInventoryDocument(deviceInventory({
+  IPv6: null, "IPv6 Prefix": " ", MTU: "", "Interface ID": null, "Interface Name": "",
+}));
+assert.equal(blankNewFields.diagnostics.some(d => d.severity === "error"), false);
+const blankMapped = mapNetworkWorkbookToScenario(blankNewFields.document);
+assert.equal(blankMapped.ok, true, JSON.stringify(blankMapped.diagnostics));
+assert.equal(blankMapped.source.resources[0].interfaces, undefined,
+  "Genuinely blank optional metadata must not invent an interface");
+console.log("PASS IMPORT-044: end-to-end dual-stack CSV preserves source IPv6, ports and MTU; invalid and competing declarations block activation");
 
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");

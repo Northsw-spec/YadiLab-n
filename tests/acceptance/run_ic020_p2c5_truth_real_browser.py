@@ -119,6 +119,91 @@ def case_conflicts(browser,url,fmt):
                 "externalRequests":0}
     finally:page.close()
 
+def case_dual_stack_source_truth(browser,url):
+    """Real compiled UI: CSV IPv6/MTU/ports survive Builder activation exactly."""
+    columns=[
+        "Asset ID","Hostname","Device Type","IP Address","Prefix Length",
+        "IPv6 Address","IPv6 Prefix","Interface ID","Interface Name",
+        "MTU","MAC Address","Connected To",
+    ]
+    rows=[
+        ["edge01","Edge Router","Router","10.14.0.1","24",
+         "2001:db8:14::1","64","eth0","LAN Uplink","1500",
+         "AA:BB:CC:DD:EE:01","peer01"],
+        ["peer01","Peer","Server","","","fe80::2","","eth1","","9000","",""],
+    ]
+    data=("\n".join([",".join(columns)]+[",".join(row) for row in rows])+"\n").encode("utf-8")
+    page,errors,outside=setup(browser,url)
+    try:
+        with page.expect_file_chooser(timeout=20000) as future:
+            page.locator('[data-network-import-primary="true"]').click()
+        future.value.set_files({"name":"dual-stack.csv","mimeType":"text/csv","buffer":data})
+        preview=page.locator('[data-network-import-preview]')
+        expect(preview).to_have_attribute("data-network-import-preview","READY",timeout=30000)
+        require(hashlib.sha256(data).hexdigest() in
+                page.locator('[data-network-import-sha]').inner_text(),
+                "Dual-stack original CSV SHA mismatch")
+        require(preview.locator('[data-network-import-unmapped="0"]').count()==1,
+                "Documented IPv6/MTU/port columns were silently unmapped")
+        require(page.locator('[data-network-import-activate]').is_enabled(),
+                "Documented dual-stack CSV refused editable Builder")
+        page.locator('[data-network-import-activate]').click()
+        expect(page.locator('[data-network-import-panel]')).to_have_count(0,timeout=45000)
+        source=exported_source(page)
+        resources={r["id"]:r for r in source["resources"]}
+        require(set(resources)=={"edge01","peer01"},
+                "Builder imported incorrect canonical device identities")
+        edge=resources["edge01"]["interfaces"][0]
+        peer=resources["peer01"]["interfaces"][0]
+        require(edge=={"id":"eth0","label":"LAN Uplink",
+                       "addresses":["10.14.0.1/24","2001:db8:14::1/64"],
+                       "mac":"AA:BB:CC:DD:EE:01","mtu":1500},
+                "Builder did not preserve explicit dual-stack/MTU/interface facts")
+        require(peer=={"id":"eth1","label":"eth1","addresses":["fe80::2"],"mtu":9000},
+                "IPv6-only peer did not preserve its exact source IPv6/MTU")
+        require(len(source["connections"])==1 and
+                source["connections"][0]["from"]=={"resource":"edge01"} and
+                source["connections"][0]["to"]=={"resource":"peer01"},
+                "Imported link must have explicit endpoint IDs, not inferred switch ports")
+        require(not errors,"Compiled dual-stack browser errors "+repr(errors))
+        require(not outside,"External HTTP request during offline import "+repr(outside))
+    finally:page.close()
+
+    # The exact same compiled UI must deny malformed IPv6, without replacing
+    # any existing Builder source or inventing a valid network from the input.
+    invalid,errors,outside=setup(browser,url)
+    try:
+        baseline=exported_source(invalid)
+        data=("Asset ID,Hostname,Device Type,IPv6 Address\n"
+              "edge01,Edge Router,Router,2001:::1\n").encode("utf-8")
+        with invalid.expect_file_chooser(timeout=20000) as future:
+            invalid.locator('[data-network-import-primary="true"]').click()
+        future.value.set_files({"name":"bad-ipv6.csv","mimeType":"text/csv","buffer":data})
+        blocked=invalid.locator('[data-network-import-preview]')
+        expect(blocked).to_have_attribute("data-network-import-preview","BLOCKED",timeout=30000)
+        require("WORKBOOK_IPV6_INVALID" in blocked.inner_text(),
+                "Malformed IPv6 was not rejected in actual compiled app")
+        require(invalid.locator('[data-network-import-activate]').is_disabled(),
+                "Malformed IPv6 incorrectly offered Builder activation")
+        require(invalid.locator('[data-network-import-runtime]').is_disabled(),
+                "Malformed IPv6 incorrectly offered Runtime activation")
+        # The import review is a modal and deliberately intercepts background
+        # controls. Dismiss it before exporting the unchanged Builder source.
+        # Never bypass the modal with a forced click or script-injected export.
+        invalid.get_by_role("button",name="Close network import").click()
+        expect(invalid.locator('[data-network-import-panel]')).to_have_count(0)
+        require(exported_source(invalid)==baseline,
+                "Blocked IPv6 import mutated the existing Builder")
+        require(not errors,"Invalid IPv6 browser errors "+repr(errors))
+        require(not outside,"External HTTP request during invalid import "+repr(outside))
+    finally:invalid.close()
+    return {"case":"actual_csv_dual_stack_source_and_invalid_ipv6",
+            "status":"PASS","origin":"real_csv",
+            "sourceIPv6Preserved":True,"MTUPreserved":True,
+            "explicitInterfaceIDsPreserved":True,
+            "malformedIPv6Rejected":True,"inventedPhysicalLinks":False,
+            "externalRequests":0}
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--url",required=True)
@@ -140,6 +225,7 @@ def main():
             for fmt in FORMATS:
                 cases.append(case_runtime(browser,args.url,fmt))
                 cases.append(case_conflicts(browser,args.url,fmt))
+            cases.append(case_dual_stack_source_truth(browser,args.url))
         finally:browser.close()
     report={"status":"PASS","kind":"Actual compiled Chromium five-format P2c5 source-bound modeled verdicts",
             "environment":"GitHub Actions Ubuntu; Parrot-native/physical network NOT_RUN",
