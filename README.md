@@ -28,8 +28,15 @@ Use the **Import JSON / Excel / CSV → Network Topology** action to preview a
 device row may declare `Asset ID`, `Hostname`, `Device Type`, IPv4
 (`IP Address` / `Prefix Length`), `IPv6 Address` / `IPv6 Prefix`,
 `MAC Address`, `Interface ID`, `Interface Name`, `MTU`, and
-`Connected To`. These supported columns are preserved as original facts;
-addresses are not inferred from a gateway or nearby nodes.
+`Connected To`. When `Connected To` explicitly names a peer device, the
+same row may also declare `Link ID`, `From Port` (or `Source Port`),
+`To Port` (or `Target Port`), and `Link Type` (`Connection Type`).
+These facts are preserved in the canonical connection. Both port identifiers
+must match independently declared `Interface ID` values (or valid canonical
+`Interface Name` identifiers) on their corresponding devices. A generic
+`primary` interface inferred from IP/MAC is **not** proof of a physical port.
+A link ID/port/type without `Connected To` is rejected rather than creating
+an imaginary link. Addresses are not inferred from gateways or nearby nodes.
 
 An explicit `Interface ID` must be a stable lowercase canonical ID for
 link-port references. An `Interface Name` may instead be a descriptive label.
