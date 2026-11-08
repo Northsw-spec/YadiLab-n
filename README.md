@@ -108,6 +108,9 @@ main menu and Import Workbench, and ignores obsolete File.text() or
 Compiler results. A newly selected file immediately disables activation
 of an older READY import, even before React repaints. No import preview
 automatically replaces the active project or writes a .yadilab file.
+Both the main menu and Workbench file inputs reset after selecting a file,
+so the operator can explicitly re-import the same filename after changing
+its contents without first choosing an unrelated file.
 These safeguards do not constitute autosave of unapplied form text or
 proof of Engine execution.
 
