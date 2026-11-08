@@ -873,7 +873,10 @@ const policyScenario = structuredClone(scenario);
 policyScenario.resources.push(
   { id: "policy_user", type: "identity.user", label: "Policy user", interfaces: [], properties: {} },
   { id: "policy_allow_group", type: "identity.group", label: "Allow", interfaces: [],
-    properties: { members: ["policy_user"] } },
+    // Declare this group's own parent memberships complete so that once
+    // the user's direct memberships are supplied, absence of the deny group
+    // is provable rather than UNKNOWN through possible nested groups.
+    properties: { members: ["policy_user"], memberOf: [] } },
   { id: "policy_deny_group", type: "identity.group", label: "Deny", interfaces: [],
     properties: {} },
   { id: "policy_server", type: "server.generic", label: "Policy server", interfaces: [],
