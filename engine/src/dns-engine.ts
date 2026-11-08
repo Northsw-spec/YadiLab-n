@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { addressInCidr, parseIpAddress } from "./ip.js";
 import { queryReachability } from "./network-engine.js";
@@ -88,7 +89,7 @@ function sourceGatewayTruth(
   const intermediateIds = path.slice(1, -1);
   let unknownAddress = false;
   for (const id of intermediateIds) {
-    const resource = state.resources[id];
+    const resource = ownResource(state, id);
     if (!resource) { unknownAddress = true; continue; }
     const addresses = addressesForResource(resource);
     if (!addresses.length) { unknownAddress = true; continue; }
@@ -136,7 +137,7 @@ export function queryDnsChain(
   sourceId: string,
   queryNameInput: string,
 ): EngineQueryResult<DnsChainDecisionTrace> {
-  const source = state.resources[sourceId];
+  const source = ownResource(state, sourceId);
   const queryName = normalizeDnsQueryName(queryNameInput);
   if (!source || !queryName) {
     return { truth: "UNKNOWN", explanation: [!source ? `DNS source '${sourceId}' does not exist in Engine state.` : "DNS query name is invalid."] };
