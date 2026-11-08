@@ -1069,8 +1069,12 @@ ok(restored061.ok, "unaltered saved runtime restores successfully");
 if (restored061.ok) {
   eq(Object.getPrototypeOf(restored061.state.resources), null,
     "restored Engine resource dictionary remains prototype-free");
-  eq(JSON.stringify(restored061.state.resources), JSON.stringify(initial.resources),
-    "valid save roundtrips source-backed runtime resource state");
+  eq(Object.keys(restored061.state.resources).sort(),
+    Object.keys(initial.resources).sort(),
+    "valid save preserves every expected resource key");
+  for (const id of Object.keys(initial.resources))
+    eq(restored061.state.resources[id], initial.resources[id],
+      "valid save roundtrips the exact resource content for " + id);
 }
 const invalidSave061 = [
   ["changed resource type", save => { save.resourceState.rds01.type = "network.firewall"; }, "SAVE_RESOURCE_ENVELOPE_MISMATCH"],
