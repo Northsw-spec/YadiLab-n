@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mapNetworkWorkbookToScenario, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
+import { mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
 
 const cell = (value) => ({ value, locator: { kind: "record-row", table: "test", row: 1 } });
 const record = (recordIndex, fields) => ({ recordIndex, fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, cell(value)])) });
@@ -461,5 +461,49 @@ assert.equal(emptyLayoutResult.ok, true, JSON.stringify(emptyLayoutResult.diagno
 assert.deepEqual(emptyLayoutResult.source.layoutHints, [{ target: "node_2", rank: 1 }],
   "A truly empty optional layout row must not create a target or invalidate good rows");
 console.log("PASS IMPORT-041: required CI validates explicit layout targets and orphan ranks");
+
+// IMPORT-042: inventory normalization must not drop a declared subnet prefix
+// when the CSV/JSON/XLSX source has no IPv4 host. Canonical mapping must
+// independently fail closed, even if a caller ignores normalization errors.
+const deviceInventory = (extra) => ({ tables: [{ tableId: "Devices", records: [
+  record(1, { "Asset ID": "device_1", Hostname: "Imported device", "Device Type": "Server", ...extra }),
+] }] });
+for (const extra of [
+  { "Prefix Length": "24" },
+  { "Prefix Length": 0 },
+  { "MAC Address": "AA:BB:CC:DD:EE:01", "Prefix Length": "24" },
+]) {
+  const normalized = normalizeNetworkInventoryDocument(deviceInventory(extra));
+  assert.ok(normalized.diagnostics.some(d => d.code === "NETWORK_IMPORT_PREFIX_WITHOUT_IP" &&
+    d.table === "Devices" && d.row === 1),
+    "Source-localized error required for a prefix without an IPv4 host");
+  const mapped = mapNetworkWorkbookToScenario(normalized.document);
+  assert.equal(mapped.ok, false, "Orphan prefixes must fail even if normalization diagnostics are not consumed");
+  assert.ok(mapped.diagnostics.some(d => d.code === "WORKBOOK_IPV4_PREFIX_WITHOUT_ADDRESS" &&
+    d.table === "Interfaces" && d.row === 1 && d.field === "prefix"));
+  assert.ok(mapped.preview.errors > 0);
+  assert.equal(mapped.source, undefined, "No orphan network prefix may reach Builder");
+}
+for (const blankPrefix of [undefined, "", "   ", null]) {
+  const normalized = normalizeNetworkInventoryDocument(deviceInventory({ "Prefix Length": blankPrefix }));
+  const mapped = mapNetworkWorkbookToScenario(normalized.document);
+  assert.ok(!normalized.diagnostics.some(d => d.severity === "error"));
+  assert.equal(mapped.ok, true, JSON.stringify(mapped.diagnostics));
+  assert.equal(mapped.source.resources[0].interfaces, undefined,
+    "A genuinely empty optional prefix must not synthesize an interface");
+}
+const documentedIPv4 = normalizeNetworkInventoryDocument(deviceInventory({
+  "IP Address": "10.20.30.40", "Prefix Length": "24",
+}));
+assert.equal(documentedIPv4.diagnostics.filter(d => d.severity === "error").length, 0);
+assert.deepEqual(mapNetworkWorkbookToScenario(documentedIPv4.document).source.resources[0].interfaces[0].addresses,
+  ["10.20.30.40/24"], "Keep explicitly documented IPv4 and prefix intact");
+const invalidTypedPrefix = normalizeNetworkInventoryDocument(deviceInventory({
+  "IP Address": "10.20.30.40", "Prefix Length": true,
+}));
+assert.ok(invalidTypedPrefix.diagnostics.some(d =>
+  d.code === "NETWORK_IMPORT_PREFIX_INVALID" && d.table === "Devices" && d.row === 1),
+  "Nonblank nontext prefix values must not silently be omitted");
+console.log("PASS IMPORT-042: inventory orphan-prefix and invalid typed prefix fail closed; blank and valid source preserved");
 
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
