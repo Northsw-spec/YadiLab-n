@@ -38,6 +38,14 @@ runtime state mutations; a legitimately declared resource with that name
 continues to work. UNKNOWN remains mandatory when the identity or evidence
 is absent, including when reading externally restored plain-object state.
 
+Engine permission decisions also require complete security-policy evidence.
+A confirmed group allow must not return TRUE while an otherwise applicable
+group deny has unknown membership. Incomplete or malformed permission rows
+(including a missing explicit `effect`) yield UNKNOWN, not an inferred allow
+or a silently truncated ACL. Explicitly invalid authentication fields such
+as a string-valued MFA requirement or malformed allowlists also yield UNKNOWN,
+without weakening a well-formed allow/deny and MFA evaluation.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the
