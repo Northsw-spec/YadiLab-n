@@ -4028,12 +4028,20 @@ function App() {
     markApplicationReady(document);
     return () => markApplicationStopped(document);
   }, []);
-  const [workspace, setWorkspace] = useState(() => createBuilderWorkspace(welcomeScenario));
+  const [workspace, commitWorkspaceState] = useState(() => createBuilderWorkspace(welcomeScenario));
   const lastBuilderWorkspaceRef = useRef(workspace);
   if (workspace.mode === "builder") lastBuilderWorkspaceRef.current = workspace;
   const projectGuardRef = useRef(() => true);
   const latestDrawioWorkspaceRef = useRef(workspace);
   latestDrawioWorkspaceRef.current = workspace;
+  // The React state commit can be batched until after the current user event.
+  // Native Save/New/Open and the discard guard must nevertheless observe the
+  // just-applied canonical Builder edit *in that same event turn*. All callers
+  // currently submit concrete workspaces, never updater callbacks.
+  const setWorkspace = React.useCallback((next) => {
+    latestDrawioWorkspaceRef.current = next;
+    commitWorkspaceState(next);
+  }, []);
   const [importWorkbench, setImportWorkbench] = useState(() => emptyImportWorkbench());
   const [networkImportOpen, setNetworkImportOpen] = useState(false);
   const [structuredXmlInspectionOpen, setStructuredXmlInspectionOpen] = useState(false);
