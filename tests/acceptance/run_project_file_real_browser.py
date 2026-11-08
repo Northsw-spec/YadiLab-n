@@ -2623,11 +2623,12 @@ def main():
             expect(inspector).to_have_attribute("data-builder-unapplied", "true")
             cross_notes.fill(original_note_text)
 
-            # Canvas selection is also a source of Inspector unmounts:
-            # attempting it must preserve the staged mission fields.
-            canvas_node = pending.locator(".react-flow__node").first
-            expect(canvas_node).to_be_visible(timeout=15000)
-            canvas_node.click(force=True, timeout=15000)
+            # A pane click can clear the selection and unmount Inspector.
+            # Test the actual ReactFlow pane: the initial welcome Builder
+            # is not required to have compiled/laid-out DOM nodes yet.
+            canvas_pane = pending.locator(".react-flow__pane").first
+            expect(canvas_pane).to_be_visible(timeout=15000)
+            canvas_pane.click(force=True, timeout=15000)
             expect(pending.locator(".diagnostic")).to_contain_text(
                 "BUILDER_CANVAS_UNAPPLIED_DRAFT", timeout=15000)
             expect(inspector).to_have_attribute("data-builder-inspector", "mission")
