@@ -150,6 +150,91 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-050: a .yadilab can carry a perfectly correct SHA-256
+            # of a broken Foundation test. Actual Chromium Open must validate
+            # original resource selectors and port/protocol declarations,
+            # never silently restoring a different network query or mutating
+            # the already active Builder. All files are constructed from an
+            # authentic explicit Save As and rehashed in browser WebCrypto.
+            malformed_open = context.new_page()
+            malformed_open.add_init_script(MOCK)
+            malformed_open.on("pageerror",lambda error: errors.append(str(error)))
+            malformed_open.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            moc = malformed_open.locator('[data-project-file-controls="ready"]')
+            expect(moc).to_be_visible(timeout=45000)
+            malformed_open.locator('[data-project-action="save-as"]').click()
+            expect(malformed_open.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            clean_file=malformed_open.evaluate("window.__yadilabProjectStore.text")
+            require(malformed_open.evaluate(
+                "window.__yadilabProjectStore.writes")==1,
+                "Expected one explicit native Save As before forged Open tests")
+            for case_name,test_case,expected_code in [
+                ("missing_reachability_source",
+                 {"id":"project_050_missing_from",
+                  "type":"network.reachability",
+                  "params":{"from":"ghost","to":"rds01",
+                            "protocol":"tcp","port":3389}},
+                 "PROJECT_UNKNOWN_TEST_RESOURCE"),
+                ("invalid_route_protocol",
+                 {"id":"project_050_bad_route",
+                  "type":"network.route_test",
+                  "params":{"from":"attacker","to":"rds01",
+                            "protocol":"broken"}},
+                 "PROJECT_TEST_PARAM_INVALID"),
+                ("missing_membership_group",
+                 {"id":"project_050_bad_group",
+                  "type":"identity.membership",
+                  "params":{"subject":"attacker","group":"ghost"}},
+                 "PROJECT_UNKNOWN_TEST_RESOURCE"),
+                ("ambiguous_scan_ports",
+                 {"id":"project_050_scan",
+                  "type":"network.port_scan",
+                  "params":{"from":"attacker","to":"rds01",
+                            "port":443,"ports":[22]}},
+                 "PROJECT_TEST_PARAM_AMBIGUOUS"),
+                ("hardening_without_equals",
+                 {"id":"project_050_hardening",
+                  "type":"windows.hardening_check",
+                  "params":{"target":"rds01","path":"properties.enabled"}},
+                 "PROJECT_TEST_PARAM_REQUIRED"),
+            ]:
+                malformed_open.evaluate("""async ({original,test}) => {
+                    const store=window.__yadilabProjectStore;
+                    const doc=JSON.parse(original);
+                    doc.content.source.tests.push(test);
+                    const raw=JSON.stringify(doc.content);
+                    const hash=await crypto.subtle.digest(
+                        'SHA-256',new TextEncoder().encode(raw));
+                    doc.contentSha256=Array.from(new Uint8Array(hash))
+                        .map(b=>b.toString(16).padStart(2,'0')).join('');
+                    store.text=JSON.stringify(doc);
+                }""",{"original":clean_file,"test":test_case})
+                malformed_open.locator('[data-project-action="open"]').click()
+                expect(malformed_open.locator(
+                    '[data-project-message]')).to_contain_text(
+                    expected_code,timeout=20000)
+                expect(malformed_open.locator(".app-frame")).to_have_attribute(
+                    "data-runtime-scenario-id","foundation_acceptance")
+                expect(moc).to_have_attribute("data-project-dirty","false")
+                require(malformed_open.evaluate(
+                    "window.__yadilabProjectStore.writes")==1,
+                    "A correctly hashed malformed file caused a hidden write: "+case_name)
+                require(malformed_open.evaluate(
+                    "window.__yadilabProjectStore.openPickerCalls")>=1,
+                    "Malformed source was never passed through real native Open")
+            malformed_open.evaluate(
+                "(original) => window.__yadilabProjectStore.text=original",
+                clean_file)
+            malformed_open.locator('[data-project-action="open"]').click()
+            expect(malformed_open.locator('[data-project-message]')).to_contain_text(
+                "Opened editable source",timeout=20000)
+            expect(moc).to_have_attribute("data-project-dirty","false")
+            require(malformed_open.evaluate(
+                "window.__yadilabProjectStore.writes")==1,
+                "Valid original project Open triggered an implicit write")
+            malformed_open.close()
+
             # PROJECT-025: File System Access picker types are advisory on some
             # platforms. Never write to a .json or other unexpected filename
             # and then display a fictional .yadilab name as successfully saved.
