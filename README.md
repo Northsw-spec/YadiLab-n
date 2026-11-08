@@ -126,11 +126,17 @@ New/Open and other source replacements require discard confirmation, and
 closing warns that visible text is at risk. Applying or reverting staged
 fields clears this warning; only an explicit successful Apply modifies the
 canonical source, and native Save then verifies the resulting bytes.
-Inspector Create/Delete/Duplicate cannot silently discard a pending Inspector
-edit, and changing two JSON panels simultaneously cannot accidentally
-discard one when only the other is applied: apply one panel at a time, or
-revert other staged text first. Real compiled Chromium tests cover these
-cases; neither form tracking nor a discarded draft constitutes autosave.
+Inspector Create/Delete/Duplicate and catalog asset operations cannot
+silently discard a pending form. An Inspector Apply cannot discard
+uncommitted JSON text (or vice versa), and editing two JSON panels
+simultaneously cannot accidentally discard one when only the other is
+applied: commit one editor at a time or revert other staged text first.
+Topology selection, canvas edits, Compile, Runtime Preview and canonical
+JSON Export are blocked while staged Builder form text remains; the
+operator must explicitly Apply or revert it. A blocked action preserves
+the visible draft instead of silently saving or compiling older source.
+Real compiled Chromium tests cover the Save/New, cross-editor and canvas
+boundaries; neither form tracking nor a discarded draft constitutes autosave.
 
 Resource Inspector preserves an existing catalog asset when editing unrelated
 fields, writes explicitly supplied asset ID/version pairs, and removes an asset
