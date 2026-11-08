@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { csvImportAdapter, mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
+import { csvImportAdapter, jsonImportAdapter, mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, previewNetworkWorkbook, validateNetworkWorkbook } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
 
 const cell = (value) => ({ value, locator: { kind: "record-row", table: "test", row: 1 } });
 const record = (recordIndex, fields) => ({ recordIndex, fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, cell(value)])) });
@@ -756,5 +756,99 @@ assert.equal(blankMapped.ok, true, JSON.stringify(blankMapped.diagnostics));
 assert.equal(blankMapped.source.resources[0].interfaces, undefined,
   "Genuinely blank optional metadata must not invent an interface");
 console.log("PASS IMPORT-044: end-to-end dual-stack CSV preserves source IPv6, ports and MTU; invalid and competing declarations block activation");
+
+// IMPORT-045: standard sheets are not necessarily projected. Routes, VLANs,
+// STP, Services, Firewall, NAT and Flows contain declarations that this
+// topology-only mapper cannot represent; READY and mappedRows must not lie.
+const ignoredModelSheets = ["Routes", "VLANs", "STP", "Services", "Firewall", "NAT", "Flows"];
+for (const sheet of [...ignoredModelSheets, "VendorObservations"]) {
+  const document = workbook(2);
+  document.tables.push({ tableId: sheet, records: [
+    record(1, { id: "fact_1", description: "Documented vendor network fact" }),
+    record(2, { id: null, description: "   " }),
+  ] });
+  const projected = mapNetworkWorkbookToScenario(document);
+  assert.equal(projected.ok, false,
+    "Nonempty unprojected sheet cannot claim Builder-ready: " + sheet);
+  assert.ok(projected.diagnostics.some(d =>
+    d.code === "WORKBOOK_SHEET_NOT_MAPPED" && d.severity === "error" &&
+    d.table === sheet && d.row === 1), "Source row must be traceable for " + sheet);
+  assert.equal(projected.preview.rowsPerSheet[sheet], 2);
+  assert.equal(projected.preview.rejectedRows[sheet], 1,
+    "One populated unsupported source row was actually rejected");
+  assert.equal(projected.preview.mappedRows[sheet], 0,
+    "No unsupported sheet row may be counted as a mapped Builder row");
+  assert.ok(projected.preview.errors > 0);
+  assert.equal(projected.source, undefined,
+    "Unsupported source network declarations must never be partly activated");
+}
+const supportedSheetExtras = [
+  { sheet: "Metadata", name: "authors", value: "Source Owner" },
+  { sheet: "Nodes", name: "rack", value: "Building C" },
+  { sheet: "Interfaces", name: "DHCPEnabled", value: false },
+  { sheet: "Links", name: "speedMbps", value: 1000 },
+  { sheet: "Layout", name: "x", value: 15 },
+  { sheet: "Zones", name: "parent", value: "other_site" },
+];
+for (const { sheet, name, value } of supportedSheetExtras) {
+  const document = workbook(2);
+  if (sheet === "Zones") document.tables.push({ tableId: "Zones", records: [
+    record(1, { zoneId: "floor_a", displayName: "Floor A", kind: "lan" }),
+  ] });
+  const table = document.tables.find(t => t.tableId === sheet);
+  table.records[0].fields[name] = cell(value);
+  const result = mapNetworkWorkbookToScenario(document);
+  assert.equal(result.ok, false,
+    "Nonempty unsupported mapped-sheet field cannot be silently dropped: " + sheet + "." + name);
+  assert.ok(result.diagnostics.some(d =>
+    d.code === "WORKBOOK_FIELD_NOT_MAPPED" &&
+    d.table === sheet && d.row === 1 && d.field === name),
+    "Field-level source locator must be retained for " + sheet + "." + name);
+  assert.equal(result.preview.rejectedRows[sheet], 1);
+  assert.equal(result.preview.mappedRows[sheet], table.records.length - 1,
+    "A nonmapped source field invalidates exactly its actual source row");
+  assert.equal(result.source, undefined);
+}
+// Two unsupported fields on a single physical record remain one rejected row.
+const twoExtraFields = workbook(2);
+const firstNodeWithExtras = twoExtraFields.tables.find(t => t.tableId === "Nodes").records[0];
+firstNodeWithExtras.fields.vendorRole = cell("core");
+firstNodeWithExtras.fields.managementVlan = cell(22);
+const multiResult = mapNetworkWorkbookToScenario(twoExtraFields);
+assert.equal(multiResult.diagnostics.filter(d => d.code === "WORKBOOK_FIELD_NOT_MAPPED").length, 2);
+assert.equal(multiResult.preview.rejectedRows.Nodes, 1);
+assert.equal(multiResult.preview.mappedRows.Nodes, 1);
+// Empty template columns and empty review-only sheets carry NO declarations.
+const emptyExtraFields = workbook(2);
+emptyExtraFields.tables.find(t => t.tableId === "Nodes").records[0].fields.vendorRole = cell(null);
+emptyExtraFields.tables.find(t => t.tableId === "Interfaces").records[0].fields.mtuSupplier = cell(" ");
+emptyExtraFields.tables.push({ tableId: "Routes", records: [
+  record(1, { destination: null, nextHop: " " }),
+] });
+const emptyResult = mapNetworkWorkbookToScenario(emptyExtraFields);
+assert.equal(emptyResult.ok, true, JSON.stringify(emptyResult.diagnostics));
+assert.equal(emptyResult.preview.rowsPerSheet.Routes, 1);
+assert.equal(emptyResult.preview.mappedRows.Routes, 0,
+  "An empty optional template row is not counted as a modeled route");
+assert.equal(emptyResult.preview.rejectedRows.Routes, 0,
+  "A genuinely empty route template row must not be rejected");
+assert.equal(emptyResult.source.connections.length, 1,
+  "Existing declared network link stays untouched");
+const actualJsonWorkbook = JSON.stringify({
+  Metadata: [{ schemaVersion: "1.0.0", scenarioId: "imported_customer",
+    title: "Imported Customer Workbook" }],
+  Nodes: [{ nodeId: "node01", displayName: "Router", type: "network.router" }],
+  Routes: [{ destination: "0.0.0.0/0", nextHop: "192.0.2.1" }],
+});
+const parsedJsonWorkbook = await jsonImportAdapter.parse({
+  bytes: new TextEncoder().encode(actualJsonWorkbook), mediaType: "application/json",
+}, { options: { tableName: "Devices" } });
+const droppedRoute = mapNetworkWorkbookToScenario(parsedJsonWorkbook.document);
+assert.equal(droppedRoute.ok, false,
+  "Actual multi-sheet JSON workbook may not discard a declared default route");
+assert.ok(droppedRoute.diagnostics.some(d =>
+  d.code === "WORKBOOK_SHEET_NOT_MAPPED" && d.table === "Routes" && d.row === 1));
+assert.equal(droppedRoute.source, undefined);
+console.log("PASS IMPORT-045: recognized/unknown populated sheets and unsupported columns fail closed; physical preview counts honest; blank templates and valid topology preserved");
 
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
