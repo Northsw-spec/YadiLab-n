@@ -50,7 +50,45 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
     const mtu = integer(record, "MTU");
     if (value(record, "MTU") !== undefined && mtu === undefined) diagnostics.push(diagnostic("WORKBOOK_MTU_INVALID", "Interfaces.MTU must be an integer.", "Interfaces", record.recordIndex, "MTU"));
   }
-  for (const record of rows(tables, "Zones")) { const id = text(record, "zoneId"); const kind = text(record, "kind"); if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_ZONE_ID_INVALID", "Zones.zoneId must be a stable canonical ID.", "Zones", record.recordIndex, "zoneId")); if (kind && !KINDS.has(kind)) diagnostics.push(diagnostic("WORKBOOK_ZONE_KIND_INVALID", `Unknown zone kind '${kind}'.`, "Zones", record.recordIndex, "kind")); }
+  // Zone references belong to the same canonical namespace as nodes. A
+  // valid-looking workbook must not promise an importable Builder source that
+  // later fails its zone/reference integrity checks during Save or Compile.
+  const zoneIds = new Set<string>();
+  for (const record of rows(tables, "Zones")) {
+    const id = text(record, "zoneId");
+    const kind = text(record, "kind");
+    if (!id || !ID.test(id))
+      diagnostics.push(diagnostic("WORKBOOK_ZONE_ID_INVALID",
+        "Zones.zoneId must be a stable canonical ID.", "Zones", record.recordIndex, "zoneId"));
+    if (id && ID.test(id)) {
+      if (zoneIds.has(id))
+        diagnostics.push(diagnostic("WORKBOOK_DUPLICATE_ZONE_ID",
+          "Each declared zone needs a unique zoneId.", "Zones", record.recordIndex, "zoneId"));
+      if (nodeIds.has(id))
+        diagnostics.push(diagnostic("WORKBOOK_CANONICAL_ID_COLLISION",
+          "Zone and node IDs must be distinct canonical identifiers.", "Zones", record.recordIndex, "zoneId"));
+      zoneIds.add(id);
+    }
+    if (kind && !KINDS.has(kind))
+      diagnostics.push(diagnostic("WORKBOOK_ZONE_KIND_INVALID",
+        "Unknown zone kind.", "Zones", record.recordIndex, "kind"));
+  }
+  for (const record of rows(tables, "Nodes")) {
+    const zone = text(record, "zoneId");
+    if (zone && !zoneIds.has(zone))
+      diagnostics.push(diagnostic("WORKBOOK_NODE_ZONE_UNKNOWN",
+        "Nodes.zoneId references no declared zone. Import cannot infer zone membership.",
+        "Nodes", record.recordIndex, "zoneId"));
+  }
+  // Layout target references must resolve to an explicitly declared node or
+  // zone. No missing object may be invented merely to satisfy a layout hint.
+  for (const record of rows(tables, "Layout")) {
+    const target = text(record, "nodeId");
+    if (target && !nodeIds.has(target) && !zoneIds.has(target))
+      diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_UNKNOWN",
+        "Layout.nodeId references no declared node or zone.",
+        "Layout", record.recordIndex, "nodeId"));
+  }
   for (const record of rows(tables, "Links")) {
     const id = text(record, "linkId"), a = text(record, "nodeA"), b = text(record, "nodeB");
     const portA = text(record, "interfaceA"), portB = text(record, "interfaceB");
