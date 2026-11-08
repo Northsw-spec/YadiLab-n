@@ -974,4 +974,86 @@ eq(queryAuthentication(createInitialEngineState(policyMfa), "policy_user", "poli
   "FALSE", "explicit unavailable MFA remains an authoritative denial");
 console.log("PASS ENGINE-058: uncertain deny, malformed ACL, MFA and authentication selectors fail closed");
 
+// ENGINE-059: Engine accepts direct operations (e.g. authored canonical
+// solutions and fault overlays) before any UI remediation validation. No
+// operation may change the resource identity or the interface ID envelope.
+// A misspelled operation must NOT silently execute REMOVE.
+const runtime059Before = JSON.stringify(initial);
+for (const operation of [
+  { op: "set", target: "rds01", path: "id", value: "attacker" },
+  { op: "set", target: "rds01", path: "type", value: "identity.user" },
+  { op: "set", target: "rds01", path: "label", value: "Forged truth" },
+  { op: "set", target: "rds01", path: "zone", value: "wan" },
+  { op: "set", target: "rds01", path: "asset", value: { id: "forged" } },
+  { op: "set", target: "rds01", path: "interfaces", value: [] },
+  { op: "set", target: "rds01", path: "interfaces.0", value: { id: "forged" } },
+  { op: "set", target: "rds01", path: "interfaces.0.id", value: "forged" },
+  { op: "set", target: "rds01", path: "interfaces.0.name", value: "forged" },
+  { op: "remove", target: "rds01", path: "id" },
+  { op: "remove", target: "rds01", path: "properties" },
+  { op: "set", target: "rds01", path: "properties", value: {} },
+]) {
+  const denied = applyOperation(initial, operation);
+  ok(!denied.ok, "mutation of protected runtime structure is denied: " + operation.path);
+  eq(denied.diagnostic?.code, "ENGINE_OPERATION_PATH_FORBIDDEN",
+    "protected path has stable Engine diagnostic: " + operation.path);
+  eq(denied.state, initial, "protected path leaves original state object untouched");
+  eq(JSON.stringify(denied.state), runtime059Before,
+    "protected path leaves canonical Engine data unchanged");
+}
+for (const [label, operation] of [
+  ["unknown op must not become remove", { op: "reset", target: "rds01", path: "properties.nla" }],
+  ["set without value must not erase property", { op: "set", target: "rds01", path: "properties.nla" }],
+  ["explicit undefined value is not JSON", { op: "set", target: "rds01", path: "properties.nla", value: undefined }],
+  ["remove may not carry set value", { op: "remove", target: "rds01", path: "properties.nla", value: false }],
+  ["malformed target rejected", { op: "set", target: 123, path: "properties.nla", value: false }],
+]) {
+  const denied = applyOperation(initial, operation);
+  ok(!denied.ok, "malformed operation is rejected: " + label);
+  eq(denied.diagnostic?.code, "ENGINE_OPERATION_INVALID",
+    "invalid op is distinguished from unknown property: " + label);
+  eq(denied.state, initial, "bad op leaves current state untouched: " + label);
+}
+const runtime059Atomic = applyOperations(initial, [
+  { op: "set", target: "rds01", path: "properties.nla", value: true },
+  { op: "set", target: "rds01", path: "id", value: "attacker" },
+]);
+ok(!runtime059Atomic.ok, "batch with protected ID mutation is rejected");
+eq(runtime059Atomic.state, initial, "batch failure rolls back prior valid property edit");
+eq(JSON.stringify(initial), runtime059Before,
+  "none of the rejected attempts modified the original state");
+
+const runtime059Positive = applyOperation(initial, {
+  op: "set", target: "rds01", path: "properties.nla", value: true,
+});
+ok(runtime059Positive.ok, "legitimate property mutation still succeeds");
+if (runtime059Positive.ok) {
+  eq(runtime059Positive.state.resources.rds01.properties.nla, true,
+    "legitimate property mutation persists");
+  eq(runtime059Positive.state.resources.rds01.id, "rds01",
+    "ordinary property mutation retains original identity");
+}
+const runtime059InterfaceScenario = structuredClone(scenario);
+runtime059InterfaceScenario.resources.find(r => r.id === "rds01").interfaces = [{
+  id: "eth0", name: "eth0", addresses: ["192.0.2.10"], mtu: 1500,
+}];
+const runtime059Interface = createInitialEngineState(runtime059InterfaceScenario);
+for (const [field, value] of [
+  ["addresses", ["192.0.2.11"]],
+  ["mtu", 1200],
+  ["mac", "02:00:00:00:00:01"],
+]) {
+  const updated = applyOperation(runtime059Interface, {
+    op: "set", target: "rds01", path: `interfaces.0.${field}`, value,
+  });
+  ok(updated.ok, "valid interface remedial change remains available: " + field);
+  if (updated.ok) {
+    eq(updated.state.resources.rds01.interfaces[0][field], value,
+      "legitimate interface state changed without identity loss");
+    eq(updated.state.resources.rds01.interfaces[0].id, "eth0",
+      "original interface identity persists after valid mutation");
+  }
+}
+console.log("PASS ENGINE-059: runtime operation identity, interface integrity and atomicity");
+
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);

@@ -20,7 +20,40 @@ export function createInitialEngineState(scenario: NormalizedScenario): EngineSt
   };
 }
 
+// Runtime operations can mutate modeled configuration and selected live
+// interface measurements, never the canonical identity/topology envelope.
+// Without this boundary a syntactically valid "set id" operation rewrites
+// resource.id while the Engine registry remains keyed by the original ID,
+// causing contradictory identity, policy and saved-state evidence.
+function isRuntimeMutablePath(path: unknown): path is string {
+  if (typeof path !== "string") return false;
+  if (path.startsWith("properties.") && path.length > "properties.".length)
+    return true;
+  // Keep explicit interface-address, MAC and MTU remediation/fault mutations
+  // available, but forbid replacing an interface or changing its canonical
+  // identity fields through the generic Engine operation API.
+  const interfaceField = /^interfaces\.(?:0|[1-9][0-9]*)\.([A-Za-z_][A-Za-z0-9_-]*)(?:\.|$)/.exec(path)?.[1];
+  return interfaceField !== undefined &&
+    !["id", "name", "label", "type"].includes(interfaceField);
+}
+
 export function applyOperation(state: EngineState, operation: ScenarioOperation): OperationResult {
+  const reject = (code: string, message: string): OperationResult => ({
+    ok: false, state, diagnostic: { code, message, target: operation?.target, path: operation?.path },
+  });
+  // Direct consumers may be JavaScript callers rather than schema-validated
+  // packages. A misspelled op previously silently took the REMOVE branch;
+  // a SET without a value could erase an existing JSON property.
+  if (!operation || (operation.op !== "set" && operation.op !== "remove") ||
+      typeof operation.target !== "string")
+    return reject("ENGINE_OPERATION_INVALID", "Operation must declare set/remove and a string target.");
+  if ((operation.op === "set" &&
+        (!Object.prototype.hasOwnProperty.call(operation, "value") || operation.value === undefined)) ||
+      (operation.op === "remove" && Object.prototype.hasOwnProperty.call(operation, "value")))
+    return reject("ENGINE_OPERATION_INVALID", "Set requires a declared JSON value; remove must not carry a value.");
+  if (!isRuntimeMutablePath(operation.path))
+    return reject("ENGINE_OPERATION_PATH_FORBIDDEN",
+      "Runtime mutations may change only properties.* or fields of an existing interface, never identity, interface ID or resource structure.");
   const resource = Object.prototype.hasOwnProperty.call(state.resources, operation.target)
     ? state.resources[operation.target] : undefined;
   if (!resource) {
