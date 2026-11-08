@@ -2537,6 +2537,10 @@ def main():
                 "staleRuntimeProgressCannotResurrectOldProject": True,
                 "threeAsyncLabStartsCannotReplaceNewProject": True,
                 "unrelatedBuilderDetachesFile": True,
+                "studioSameTaskLatestFields": True,
+                "newestFileImportWinsOutOfOrderReads": True,
+                "crossEntryImportStaleActivationDenied": True,
+                "obsoleteCompileCannotOverwriteNewImport": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
