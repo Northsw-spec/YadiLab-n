@@ -92,9 +92,12 @@ export function restoreSaveState(scenario: NormalizedScenario, input: SaveState)
       const expected = declaredInterfaces[index];
       if (!isRecord(candidate) || !isRecord(expected))
         return fail("SAVE_INTERFACE_INVALID", `Save interface '${id}[${index}]' is malformed.`);
+      // A schema-defined interface has no arbitrary index signature. The
+      // readonly record view is for own-key comparison, not for mutation.
+      const expectedFields = expected as unknown as Readonly<Record<string, unknown>>;
       for (const key of fixedInterfaceKeys) {
-        if (Object.prototype.hasOwnProperty.call(candidate, key) !== Object.prototype.hasOwnProperty.call(expected, key) ||
-            !jsonEqual(candidate[key], expected[key]))
+        if (Object.prototype.hasOwnProperty.call(candidate, key) !== Object.prototype.hasOwnProperty.call(expectedFields, key) ||
+            !jsonEqual(candidate[key], expectedFields[key]))
           return fail("SAVE_INTERFACE_IDENTITY_MISMATCH", `Save interface '${id}[${index}]' changes canonical '${key}'.`);
       }
     }
