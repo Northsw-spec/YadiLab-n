@@ -5147,9 +5147,10 @@ function App() {
   const openGuidedLab = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
     const launch = reserveGuardedScenarioLaunch();
+    const isLiveLaunch = launch.isLive;
     const entry = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
     if (!entry) {
-      if (launch.isLive()) setDiagnostics(guidedLabCatalog.diagnostics.length ? guidedLabCatalog.diagnostics : [{ severity: "error", code: "CURRICULUM_LAB_NOT_SELECTED", message: "Select a built-in guided lab first." }]);
+      if (isLiveLaunch()) setDiagnostics(guidedLabCatalog.diagnostics.length ? guidedLabCatalog.diagnostics : [{ severity: "error", code: "CURRICULUM_LAB_NOT_SELECTED", message: "Select a built-in guided lab first." }]);
       return;
     }
     let next = createBuilderWorkspace(cloneGuidedLabSource(entry));
@@ -5162,7 +5163,7 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         if (launch.publish(next))
           setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
@@ -5171,18 +5172,18 @@ function App() {
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
       // A newer project, competing launch or newly typed unapplied form must
       // abort before changing the source, diagnostics or Runtime.
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         if (launch.publish(next)) setDiagnostics(layout.diagnostics);
         return;
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (launch.publish(runtime.ok ? runtime.workspace : next))
         setDiagnostics(runtime.diagnostics);
     } catch (error) {
-      if (launch.isLive()) setDiagnostics([{ severity: "error", code: "CURRICULUM_LAB_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "CURRICULUM_LAB_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally {
       if (launch.mayFinishBusy()) setBusy(false);
     }
@@ -5191,6 +5192,7 @@ function App() {
   const openEnterpriseScenario = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
     const launch = reserveGuardedScenarioLaunch();
+    const isLiveLaunch = launch.isLive;
     const source = enterpriseScenarioById.get(enterpriseScenarioId);
     if (!source) return;
     let next = createBuilderWorkspace(structuredClone(source));
@@ -5201,25 +5203,25 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         if (launch.publish(next))
           setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         if (launch.publish(next)) setDiagnostics(layout.diagnostics);
         return;
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (launch.publish(runtime.ok ? runtime.workspace : next))
         setDiagnostics(runtime.diagnostics);
     } catch (error) {
-      if (launch.isLive()) setDiagnostics([{ severity: "error", code: "ENTERPRISE_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "ENTERPRISE_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally {
       if (launch.mayFinishBusy()) setBusy(false);
     }
@@ -5228,6 +5230,7 @@ function App() {
   const openVerifiedDeliveryScenario = async (startRuntime) => {
     if (!projectGuardRef.current()) return;
     const launch = reserveGuardedScenarioLaunch();
+    const isLiveLaunch = launch.isLive;
     const source = verifiedDeliveryScenarioById.get(verifiedDeliveryScenarioId);
     if (!source) return;
     let next = createBuilderWorkspace(structuredClone(source));
@@ -5238,27 +5241,27 @@ function App() {
     setBusy(true);
     try {
       next = await compileBuilderWorkspace(next, compilerOptions);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (next.compile.status !== "valid") {
         if (launch.publish(next))
           setDiagnostics(next.compile.diagnostics.map((d) => ({ severity: d.severity, code: d.code, message: d.message })));
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       if (!layout.ok) {
         if (launch.publish(next)) setDiagnostics(layout.diagnostics);
         return;
       }
       next = layout.workspace;
       const runtime = previewRuntime(next);
-      if (!launch.isLive()) return;
+      if (!isLiveLaunch()) return;
       // The verified-delivery screen epoch belongs only to a committed
       // handoff, never to an abandoned asynchronous lab switch.
       if (launch.publish(null, () => commitVerifiedDeliveryRuntime(runtime, next)))
         setDiagnostics(runtime.diagnostics);
     } catch (error) {
-      if (launch.isLive()) setDiagnostics([{ severity: "error", code: "VERIFIED_DELIVERY_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (isLiveLaunch()) setDiagnostics([{ severity: "error", code: "VERIFIED_DELIVERY_SCENARIO_SWITCH_FAILED", message: error instanceof Error ? error.message : String(error) }]);
     } finally {
       if (launch.mayFinishBusy()) setBusy(false);
     }
