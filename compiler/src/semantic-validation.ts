@@ -1,3 +1,4 @@
+import { isMutableRuntimeOperationPath } from "../../core-model/src/operation-policy.js";
 import type {
   ScenarioSource,
   Scenariosourcerule,
@@ -770,6 +771,9 @@ export function validateScenarioSemantics(
 
   source.canonicalSolution?.operations.forEach((operation, i) => {
     if (!resources.has(operation.target)) diagnostics.push(error("UNKNOWN_SOLUTION_TARGET", `canonicalSolution.operations[${i}].target`, `Unknown resource '${operation.target}'.`));
+    if (!isMutableRuntimeOperationPath(operation.path))
+      diagnostics.push(error("SOLUTION_OPERATION_PATH_FORBIDDEN", `canonicalSolution.operations[${i}].path`,
+        "Canonical solution may modify only mutable properties or explicitly addressed interface state; resource/port identity is immutable."));
   });
 
   const layoutTargets = new Set([...zones, ...resources]);
