@@ -41,6 +41,21 @@ function stringCell(cell: ImportCell | undefined): string | undefined {
   const value = cell?.value;
   return typeof value === "string" && value.trim() ? format(value) : typeof value === "number" && Number.isFinite(value) ? String(value) : undefined;
 }
+// A populated JSON/XLSX/ODS field with an unrepresentable value is not blank.
+// In particular false/true/object must not turn into missing IP, MAC, peer,
+// role or link kind and permit the operator to activate incomplete topology.
+function rejectUnrepresentableField(
+  cell: ImportCell | undefined, field: string, table: string, row: number,
+  diagnostics: ImportDiagnostic[],
+): void {
+  if (populatedSourceCell(cell?.value) && stringCell(cell) === undefined) {
+    diagnostics.push({
+      code: "NETWORK_IMPORT_FIELD_TYPE_INVALID", severity: "error",
+      message: `The declared ${field} value cannot be represented as text; it was not accepted as missing source data.`,
+      table, row, field,
+    });
+  }
+}
 function cellValue(value: string, source: ImportCell | undefined, table: string, row: number): ImportCell {
   return { value, locator: source?.locator ?? { kind: "record-row", table, row } };
 }
@@ -129,6 +144,11 @@ export function normalizeNetworkInventoryDocument(
     const fields = (Object.keys(aliases) as (keyof typeof aliases)[]).reduce((out, name) => {
       out[name] = pick(row, aliases[name], inventory.tableId, diagnostics); return out;
     }, {} as Record<keyof typeof aliases, ImportCell | undefined>);
+    // Only genuinely blank optional declarations may use documented fallbacks.
+    // Invalid typed values must block activation, not disappear into defaults.
+    for (const field of ["label", "type", "ip", "cidr", "mac", "gateway", "target"] as const) {
+      rejectUnrepresentableField(fields[field], field, inventory.tableId, row.recordIndex, diagnostics);
+    }
     const id = stringCell(fields.id), label = stringCell(fields.label), type = stringCell(fields.type);
     if (!id || !ID.test(id)) { diagnostics.push({ code: "NETWORK_IMPORT_DEVICE_ID_INVALID", severity: "error", message: `Device row ${row.recordIndex} needs a stable lowercase ID (a-z, 0-9, underscore or hyphen).`, table: inventory.tableId, row: row.recordIndex }); continue; }
     const mappedType = roleType(type, inventory.tableId, row.recordIndex, diagnostics);
@@ -249,6 +269,14 @@ export function normalizeNetworkInventoryDocument(
     const portA = pickLink(["interfaceA", "From Port", "Source Port"]);
     const portB = pickLink(["interfaceB", "To Port", "Target Port"]);
     const kind = pickLink(["kind", "Link Type", "Connection Type"]);
+    // Do not manufacture a row-based ID or default network link kind from
+    // an explicit but nontext declaration in a separate Links sheet.
+    for (const [field, cell] of [
+      ["linkId", id], ["nodeA", from], ["nodeB", to],
+      ["interfaceA", portA], ["interfaceB", portB], ["kind", kind],
+    ] as const) {
+      rejectUnrepresentableField(cell, field, explicitLinks!.tableId, row.recordIndex, diagnostics);
+    }
     const linkId = stringCell(id) ?? `link_sheet_row_${row.recordIndex}`;
     const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
       linkId: { value: linkId, source: id }, nodeA: { value: stringCell(from) ?? "", source: from }, nodeB: { value: stringCell(to) ?? "", source: to },
