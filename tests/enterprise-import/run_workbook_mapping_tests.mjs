@@ -851,4 +851,104 @@ assert.ok(droppedRoute.diagnostics.some(d =>
 assert.equal(droppedRoute.source, undefined);
 console.log("PASS IMPORT-045: recognized/unknown populated sheets and unsupported columns fail closed; physical preview counts honest; blank templates and valid topology preserved");
 
+// IMPORT-046: A populated projected text cell is not optional merely because
+// the generic text extractor cannot represent its JSON/XLSX type. Previously
+// the importer silently renamed the workbook, dropped a zone/interface label,
+// or lost a declared gateway without blocking Builder activation.
+for (const { table, field, invalid } of [
+  { table: "Metadata", field: "title", invalid: true },
+  { table: "Metadata", field: "title", invalid: { label: "Wrong type" } },
+  { table: "Metadata", field: "description", invalid: false },
+  { table: "Metadata", field: "description", invalid: ["not", "text"] },
+  { table: "Zones", field: "displayName", invalid: false },
+  { table: "Zones", field: "displayName", invalid: { title: "Declares zone" } },
+  { table: "Interfaces", field: "name", invalid: true },
+  { table: "Interfaces", field: "name", invalid: ["eth0"] },
+  { table: "Nodes", field: "gateway", invalid: true },
+  { table: "Nodes", field: "gateway", invalid: Infinity },
+  { table: "Nodes", field: "Default Gateway", invalid: false },
+  { table: "Nodes", field: "Default Gateway", invalid: {} },
+]) {
+  const sourceBook = workbook(2);
+  if (table === "Zones") sourceBook.tables.push({ tableId: "Zones", records: [
+    record(1, { zoneId: "site_a", kind: "lan" }),
+  ] });
+  sourceBook.tables.find(x => x.tableId === table).records[0].fields[field] = cell(invalid);
+  const result = mapNetworkWorkbookToScenario(sourceBook);
+  assert.equal(result.ok, false,
+    "Populated incompatible projected field must not disappear: " + table + "." + field);
+  assert.ok(result.diagnostics.some(d =>
+    d.code === "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID" &&
+    d.table === table && d.row === 1 && d.field === field),
+    "Original workbook field location must be returned: " + table + "." + field);
+  assert.equal(result.preview.rejectedRows[table], 1);
+  assert.equal(result.preview.mappedRows[table],
+    sourceBook.tables.find(t => t.tableId === table).records.length - 1);
+  assert.equal(result.source, undefined, "No partial Builder activation on bad typed metadata");
+}
+// The two gateway names represent the SAME source claim. If both are present
+// with different values, returning just the first violates source fidelity.
+const disagreeingGateways = workbook(2);
+const disagreeingNode = disagreeingGateways.tables.find(t => t.tableId === "Nodes").records[0];
+disagreeingNode.fields.gateway = cell("10.20.0.1");
+disagreeingNode.fields["Default Gateway"] = cell("10.20.0.254");
+const blockedGateways = mapNetworkWorkbookToScenario(disagreeingGateways);
+assert.equal(blockedGateways.ok, false, "Contradictory gateway assertions must fail");
+assert.ok(blockedGateways.diagnostics.some(d =>
+  d.code === "WORKBOOK_GATEWAY_DECLARATION_CONFLICT" &&
+  d.table === "Nodes" && d.row === 1 && d.field === "Default Gateway"));
+assert.equal(blockedGateways.preview.rejectedRows.Nodes, 1);
+assert.equal(blockedGateways.source, undefined);
+
+// A finite number in a text-capable cell is representable; real blanks are
+// not source claims. Preserve documented fallbacks without inventing routes.
+const validOptionalText = workbook(2);
+validOptionalText.tables[0].records[0].fields.title = cell(42);
+validOptionalText.tables[0].records[0].fields.description = cell("Office inventory");
+validOptionalText.tables.push({ tableId: "Zones", records: [
+  record(1, { zoneId: "site_a", displayName: " ", kind: "lan" }),
+] });
+validOptionalText.tables.find(t => t.tableId === "Interfaces").records[0].fields.name = cell(null);
+validOptionalText.tables.find(t => t.tableId === "Nodes").records[0].fields.gateway = cell("10.20.0.1");
+validOptionalText.tables.find(t => t.tableId === "Nodes").records[0].fields["Default Gateway"] = cell(" 10.20.0.1 ");
+const validOptionalResult = mapNetworkWorkbookToScenario(validOptionalText);
+assert.equal(validOptionalResult.ok, true, JSON.stringify(validOptionalResult.diagnostics));
+assert.equal(validOptionalResult.source.metadata.title, "42");
+assert.equal(validOptionalResult.source.metadata.description, "Office inventory");
+assert.deepEqual(validOptionalResult.source.zones[0],
+  { id: "site_a", label: "site_a", kind: "lan" },
+  "Genuinely blank zone label uses a documented node-free fallback");
+assert.equal(validOptionalResult.source.resources[0].interfaces[0].label, undefined,
+  "Genuinely blank interface label does not create synthetic hardware identity");
+assert.equal(validOptionalResult.source.resources[0].interfaces[0].id, "eth0");
+assert.equal(validOptionalResult.source.notes.length, 1,
+  "Two identical source gateway aliases establish one preserved note");
+assert.match(validOptionalResult.source.notes[0].text, /10\.20\.0\.1/);
+assert.equal(validOptionalResult.source.connections.length, 1,
+  "Gateway aliases do not create any additional connection");
+
+// Exercise a real JSON adapter so the fail-closed path covers actual media,
+// not only hand-constructed ImportDocument objects.
+const contradictoryJson = {
+  Metadata: [{ schemaVersion: "1.0.0", scenarioId: "customer_site",
+    title: false, description: { owner: "operations" } }],
+  Nodes: [{ nodeId: "edge01", displayName: "Edge", type: "network.router",
+    gateway: "192.0.2.1", "Default Gateway": "192.0.2.254" }],
+};
+const parsedContradictory = await jsonImportAdapter.parse({
+  bytes: new TextEncoder().encode(JSON.stringify(contradictoryJson)),
+  mediaType: "application/json",
+}, { options: { tableName: "Devices" } });
+const actualBlocked = mapNetworkWorkbookToScenario(parsedContradictory.document);
+assert.equal(actualBlocked.ok, false);
+for (const { code, table, field } of [
+  { code: "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", table: "Metadata", field: "title" },
+  { code: "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", table: "Metadata", field: "description" },
+  { code: "WORKBOOK_GATEWAY_DECLARATION_CONFLICT", table: "Nodes", field: "Default Gateway" },
+]) assert.ok(actualBlocked.diagnostics.some(d =>
+  d.code === code && d.table === table && d.row === 1 && d.field === field),
+  "Real JSON must preserve traceable source declaration errors: " + table + "." + field);
+assert.equal(actualBlocked.source, undefined);
+console.log("PASS IMPORT-046: optional projected text and conflicting gateway aliases fail closed; valid blanks, finite text and matching declarations preserved");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
