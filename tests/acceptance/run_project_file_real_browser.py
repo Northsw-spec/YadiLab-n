@@ -142,6 +142,48 @@ def main():
                     "Welcome source unexpectedly dirty")
             require(page.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Project file was autosaved at startup")
+            # PROJECT-025: File System Access picker types are advisory on some
+            # platforms. Never write to a .json or other unexpected filename
+            # and then display a fictional .yadilab name as successfully saved.
+            wrong_extension = context.new_page()
+            wrong_extension.add_init_script(MOCK)
+            wrong_extension.on("pageerror", lambda error: errors.append(str(error)))
+            wrong_extension.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            wec = wrong_extension.locator('[data-project-file-controls="ready"]')
+            expect(wec).to_be_visible(timeout=45000)
+            wrong_extension.locator('[data-project-action="new"]').click()
+            expect(wec).to_have_attribute("data-project-dirty", "true")
+            wrong_extension.evaluate("""() => {
+                window.__originalSavePicker = window.showSaveFilePicker;
+                Object.defineProperty(window, 'showSaveFilePicker', {
+                    configurable: true, value: async () => ({
+                    name: 'misleading-project.json',
+                    async createWritable() {
+                        window.__yadilabProjectStore.writes++;
+                        throw Error('UNEXPECTED_INVALID_EXTENSION_WRITE');
+                    },
+                    async getFile() { return new File([], 'misleading-project.json'); },
+                }) });
+            }""")
+            wrong_extension.locator('[data-project-action="save-as"]').click()
+            expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_FILE_EXTENSION_INVALID", timeout=20000)
+            require(wrong_extension.evaluate("window.__yadilabProjectStore.writes") == 0,
+                    "PROJECT-025 invalid picker file was written")
+            expect(wec).to_have_attribute("data-project-dirty", "true")
+            expect(wec).to_have_attribute("data-project-filename", "Untitled.yadilab")
+            wrong_extension.evaluate("""() => {
+                Object.defineProperty(window, 'showSaveFilePicker', {
+                    configurable: true, value: window.__originalSavePicker,
+                });
+            }""")
+            wrong_extension.locator('[data-project-action="save-as"]').click()
+            expect(wrong_extension.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            require(wrong_extension.evaluate("window.__yadilabProjectStore.writes") == 1,
+                    "PROJECT-025 valid .yadilab recovery did not write exactly once")
+            expect(wec).to_have_attribute("data-project-dirty", "false")
+            wrong_extension.close()
             # PROJECT-018: browsers without File System Access still need a
             # discard guard and a pinned origin while a normal file-input
             # chooser is open. Test the real Chromium file chooser (not a
@@ -1407,17 +1449,32 @@ def main():
                 "window.__yadilabProjectStore.text") == previous_bytes,
                 "Loading another scenario changed the previous project file")
             different_scenario.keyboard.press("Control+s")
-            # Scenario Studio deliberately starts with an incomplete draft:
-            # schema validation must fail before any native target is touched.
+            # PROJECT-026: an empty Scenario Studio draft is editable and
+            # saveable, but it must NEVER reuse or overwrite the previous
+            # project's nonempty native file. A new empty destination is needed.
             expect(different_scenario.locator('[data-project-message]')).to_contain_text(
-                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
             require(different_scenario.evaluate(
                 "window.__yadilabProjectStore.text") == previous_bytes,
-                "New scenario overwrote the original .yadilab through inherited handle")
+                "New draft overwrote the original .yadilab through inherited handle")
             require(different_scenario.evaluate(
                 "window.__yadilabProjectStore.writes") == previous_writes,
-                "New scenario performed an unintended write to the old project")
+                "New draft performed an unintended write to the old project")
             expect(different_controls).to_have_attribute("data-project-dirty", "true")
+            different_scenario.evaluate(
+                "window.__yadilabProjectStore.chooseAlternative = true")
+            different_scenario.locator('[data-project-action="save-as"]').click()
+            expect(different_scenario.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(different_controls).to_have_attribute("data-project-dirty", "false")
+            expect(different_controls).to_have_attribute(
+                "data-project-filename", "safe-recovery-copy.yadilab")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.otherWrites") == 1,
+                "New editable draft did not Save As into separate empty target")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.text") == previous_bytes,
+                "Separate draft Save As modified the original project file")
             different_scenario.close()
             # PROJECT-014: a new scenario can reuse the SAME canonical
             # scenarioId but represents a distinct authored project. The
@@ -1461,8 +1518,11 @@ def main():
                 "window.__yadilabProjectStore.text") == prior_file_bytes,
                 "Same-ID scenario replacement unexpectedly modified prior disk bytes")
             reused_id.keyboard.press("Control+s")
+            # Same public scenario ID does not authorize overwriting the
+            # previous native file. An editable blank draft remains valid,
+            # but the detached Save As target is already nonempty.
             expect(reused_id.locator('[data-project-message]')).to_contain_text(
-                "PROJECT_SOURCE_SCHEMA_INVALID", timeout=20000)
+                "PROJECT_DESTINATION_NOT_EMPTY", timeout=20000)
             require(reused_id.evaluate(
                 "window.__yadilabProjectStore.writes") == prior_file_writes,
                 "Same-ID Studio draft overwrote the previous native project")

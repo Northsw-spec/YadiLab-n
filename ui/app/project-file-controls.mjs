@@ -314,6 +314,13 @@ export function ProjectFileControls({
     busyRef.current = true;
     try {
       const handle = picker ? await picker : forceSaveAs ? null : handleRef.current;
+      // Native picker file-type filters are not a guarantee on every OS.
+      // Never write a .json/.txt file while displaying a fictional .yadilab
+      // filename as verified. An attached handle must keep its real name.
+      if (handle && (typeof handle.name !== "string" ||
+          handle.name.length <= ".yadilab".length ||
+          !handle.name.toLowerCase().endsWith(".yadilab")))
+        throw new Error("PROJECT_FILE_EXTENSION_INVALID");
       const data = await createProjectDocument(before, { validateSource });
       requireLiveSaveSource();
       if (!handle) {
@@ -373,7 +380,7 @@ export function ProjectFileControls({
       handleRef.current = handle;
       fileFingerprintRef.current = writtenFingerprint;
       unpersistedRef.current = false;
-      nameState(projectFilename(handle.name || filename));
+      nameState(handle.name);
       baselineRef.current = original;
       lastBuilderSnapshotRef.current = projectSnapshot(getWorkspace());
       // A verified write clears the synchronous warning only when no newer
