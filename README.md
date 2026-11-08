@@ -15,13 +15,15 @@ The active YadiLab application repository, migrated to a new Git history from th
 
 **Current build status is determined exclusively by the latest GitHub Actions run for the exact commit.** Do not infer PASS from this README.
 
-## Next feature: manual .yadilab project files
+## Editable .yadilab projects (implemented)
 
-[Feature specification and frozen acceptance criteria](https://github.com/Northsw-spec/YadiLab-n/issues/1).
+The application provides user-controlled **New, Open, Save, Save As and Ctrl+S** for editable `.yadilab` documents, with schema and reference checks, unsaved-change warnings, native-disk conflict detection and byte-for-byte post-write verification. A browser fallback download is **not** treated as a verified durable save. File reopening restores editable source, **not** previous runtime evaluation or Engine PASS. There is no project autosave, silent overwrite, cloud project storage or inferred network connectivity.
 
-Implement an explicit editable project file with New/Open/Save/Save As/Ctrl+S, verified read-back and preservation of declared topology identities, unsaved-change warnings and a safe failure path. No automatic periodic saving, cloud persistence, fabricated connectivity or import of the abandoned old PR #159 implementation.
+Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py). The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
-## Engineering policy
+## Engineering policy and cold-start
+
+**[`AGENTS.md` is the versioned development and automation entrypoint](AGENTS.md).** Read it from current GitHub `main` together with actual source, tests, schemas, current PRs and exact-commit Actions runs. Previous conversations, AI memory and old status documents are **not required** and must not be used as substitutes for those sources. The automation prompt controls workflow; GitHub contains the technical facts.
 
 GitHub-hosted Ubuntu PASS is YadiLab project acceptance for Parrot; no routine manual Parrot testing. Security tests and real Chromium checks must report genuine results. A failed, cancelled, skipped or pending test is not PASS. Prefer small, reviewed pull requests and exactly three permanent workflows.
 
