@@ -2610,6 +2610,17 @@ def main():
 
             # Compiling or exporting before Apply can misleadingly validate
             # or deliver a canonical source which excludes visible edits.
+            # Scenario Studio is inside a separately collapsed Control
+            # Center details section; open it without altering source.
+            pending.evaluate("""() => {
+              const studio = document.querySelector('[data-scenario-studio]');
+              if (!studio) throw new Error('PROJECT065_STUDIO_MISSING');
+              let ancestor = studio.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
             pending.locator('[data-studio-action="validate-compile"]').click()
             expect(pending.locator(".diagnostic")).to_contain_text(
                 "BUILDER_COMPILE_UNAPPLIED_DRAFT", timeout=15000)
