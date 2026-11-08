@@ -1956,9 +1956,29 @@ const PATH_SEARCH_MAX_EXPANSIONS = 16_384;
 const PATH_SEARCH_MAX_QUEUE = 4_096;
 const PATH_SEARCH_MAX_QUEUED_NODES = 250_000;
 
+// Exhausting graph connectivity costs O(nodes + edges), not factorial simple
+// paths. Prove a disconnected component FALSE without consuming the bounded
+// policy-evaluation path budget or degrading a provably isolated network to
+// UNKNOWN merely because its own component is dense.
+function hasTopologyRoute(graph: ReadonlyMap<string, readonly string[]>, from: string, to: string): boolean {
+  const visited = new Set<string>([from]);
+  const queue: string[] = [from];
+  for (let index = 0; index < queue.length; index += 1) {
+    for (const next of graph.get(queue[index]!) ?? []) {
+      if (next === to) return true;
+      if (!visited.has(next)) {
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
 function enumeratePaths(scenario: NormalizedScenario, from: string, to: string, limit = 128): { readonly paths: readonly (readonly string[])[]; readonly truncated: boolean } {
   if (from === to) return { paths: [[from]], truncated: false };
   const graph = adjacency(scenario);
+  if (!hasTopologyRoute(graph, from, to)) return { paths: [], truncated: false };
   const queue: string[][] = [[from]];
   const found: string[][] = [];
   const maxDepth = Math.max(1, scenario.resources.length);
