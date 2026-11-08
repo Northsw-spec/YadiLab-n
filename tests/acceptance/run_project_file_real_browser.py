@@ -1793,6 +1793,8 @@ def main():
             atomic.locator('[data-project-action="save-as"]').click()
             expect(atomic.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
+            atomic.wait_for_function(
+                "window.__yadilabProjectStore.writes === 1", timeout=20000)
             expect(ac).to_have_attribute("data-project-dirty", "false")
             for index in range(3):
                 saved_title = "PROJECT-046 atomic Save " + str(index + 1)
@@ -1807,6 +1809,9 @@ def main():
                     apply.click();
                     save.click();
                 }""")
+                atomic.wait_for_function(
+                    "(expected) => window.__yadilabProjectStore.writes === expected",
+                    arg=index + 2, timeout=20000)
                 expect(atomic.locator('[data-project-message]')).to_contain_text(
                     "Saved and read back", timeout=20000)
                 require(json.loads(atomic.evaluate(
