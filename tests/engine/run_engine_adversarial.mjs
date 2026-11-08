@@ -1213,4 +1213,58 @@ eq(queryLayer2BroadcastReachability(ownScenario062, ownPlain062, "constructor", 
   "FALSE", "real constructor-named L2 endpoint can prove declared path absence");
 console.log("PASS ENGINE-062: no inherited-resource truths, crashes, or phantom endpoints");
 
+// ENGINE-063: 11 mutually linked resources have factorially many simple
+// paths even when no destination path is present. Exhaustive enumeration
+// could hang indefinitely. A bounded search must return UNKNOWN if it
+// cannot exhaust the graph rather than manufacturing a negative verdict.
+const denseScenario063 = structuredClone(scenario);
+const denseCount063 = 11;
+for (let i = 0; i < denseCount063; i++) {
+  denseScenario063.resources.push({
+    id: `dense_${i}`, type: "network.switch", label: `Dense switch ${i}`,
+    interfaces: [], properties: {},
+  });
+}
+for (let i = 0; i < denseCount063; i++) {
+  for (let j = i + 1; j < denseCount063; j++) {
+    denseScenario063.connections.push({
+      id: `mesh_${i}_${j}`, kind: "network",
+      from: { resource: `dense_${i}` },
+      to: { resource: `dense_${j}` },
+      properties: {},
+    });
+  }
+}
+const denseState063 = createInitialEngineState(denseScenario063);
+const denseUnresolved063 = queryReachability(denseScenario063, denseState063,
+  "dense_0", "rds01", "tcp", 3389);
+eq(denseUnresolved063.truth, "UNKNOWN",
+  "bounded reachability cannot assert FALSE after truncating a dense graph");
+ok(denseUnresolved063.explanation.some(line => line.includes("work/memory limit")),
+  "bounded reachability explains its failure to prove topology isolation");
+const denseL2063 = queryLayer2BroadcastReachability(denseScenario063, denseState063,
+  "dense_0", "rds01");
+eq(denseL2063.truth, "UNKNOWN",
+  "bounded L2 search cannot claim FALSE after exhausting work budget");
+ok(denseL2063.explanation.some(line => line.includes("work/memory limit")),
+  "bounded L2 search preserves cutoff reason");
+
+// Positive: finite disconnected and reachable paths retain their normal
+// distinction. Do not degrade small, provably isolated networks to UNKNOWN.
+const isolatedScenario063 = structuredClone(scenario);
+isolatedScenario063.resources.push({
+  id: "island_0", type: "network.switch", label: "Isolated",
+  interfaces: [], properties: {},
+});
+const isolatedState063 = createInitialEngineState(isolatedScenario063);
+eq(queryReachability(isolatedScenario063, isolatedState063,
+  "island_0", "rds01", "tcp", 3389).truth, "FALSE",
+  "exhausted small disconnected topology still proves path absence");
+eq(queryLayer2BroadcastReachability(isolatedScenario063, isolatedState063,
+  "island_0", "rds01").truth, "FALSE",
+  "exhausted small L2 topology still proves isolation");
+eq(queryReachability(scenario, initial, "attacker", "rds01", "tcp", 3389).truth,
+  "TRUE", "known reachable source path still succeeds under bounded search");
+console.log("PASS ENGINE-063: bounded graph work, safe UNKNOWN, and precise small-path truths");
+
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);
