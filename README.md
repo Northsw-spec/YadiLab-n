@@ -64,6 +64,16 @@ configuration and interface-state edits remain supported. These source
 guards are regression-tested by required Compiler, Builder authoring and
 native project-file checks, not by inferring runtime or physical evidence.
 
+Engine Runtime save-state restore additionally verifies that each restored
+resource retains the immutable identity and topology envelope of the exact
+normalized scenario (including type, zone, label, catalog asset, interface
+count and interface IDs). A saved resource with malformed properties or
+interfaces is rejected before becoming live Engine state. Declared mutable
+property values, interface addresses, MAC and MTU remain restorable.
+Both serialized and restored resource-ID maps are prototype-free, including
+when a real resource is legitimately named `constructor`. A scenario hash
+alone does not attest the saved Runtime state as trustworthy evidence.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the
