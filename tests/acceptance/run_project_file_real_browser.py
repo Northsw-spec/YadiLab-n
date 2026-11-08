@@ -434,6 +434,14 @@ def main():
                 "window.__yadilabProjectStore.pendingWritableOpen === true",
                 timeout=20000)
             expect(ug_controls).to_have_attribute("data-project-dirty", "false")
+            # PROJECT-027: an in-flight native Save must be visible and
+            # competing project actions visibly disabled, not silent no-ops.
+            expect(ug_controls).to_have_attribute("data-project-operation", "saving")
+            expect(unload_guard.locator('[data-project-message]')).to_contain_text(
+                "Saving project", timeout=10000)
+            for action in ("new", "open", "save", "save-as"):
+                expect(unload_guard.locator(
+                    f'[data-project-action="{action}"]')).to_be_disabled()
             active_warning = unload_guard.evaluate("""() => {
                 const event = new Event('beforeunload', { cancelable: true });
                 window.dispatchEvent(event);
@@ -466,6 +474,9 @@ def main():
             require(unload_guard.evaluate(
                 "window.__yadilabProjectStore.writes") == baseline_writes + 1,
                 "Resumed explicit Save was not verified as exactly one disk write")
+            expect(ug_controls).to_have_attribute("data-project-operation", "idle")
+            expect(unload_guard.locator(
+                '[data-project-action="save"]')).to_be_enabled()
             unload_guard.close()
 
             # PROJECT-017: when a write fails after a previously verified
@@ -769,13 +780,21 @@ def main():
             page.wait_for_function(
                 "window.__yadilabProjectStore.pendingOpenPicker === true",
                 timeout=10000)
-            page.locator('[data-project-action="new"]').click()
+            expect(controls).to_have_attribute("data-project-operation", "opening")
+            expect(page.locator('[data-project-message]')).to_contain_text(
+                "Opening project", timeout=10000)
+            for action in ("new", "open", "save", "save-as"):
+                expect(page.locator(f'[data-project-action="{action}"]')).to_be_disabled()
+            # Disabled native buttons are probed through DOM click (Playwright
+            # locator.click waits for enablement); the keyboard shortcut still
+            # exercises the synchronous internal lock.
+            page.locator('[data-project-action="new"]').evaluate("(el) => el.click()")
             require(page.locator(".app-frame").get_attribute(
                 "data-runtime-scenario-id") == "foundation_acceptance",
                 "New replaced Builder while the native Open picker was pending")
-            page.locator('[data-project-action="save-as"]').click()
+            page.locator('[data-project-action="save-as"]').evaluate("(el) => el.click()")
             page.keyboard.press("Control+s")
-            page.locator('[data-project-action="open"]').click()
+            page.locator('[data-project-action="open"]').evaluate("(el) => el.click()")
             require(page.evaluate("window.__yadilabProjectStore.writes")
                     == writes_before_picker,
                     "Save/Save As wrote file while Open picker was pending")
@@ -783,6 +802,7 @@ def main():
                     == picker_calls_before + 1,
                     "Another Open picker was launched while the first was unresolved")
             expect(controls).to_have_attribute("data-project-dirty", "false")
+            expect(controls).to_have_attribute("data-project-operation", "opening")
             page.evaluate("""() => {
                 const store = window.__yadilabProjectStore;
                 store.pauseOpenPicker = false;
@@ -793,6 +813,8 @@ def main():
             require(page.evaluate("window.__yadilabProjectStore.writes")
                     == writes_before_picker,
                     "Native Open performed an implicit project save")
+            expect(controls).to_have_attribute("data-project-operation", "idle")
+            expect(page.locator('[data-project-action="open"]')).to_be_enabled()
             require(page.locator(".app-frame").get_attribute(
                 "data-runtime-scenario-id") == "foundation_acceptance",
                 "Pending native Open replaced the wrong Builder project")
