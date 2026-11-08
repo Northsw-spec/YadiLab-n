@@ -5,6 +5,7 @@ import {
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
   projectHasLiveUnsavedChanges, projectNeedsUnloadWarning,
   projectFilePickerStillCurrent, sameEditableProjectRevision,
+  projectFileAssociationStillCurrent,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -307,12 +308,26 @@ export function ProjectFileControls({
       setMessage("Save requires editable Builder mode and an idle workspace.");
       return;
     }
+    // An external Scenario Studio/import action can publish a new Builder
+    // immediately. Its old .yadilab association is not detached until the
+    // next React effect. Reject Save/Save As *before* choosing a file or
+    // invoking any asynchronous I/O while that association is unresolved.
+    const transition = getScenarioTransitionId();
+    if (!projectFileAssociationStillCurrent(previousWorkspaceRef.current, before,
+      previousTransitionRef.current, transition)) {
+      setMessage("PROJECT_FILE_ASSOCIATION_PENDING: project changed; retry Save As after the new project is ready.");
+      setDiagnostics([diag("PROJECT_FILE_ASSOCIATION_PENDING",
+        "The current Builder replaced the previously attached project before its file association was updated. No file was written.")]);
+      return;
+    }
     const original = projectSnapshot(before);
     const epoch = fileEpochRef.current;
     // File identity checks may await browser permissions or the filesystem.
     // The originating project must still be current at EVERY write boundary.
     const requireLiveSaveSource = () => {
-      if (fileEpochRef.current !== epoch || projectSnapshot(getWorkspace()) !== original)
+      if (fileEpochRef.current !== epoch ||
+          getScenarioTransitionId() !== transition ||
+          projectSnapshot(getWorkspace()) !== original)
         throw new Error("PROJECT_STALE_BEFORE_WRITE");
     };
     // The filename displayed for New/imported/opened projects must be the
@@ -387,7 +402,7 @@ export function ProjectFileControls({
       }
       // A different project may have been activated during asynchronous I/O.
       // Never bind an old file handle or baseline to that new project.
-      if (fileEpochRef.current !== epoch) {
+      if (fileEpochRef.current !== epoch || getScenarioTransitionId() !== transition) {
         setMessage("File was written, but the active project changed. Current project remains unsaved.");
         setDiagnostics([diag("PROJECT_SAVE_ASSOCIATION_STALE",
           "The verified write belongs to an earlier project. Current project was not marked saved.", "warning")]);
@@ -406,7 +421,8 @@ export function ProjectFileControls({
       changedRef.current = projectHasUnsavedChanges(
         lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
       setRevision(n => n + 1);
-      if (projectSnapshot(getWorkspace()) !== original || fileEpochRef.current !== epoch) {
+      if (projectSnapshot(getWorkspace()) !== original ||
+          fileEpochRef.current !== epoch || getScenarioTransitionId() !== transition) {
         setMessage("File saved, but the workspace changed during writing: newer edits remain unsaved.");
         setDiagnostics([diag("PROJECT_SAVE_STALE", "The written file passed readback, but more recent edits were not in that file.", "warning")]);
         return;
