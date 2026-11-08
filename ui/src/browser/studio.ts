@@ -9,13 +9,19 @@ export interface ScenarioDraftOptions {
   readonly language?: string;
 }
 
-function normalizeId(value: string): string {
-  const id = value.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, "_").replace(/^[^a-z]+/, "studio_");
+// The editable .yadilab and Compiler source schemas use the same ID rule:
+ // ^[a-z][a-z0-9_-]{0,63}$. Dots and >64-character values previously
+// created drafts that looked editable but could not be compiled or saved.
+export function canonicalScenarioDraftId(value: string): string {
+  const id = value.trim().toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^[^a-z]+/, "studio_")
+    .slice(0, 64);
   return id || "studio_scenario";
 }
 
 export function createScenarioDraft(options: ScenarioDraftOptions = {}): ScenarioSource {
-  const scenarioId = normalizeId(options.scenarioId ?? "studio_scenario");
+  const scenarioId = canonicalScenarioDraftId(options.scenarioId ?? "studio_scenario");
   return {
     formatId: "infrastructure-cyber-lab.scenario-source",
     schemaVersion: "0.1.0",
