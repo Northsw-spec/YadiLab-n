@@ -506,4 +506,73 @@ assert.ok(invalidTypedPrefix.diagnostics.some(d =>
   "Nonblank nontext prefix values must not silently be omitted");
 console.log("PASS IMPORT-042: inventory orphan-prefix and invalid typed prefix fail closed; blank and valid source preserved");
 
+// IMPORT-043: an explicit nonblank but nontext value is not a missing
+// declaration. This is critical for JSON booleans and malformed workbook cells
+// that previously became omitted network facts, generic roles or default links.
+for (const { column, invalid, field } of [
+  { column: "Hostname", invalid: true, field: "label" },
+  { column: "Device Type", invalid: false, field: "type" },
+  { column: "IP Address", invalid: true, field: "ip" },
+  { column: "CIDR", invalid: false, field: "cidr" },
+  { column: "MAC Address", invalid: {}, field: "mac" },
+  { column: "Default Gateway", invalid: true, field: "gateway" },
+  { column: "Connected To", invalid: false, field: "target" },
+]) {
+  const normalized = normalizeNetworkInventoryDocument(deviceInventory({ [column]: invalid }));
+  assert.ok(normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_FIELD_TYPE_INVALID" &&
+    d.table === "Devices" && d.row === 1 && d.field === field),
+    `Explicit invalid ${column} must not silently become an absent source fact`);
+}
+// A separate Links sheet may not synthesize a link ID or default its kind
+// when the source provides an unsupported boolean/object instead.
+const sheetInventory = changes => ({ tables: [
+  { tableId: "Devices", records: [
+    record(1, { "Asset ID": "device_1", Hostname: "One", "Device Type": "Server" }),
+    record(2, { "Asset ID": "device_2", Hostname: "Two", "Device Type": "Server" }),
+  ] },
+  { tableId: "Links", records: [record(1, {
+    linkId: "edge_1", nodeA: "device_1", nodeB: "device_2", kind: "management", ...changes,
+  })] },
+] });
+for (const { field, invalid } of [
+  { field: "linkId", invalid: true },
+  { field: "nodeA", invalid: false },
+  { field: "nodeB", invalid: {} },
+  { field: "interfaceA", invalid: true },
+  { field: "interfaceB", invalid: false },
+  { field: "kind", invalid: true },
+]) {
+  const normalized = normalizeNetworkInventoryDocument(sheetInventory({ [field]: invalid }));
+  assert.ok(normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_FIELD_TYPE_INVALID" &&
+    d.table === "Links" && d.row === 1 && d.field === field),
+    `Explicit invalid Links.${field} must fail before activation`);
+}
+const goodTypedInventory = normalizeNetworkInventoryDocument(deviceInventory({
+  "IP Address": "10.0.0.5", "MAC Address": "AA:BB:CC:DD:EE:01",
+  "Device Type": "Server", "Default Gateway": "10.0.0.1",
+}));
+assert.equal(goodTypedInventory.diagnostics.some(d => d.severity === "error"), false,
+  "Documented IPv4/MAC/default gateway must remain importable");
+assert.deepEqual(mapNetworkWorkbookToScenario(goodTypedInventory.document).source.resources[0].interfaces[0].addresses,
+  ["10.0.0.5"]);
+const goodExplicitLink = normalizeNetworkInventoryDocument(sheetInventory({}));
+assert.equal(goodExplicitLink.diagnostics.some(d => d.severity === "error"), false);
+const linkedSource = mapNetworkWorkbookToScenario(goodExplicitLink.document);
+assert.equal(linkedSource.ok, true, JSON.stringify(linkedSource.diagnostics));
+assert.equal(linkedSource.source.connections[0].id, "edge_1");
+assert.equal(linkedSource.source.connections[0].kind, "management");
+assert.equal(linkedSource.source.connections[0].from.resource, "device_1");
+assert.equal(linkedSource.source.connections[0].to.resource, "device_2");
+const blankOptionalLink = normalizeNetworkInventoryDocument(sheetInventory({
+  linkId: " ", kind: null, interfaceA: "", interfaceB: null,
+}));
+assert.equal(blankOptionalLink.diagnostics.some(d => d.severity === "error"), false);
+const defaultLink = mapNetworkWorkbookToScenario(blankOptionalLink.document);
+assert.equal(defaultLink.ok, true, JSON.stringify(defaultLink.diagnostics));
+assert.equal(defaultLink.source.connections[0].id, "link_sheet_row_1");
+assert.equal(defaultLink.source.connections[0].kind, "network");
+console.log("PASS IMPORT-043: typed network declarations rejected; valid, blank and explicit links preserved");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
