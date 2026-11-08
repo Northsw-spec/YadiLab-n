@@ -123,6 +123,54 @@ ok(!ws.source.resources.some((x) => x.id === "backup03"), "selected resource del
 eq(ws.compile.status, "idle", "inspector semantic edits invalidate compile result");
 ok(ws.sourceRevision >= 10, "inspector edits increment source revision");
 
+// BUILDER-052: the typed resource editor is a canonical source editor.
+// An unrelated label change must not drop an explicit asset requirement.
+const sourceWithAsset = structuredClone(source);
+const originalAsset = { id: "endpoint.windows", version: "1.0.0" };
+const assetResource = sourceWithAsset.resources.find((item) => item.id === "rds01");
+if (!assetResource) throw Error("asset resource fixture unavailable");
+assetResource.asset = originalAsset;
+let assetWorkspace = createBuilderWorkspace(sourceWithAsset);
+const sourceAssetDigest = JSON.stringify(assetWorkspace.source);
+const assetInput = {
+  label: "RDS with preserved asset", type: assetResource.type,
+  zone: assetResource.zone, propertiesJson: JSON.stringify(assetResource.properties),
+  interfacesJson: JSON.stringify(assetResource.interfaces ?? []),
+};
+result = applyResourceInspector(assetWorkspace, "rds01", assetInput);
+ok(result.ok, "resource label edit succeeds with existing asset");
+assetWorkspace = result.workspace;
+eq(assetWorkspace.source.resources.find((item) => item.id === "rds01")?.asset,
+  originalAsset, "resource label edit preserves existing canonical asset when asset pair omitted");
+result = applyResourceInspector(assetWorkspace, "rds01",
+  { ...assetInput, assetId: originalAsset.id, assetVersion: originalAsset.version });
+ok(result.ok, "same explicit asset pair stays accepted");
+eq(result.workspace.source.resources.find((item) => item.id === "rds01")?.asset,
+  originalAsset, "unchanged visible asset fields preserve exact requirement");
+assetWorkspace = result.workspace;
+result = applyResourceInspector(assetWorkspace, "rds01",
+  { ...assetInput, assetId: "endpoint.linux", assetVersion: "2.0.0" });
+ok(result.ok, "resource can update an asset pair intentionally");
+eq(result.workspace.source.resources.find((item) => item.id === "rds01")?.asset,
+  { id: "endpoint.linux", version: "2.0.0" },
+  "edited asset ID and version survive canonical source replacement");
+assetWorkspace = result.workspace;
+result = applyResourceInspector(assetWorkspace, "rds01",
+  { ...assetInput, assetId: "", assetVersion: "" });
+ok(result.ok, "user can explicitly clear both asset fields");
+ok(!("asset" in (result.workspace.source.resources.find((item) => item.id === "rds01") ?? {})),
+  "clearing the pair deliberately removes asset binding");
+ok(sourceAssetDigest.includes(originalAsset.id), "fixture source contained original catalog requirement");
+result = createResourceFromInspector(createBuilderWorkspace(source), "owned_asset", {
+  label: "Owned resource", type: "server.generic", zone: "server",
+  propertiesJson: "{}", interfacesJson: "[]",
+  assetId: "server.generic", assetVersion: "1.0.0",
+});
+ok(result.ok, "create resource accepts an explicit asset pair");
+eq(result.workspace.source.resources.find((item) => item.id === "owned_asset")?.asset,
+  { id: "server.generic", version: "1.0.0" },
+  "resource creation includes both visibly entered asset fields");
+
 const mainSource = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(mainSource.includes("BuilderInspector"), "browser UI contains typed BuilderInspector component");
 ok(mainSource.includes("Skapa topologiobjekt"), "browser UI exposes visual create controls");

@@ -859,6 +859,58 @@ def main():
                 "data-project-dirty", "false")
             isolated.close()
 
+            # BUILDER-052: a new connection with a reused ID must NOT
+            # overwrite an existing topology link. This is exercised through
+            # the real Builder Create panel, with no compilation dependency:
+            # an uncompiled draft still needs protection against data loss.
+            duplicate_page = context.new_page()
+            duplicate_page.add_init_script(MOCK)
+            duplicate_page.on("pageerror", lambda error: errors.append(str(error)))
+            duplicate_page.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            duplicate_controls = duplicate_page.locator(
+                '[data-project-file-controls="ready"]')
+            expect(duplicate_controls).to_be_visible(timeout=45000)
+            duplicate_section = duplicate_page.locator(
+                "details.control-section").filter(
+                    has_text="Builder Inspector & Authoring")
+            if duplicate_section.get_attribute("open") is None:
+                duplicate_section.locator("summary").first.click()
+            create_panel = duplicate_page.locator(".create-panel")
+            expect(create_panel).to_be_visible(timeout=15000)
+            create_panel.locator("select").first.select_option("connection")
+            create_panel.locator(
+                'label.inspector-field', has_text="ID").locator(
+                    "input").fill("fw_rds")
+            create_panel.locator(
+                'label.inspector-field', has_text="From").locator(
+                    "select").select_option("rds01")
+            create_panel.locator(
+                'label.inspector-field', has_text="To").locator(
+                    "select").select_option("firewall01")
+            create_panel.get_by_role("button", name="Skapa objekt").click()
+            expect(duplicate_page.locator(".diagnostic")).to_contain_text(
+                "BUILDER_DUPLICATE_ID")
+            expect(duplicate_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            require(duplicate_page.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "BUILDER-052 duplicate connection Create wrote a native file")
+            duplicate_page.locator('[data-project-action="save-as"]').click()
+            expect(duplicate_page.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            saved_links = json.loads(duplicate_page.evaluate(
+                "window.__yadilabProjectStore.text"))["content"]["source"]["connections"]
+            existing = next((link for link in saved_links
+                             if link["id"] == "fw_rds"), None)
+            require(len(saved_links) == 3 and existing is not None,
+                    "BUILDER-052 duplicate Create erased or appended a link")
+            require(existing["from"]["resource"] != "rds01" or
+                    existing["to"]["resource"] != "firewall01",
+                    "BUILDER-052 Create silently rewired an existing link")
+            expect(duplicate_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            duplicate_page.close()
+
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)

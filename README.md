@@ -39,7 +39,17 @@ settings or JSON to the replacement project. JSON editors capture the latest
 input synchronously for same-event Apply before React repaints; only an
 explicit valid Apply changes canonical source, and verified Save still uses
 that canonical source. These safeguards do not constitute autosave of
-unapplied form text or proof of Engine execution. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
+unapplied form text or proof of Engine execution.
+
+Resource Inspector preserves an existing catalog asset when editing unrelated
+fields, writes explicitly supplied asset ID/version pairs, and removes an asset
+only when both visible fields are cleared. Incomplete asset pairs are rejected
+without changing the canonical source. The Builder's separate Create Connection
+action rejects an already-used connection ID rather than silently overwriting
+the existing topology link. Its Edit Connection action remains available for
+deliberate updates. The asset semantics are regression-tested by the
+mandatory Builder Inspector TypeScript/Node suite; duplicate link creation is
+also rejected by an actual source-built Chromium UI acceptance. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports
 
