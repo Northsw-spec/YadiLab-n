@@ -265,4 +265,79 @@ for (const { ip, prefix, code, field } of [
 }
 console.log("PASS IMPORT-037: explicit IPv4/CIDR preserved, conflicting or malformed source rejected");
 
+// IMPORT-039: a source link ID occupies the same canonical namespace as
+// zones and nodes. The importer may not return ok:true for an object whose
+// duplicate identity only fails later during .yadilab Save or compilation.
+for (const { duplicate, addZone } of [
+  { duplicate: "node_1", addZone: false },
+  { duplicate: "floor_a", addZone: true },
+]) {
+  const invalid = workbook(2);
+  if (addZone) invalid.tables.push({
+    tableId: "Zones", records: [record(1, {
+      zoneId: "floor_a", displayName: "Floor A", kind: "lan",
+    })],
+  });
+  invalid.tables.find(t => t.tableId === "Links").records[0].fields.linkId =
+    cell(duplicate);
+  const result = mapNetworkWorkbookToScenario(invalid);
+  assert.equal(result.ok, false, "Link IDs cannot shadow explicit source objects");
+  assert.ok(result.diagnostics.some(d =>
+    d.code === "WORKBOOK_CANONICAL_ID_COLLISION" &&
+    d.table === "Links" && d.row === 1 && d.field === "linkId"),
+    "Collision must identify the actual offending link row and field");
+  assert.ok(result.preview.errors > 0);
+  assert.equal(result.source, undefined, "No invalid canonical topology may be activated");
+}
+// Internally generated review objectives and gateway notes must avoid
+// *real*, unchanged imported IDs. The original node, link and zone IDs have
+// priority; only generated identities may be renamed deterministically.
+const generatedCollision = workbook(2);
+const renamed = "imported_topology_manual_verification";
+generatedCollision.tables.find(t => t.tableId === "Nodes").records[0].fields.nodeId = cell(renamed);
+generatedCollision.tables.find(t => t.tableId === "Nodes").records[0].fields.gateway = cell("10.0.0.254");
+generatedCollision.tables.find(t => t.tableId === "Interfaces").records[0].fields.nodeId = cell(renamed);
+generatedCollision.tables.find(t => t.tableId === "Links").records[0].fields.nodeA = cell(renamed);
+generatedCollision.tables.find(t => t.tableId === "Layout").records[0].fields.nodeId = cell(renamed);
+generatedCollision.tables.push({ tableId: "Zones", records: [
+  record(1, { zoneId: "gateway_note_1", displayName: "Unchanged declared zone" }),
+] });
+const generated = mapNetworkWorkbookToScenario(generatedCollision);
+assert.equal(generated.ok, true, JSON.stringify(generated.diagnostics));
+assert.equal(generated.source.resources[0].id, renamed, "Never rename an imported node");
+assert.deepEqual(generated.source.zones.map(z => z.id), ["gateway_note_1"],
+  "Never rename a declared source zone to accommodate a generated note");
+assert.deepEqual(generated.source.connections.map(c => c.id), ["link_1"],
+  "Never infer or rename a source-declared connection");
+assert.equal(generated.source.objectives[0].id, renamed + "_1",
+  "Generated review objective must choose a free canonical identity");
+assert.equal(generated.source.notes[0].id, "gateway_note_1_1",
+  "Generated gateway note must not collide with a declared zone");
+assert.equal(generated.source.notes[0].target, renamed,
+  "Gateway note must remain attached to the original node identity");
+assert.match(generated.source.notes[0].text, /10\.0\.0\.254/,
+  "Preserve the exact documented gateway, but do not infer a route");
+const canonicalIds = [
+  ...generated.source.resources.map(x => x.id),
+  ...generated.source.zones.map(x => x.id),
+  ...generated.source.connections.map(x => x.id),
+  ...generated.source.objectives.map(x => x.id),
+  ...generated.source.notes.map(x => x.id),
+];
+assert.equal(new Set(canonicalIds).size, canonicalIds.length,
+  "The generated source must be safe for global Save/Open ID validation");
+const repeat = mapNetworkWorkbookToScenario(generatedCollision);
+assert.deepEqual(repeat.source, generated.source,
+  "Generated IDs and source must be byte-for-byte deterministic across previews");
+const shadowObjectiveWithLink = workbook(2);
+shadowObjectiveWithLink.tables.find(t => t.tableId === "Links").records[0].fields.linkId =
+  cell("imported_topology_manual_verification");
+const linkShadow = mapNetworkWorkbookToScenario(shadowObjectiveWithLink);
+assert.equal(linkShadow.ok, true, JSON.stringify(linkShadow.diagnostics));
+assert.equal(linkShadow.source.connections[0].id,
+  "imported_topology_manual_verification", "The imported link owns its actual ID");
+assert.equal(linkShadow.source.objectives[0].id,
+  "imported_topology_manual_verification_1", "Generated objective must not shadow link ID");
+console.log("PASS IMPORT-039: link namespace enforced; generated objective/notes never shadow source identities");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");

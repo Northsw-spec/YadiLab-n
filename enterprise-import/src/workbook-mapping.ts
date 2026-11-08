@@ -195,6 +195,13 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
         "Links.kind is not a canonical scenario connection kind.",
         "Links", record.recordIndex, "kind"));
     if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_LINK_ID_INVALID", "Links.linkId must be a stable canonical ID.", "Links", record.recordIndex, "linkId"));
+    // Zone, node and link IDs share one canonical source namespace. A
+    // link colliding with an existing object cannot be saved or compiled,
+    // even if its endpoint references are otherwise valid.
+    if (id && ID.test(id) && (nodeIds.has(id) || zoneIds.has(id)))
+      diagnostics.push(diagnostic("WORKBOOK_CANONICAL_ID_COLLISION",
+        "Links.linkId collides with a declared zone or node ID.",
+        "Links", record.recordIndex, "linkId"));
     if (!a || !nodeIds.has(a)) diagnostics.push(diagnostic("WORKBOOK_LINK_ENDPOINT_UNKNOWN", `Links.nodeA references unknown node '${a ?? ""}'.`, "Links", record.recordIndex, "nodeA"));
     if (!b || !nodeIds.has(b)) diagnostics.push(diagnostic("WORKBOOK_LINK_ENDPOINT_UNKNOWN", `Links.nodeB references unknown node '${b ?? ""}'.`, "Links", record.recordIndex, "nodeB"));
     if (a && portA && nodeIds.has(a) && !interfacesByNode.get(a)?.has(portA))
@@ -236,12 +243,31 @@ export function mapNetworkWorkbookToScenario(document: ImportDocument): Workbook
   for (const record of rows(tables, "Nodes")) { const id = text(record, "nodeId")!; const zone = text(record, "zoneId"); resourceMap.set(id, { id, type: text(record, "type")!, label: text(record, "displayName")!, ...(zone ? { zone } : {}), properties: {} }); }
   for (const record of rows(tables, "Interfaces")) { const nodeId = text(record, "nodeId")!; const resource = resourceMap.get(nodeId)!; const id = text(record, "interfaceId") ?? text(record, "name")!; const label = text(record, "name"); const ipv4 = text(record, "IPv4"); const prefix = text(record, "prefix"); const ipv6 = text(record, "IPv6"); const addresses = [ipv4 && prefix && !ipv4.includes("/") ? `${ipv4}/${prefix}` : ipv4, ipv6].filter((x): x is string => Boolean(x)); const mac = text(record, "MAC"); const mtu = integer(record, "MTU"); const iface = { id, ...(label ? { label } : {}), ...(addresses.length ? { addresses } : {}), ...(mac ? { mac } : {}), ...(mtu !== undefined ? { mtu } : {}) }; resourceMap.set(nodeId, { ...resource, interfaces: [...(resource.interfaces ?? []), iface] }); }
   const connections: Scenariosourceconnection[] = rows(tables, "Links").map((record) => { const interfaceA = text(record, "interfaceA"); const interfaceB = text(record, "interfaceB"); return { id: text(record, "linkId")!, kind: (text(record, "kind") as Scenariosourceconnection["kind"] | undefined) ?? "network", from: { resource: text(record, "nodeA")!, ...(interfaceA ? { port: interfaceA } : {}) }, to: { resource: text(record, "nodeB")!, ...(interfaceB ? { port: interfaceB } : {}) }, properties: {} }; });
+  // Generated review artifacts are not original source facts. Reserve the
+  // namespace occupied by every explicitly declared source object before
+  // allocating their identities, instead of invalidating legitimate IDs in
+  // workbook input. Candidate IDs remain deterministic across previews.
+  const occupiedIds = new Set<string>([
+    ...zones.map(zone => zone.id), ...resourceMap.keys(),
+    ...connections.map(connection => connection.id),
+  ]);
+  const generatedId = (base: string): string => {
+    let id = base;
+    let suffix = 0;
+    while (occupiedIds.has(id)) {
+      suffix++;
+      const ending = `_${suffix}`;
+      id = base.slice(0, 64 - ending.length) + ending;
+    }
+    occupiedIds.add(id);
+    return id;
+  };
   // Imported source declarations establish modeled nodes/links, not that
   // cabling, network operation or the operator's expected topology was verified.
   // Never auto-complete merely by comparing a resource's imported type to itself.
   // This review signal is deliberately UNSET on every imported resource.
   const objective = {
-    id: "imported_topology_manual_verification",
+    id: generatedId("imported_topology_manual_verification"),
     title: "Review imported nodes and explicit network connections",
     category: "enterprise-import", required: true,
     condition: { op: "equals" as const, target: [...resourceMap.values()][0]!.id,
@@ -251,7 +277,7 @@ export function mapNetworkWorkbookToScenario(document: ImportDocument): Workbook
     notes: rows(tables, "Nodes").flatMap((record) => {
       const gw = text(record, "gateway") ?? text(record, "Default Gateway");
       const nodeId = text(record, "nodeId");
-      return gw && nodeId ? [{ id: `gateway_note_${record.recordIndex}`, title: "Declared default gateway", text: `Source declares gateway ${gw} for ${nodeId}. Inventory-only: no cable, route or tested reachability is inferred.`, target: nodeId }] : [];
+      return gw && nodeId ? [{ id: generatedId(`gateway_note_${record.recordIndex}`), title: "Declared default gateway", text: `Source declares gateway ${gw} for ${nodeId}. Inventory-only: no cable, route or tested reachability is inferred.`, target: nodeId }] : [];
     }), layoutHints: rows(tables, "Layout").flatMap((record) => { const target = text(record, "nodeId"); const rank = integer(record, "rank"); return target ? [{ target, ...(rank !== undefined ? { rank } : {}) }] : []; }) };
   return { ok: true, source, diagnostics, preview };
 }
