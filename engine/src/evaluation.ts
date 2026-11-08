@@ -5,7 +5,9 @@ import type { EngineEvaluation, EngineState, TruthValue } from "./types.js";
 
 export function evaluateEngine(scenario: NormalizedScenario, state: EngineState): EngineEvaluation {
   const tests = scenario.tests.map((test) => evaluateTest(scenario, state, test));
-  const testResults: Record<string, TruthValue> = {};
+  // Test IDs share the same canonical naming rules as resource IDs.
+  // Inherited keys must never look like real test evidence.
+  const testResults: Record<string, TruthValue> = Object.create(null);
   tests.forEach((test) => { testResults[test.id] = test.outcome; });
   const context = { scenario, state, testResults };
 
