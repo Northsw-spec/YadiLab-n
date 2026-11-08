@@ -1093,17 +1093,37 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       };
     }),
   };
-  const denyUnappliedCanvasChange = (active) => {
-    if (active.mode !== "builder" || !getPendingDraftChanges()) return false;
-    setDiagnostics([{ severity: "error", code: "BUILDER_CANVAS_UNAPPLIED_DRAFT",
-      message: "Apply or revert the Inspector/JSON fields before selecting or changing topology objects. The staged text is preserved." }]);
+  const blockedCanvasActionRef = useRef(null);
+  const denyUnappliedCanvasChange = (active, action = "mutation") => {
+    if (active.mode !== "builder" || !getPendingDraftChanges()) {
+      blockedCanvasActionRef.current = null;
+      return false;
+    }
+    // ReactFlow may repeatedly publish an unchanged selection after a
+    // parent diagnostic render. Do not create a feedback loop of App updates
+    // while preserving an unapplied draft.
+    if (blockedCanvasActionRef.current !== action) {
+      blockedCanvasActionRef.current = action;
+      setDiagnostics([{ severity: "error", code: "BUILDER_CANVAS_UNAPPLIED_DRAFT",
+        message: "Apply or revert the Inspector/JSON fields before selecting or changing topology objects. The staged text is preserved." }]);
+    }
     return true;
   };
   const onSelectionChange = ({ nodes, edges }) => {
     const active = liveTopologyWorkspace();
-    if (!active || denyUnappliedCanvasChange(active)) return;
+    if (!active) return;
     const nodeIds = nodes.map((node) => node.id);
     const edgeIds = edges.map((edge) => edge.id);
+    if (active.mode === "builder" && getPendingDraftChanges()) {
+      // A repeated callback describing the ALREADY-selected nodes is not a
+      // user attempt to discard the pending form; it needs no diagnostics.
+      const selected = active.selection?.ids ?? [];
+      const requested = [...nodeIds, ...edgeIds];
+      if (JSON.stringify(selected) !== JSON.stringify(requested))
+        denyUnappliedCanvasChange(active, "selection:" + JSON.stringify(requested));
+      return;
+    }
+    blockedCanvasActionRef.current = null;
     const primary = [...nodeIds, ...edgeIds].at(-1);
     // Selection carries no authority to replace the canonical source.
     // Apply it to the synchronously published current workspace only.
