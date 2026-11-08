@@ -2141,10 +2141,18 @@ function Topology({ workspace, setWorkspace, setDiagnostics, journey, stateFocus
   );
 }
 
-function BuilderAssetLibrary({ workspace, setWorkspace, setDiagnostics }) {
+function BuilderAssetLibrary({ workspace, getWorkspace, setWorkspace, setDiagnostics }) {
   const model = buildBuilderAssetLibraryModel(workspace, catalog.assets);
   const selected = workspace.source.resources.find((resource) => resource.id === model.selectedResourceId);
-  const run = (result) => { setDiagnostics(result.diagnostics); if (result.ok) setWorkspace(result.workspace); };
+  const run = (result) => {
+    if (getWorkspace() !== workspace) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_ASSET_STALE_WORKSPACE",
+        message: "The project changed before the asset action completed. No previous Builder was restored." }]);
+      return;
+    }
+    setDiagnostics(result.diagnostics);
+    if (result.ok) setWorkspace(result.workspace);
+  };
   return e("section", { className: "asset-library-panel", "data-asset-library": "ready" },
     e("h3", null, "Resursbibliotek"),
     e("p", { className: "asset-library-status" }, selected
@@ -2200,7 +2208,7 @@ function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onComp
   );
 }
 
-function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
+function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostics }) {
   const model = buildBuilderInspectorModel(workspace);
   const configuration = configurationSummary(workspace.source);
   const [form, setForm] = useState(() => ({ ...model }));
@@ -2225,6 +2233,14 @@ function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
   const [createTo, setCreateTo] = useState("");
 
   const run = (result) => {
+    // A New/Open or an import can publish the next project synchronously.
+    // Old React buttons remain clickable until repaint; never let them
+    // resurrect the previous source or corrupt the new project's draft.
+    if (getWorkspace() !== workspace) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_INSPECTOR_STALE_WORKSPACE",
+        message: "The Builder changed before Apply. Reopen the inspector on the current project." }]);
+      return;
+    }
     setDiagnostics(result.diagnostics);
     if (result.ok) setWorkspace(result.workspace);
   };
@@ -2347,37 +2363,60 @@ function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, c
   );
 }
 
-function BuilderAuthoringPanels({ workspace, setWorkspace, setDiagnostics }) {
+function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiagnostics }) {
   const model = buildBuilderAuthoringModel(workspace);
-  const [testsJson, setTestsJson] = useState(model.testsJson);
-  const [findingsJson, setFindingsJson] = useState(model.findingsJson);
-  const [objectivesJson, setObjectivesJson] = useState(model.objectivesJson);
-  const [troubleshootingObjectivesJson, setTroubleshootingObjectivesJson] = useState(model.troubleshootingObjectivesJson);
-  const [hintsJson, setHintsJson] = useState(model.hintsJson);
-  const [notesJson, setNotesJson] = useState(model.notesJson);
-  const [completionJson, setCompletionJson] = useState(model.completionJson);
-  const [solutionJson, setSolutionJson] = useState(model.canonicalSolutionJson);
-  const run = (result) => { setDiagnostics(result.diagnostics); if (result.ok) setWorkspace(result.workspace); };
-  const panel = (title, value, setter, apply, rows = 7) => e("details", { className: "authoring-panel" },
+  // The JSX/React render can lag behind a native input event. Maintain an
+  // authoritative synchronous draft so Input -> Apply in one JS task commits
+  // the text that the operator actually entered, not a stale rendered prop.
+  const [drafts, setDrafts] = useState(() => ({
+    testsJson: model.testsJson,
+    findingsJson: model.findingsJson,
+    objectivesJson: model.objectivesJson,
+    troubleshootingObjectivesJson: model.troubleshootingObjectivesJson,
+    hintsJson: model.hintsJson,
+    notesJson: model.notesJson,
+    completionJson: model.completionJson,
+    solutionJson: model.canonicalSolutionJson,
+  }));
+  const liveDraftsRef = useRef(drafts);
+  const editDraft = (key, value) => {
+    const next = { ...liveDraftsRef.current, [key]: value };
+    liveDraftsRef.current = next;
+    setDrafts(next);
+  };
+  const applyDraft = (key, apply) => {
+    // A New/Open/import may replace the entire canonical source before React
+    // remounts these controls. No queued click from the previous project may
+    // apply its JSON to the new project or restore an obsolete workspace.
+    if (getWorkspace() !== workspace) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_AUTHORING_STALE_WORKSPACE",
+        message: "The Builder changed before JSON Apply. Review the current project's source again." }]);
+      return;
+    }
+    const result = apply(workspace, liveDraftsRef.current[key]);
+    setDiagnostics(result.diagnostics);
+    if (result.ok) setWorkspace(result.workspace);
+  };
+  const panel = (title, key, apply, rows = 7) => e("details", { className: "authoring-panel" },
     e("summary", null, title),
-    e("textarea", { rows, value, onChange: (event) => setter(event.target.value), "aria-label": title }),
-    e("button", { type: "button", onClick: () => run(apply(workspace, value)) }, `Apply ${title}`),
+    e("textarea", { rows, value: drafts[key],
+      onChange: (event) => editDraft(key, event.target.value), "aria-label": title }),
+    e("button", { type: "button", onClick: () => applyDraft(key, apply) }, `Apply ${title}`),
   );
   return e("section", { className: "builder-authoring", "data-builder-authoring": "ready" },
     e("h3", null, "Redigeringspaneler"),
     e("p", null, "Valideringsstatus: ", e("strong", null, model.compileStatus)),
     model.compileDiagnostics.length ? e("ul", { className: "validation-list" }, ...model.compileDiagnostics.map((d, i) => e("li", { key: `${d.code}-${i}` }, `${d.code}: ${d.message}`))) : null,
-    panel("Test JSON", testsJson, setTestsJson, applyTestsAuthoring),
-    panel("Fynd JSON", findingsJson, setFindingsJson, applyFindingsAuthoring),
-    panel("Mål JSON", objectivesJson, setObjectivesJson, applyObjectivesAuthoring),
-    panel("Mål för felsökningsevidens JSON", troubleshootingObjectivesJson, setTroubleshootingObjectivesJson, applyTroubleshootingObjectivesAuthoring, 10),
-    panel("Ledtrådar JSON", hintsJson, setHintsJson, applyHintsAuthoring, 5),
-    panel("Anteckningar JSON", notesJson, setNotesJson, applyNotesAuthoring, 6),
-    panel("Slutföranderegel JSON", completionJson, setCompletionJson, applyCompletionAuthoring, 6),
-    panel("Kanonisk lösning JSON", solutionJson, setSolutionJson, applyCanonicalSolutionAuthoring, 7),
+    panel("Test JSON", "testsJson", applyTestsAuthoring),
+    panel("Fynd JSON", "findingsJson", applyFindingsAuthoring),
+    panel("Mål JSON", "objectivesJson", applyObjectivesAuthoring),
+    panel("Mål för felsökningsevidens JSON", "troubleshootingObjectivesJson", applyTroubleshootingObjectivesAuthoring, 10),
+    panel("Ledtrådar JSON", "hintsJson", applyHintsAuthoring, 5),
+    panel("Anteckningar JSON", "notesJson", applyNotesAuthoring),
+    panel("Slutföranderegel JSON", "completionJson", applyCompletionAuthoring),
+    panel("Kanonisk lösning JSON", "solutionJson", applyCanonicalSolutionAuthoring),
   );
 }
-
 
 function ImportHelper({ workspace, setWorkspace, setDiagnostics }) {
   const [source, setSource] = useState(null);
@@ -3217,7 +3256,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   );
 }
 
-function Sidebar({ workspace, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false }) {
+function Sidebar({ workspace, getWorkspace, projectGeneration = 0, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false }) {
   const selected = workspace.selection.primary;
   const semantic = workspace.mode === "builder"
     ? [...workspace.source.zones, ...workspace.source.resources, ...workspace.source.connections].find((x) => x.id === selected)
@@ -3290,9 +3329,12 @@ function Sidebar({ workspace, setWorkspace, diagnostics, setDiagnostics, noteboo
       ? e(React.Fragment, null,
           e(ImportHelper, { workspace, setWorkspace, setDiagnostics }),
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
-          e(BuilderAssetLibrary, { key: `assets-${selected ?? "none"}-${workspace.sourceRevision}`, workspace, setWorkspace, setDiagnostics }),
-          e(BuilderInspector, { key: `inspector-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, setWorkspace, setDiagnostics }),
-          e(BuilderAuthoringPanels, { key: `authoring-${workspace.sourceRevision}`, workspace, setWorkspace, setDiagnostics }),
+          // Source revision starts at zero in *every* project. A New/Open of
+          // another project can therefore reuse the same React keys. Bind
+          // ephemeral authoring forms to the explicit scenario generation.
+          e(BuilderAssetLibrary, { key: `assets-${projectGeneration}-${selected ?? "none"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
+          e(BuilderInspector, { key: `inspector-${projectGeneration}-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
+          e(BuilderAuthoringPanels, { key: `authoring-${projectGeneration}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
         )
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
@@ -6681,7 +6723,7 @@ function App() {
           e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace: replaceProjectDocument, setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
-          e(Sidebar, { workspace, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
+          e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
         ) : null,
       ),
       e(Topology, { workspace, setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
@@ -6701,7 +6743,7 @@ function App() {
         onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
         onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
         onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
-        workspace.mode === "runtime" ? e(Sidebar, { workspace, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
+        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,
         troubleshootingTimeline ? e("details", { className: "troubleshooting-timeline", "aria-label": "Troubleshooting timeline", "data-troubleshooting-timeline": "ready" }, e("summary", null, "Troubleshooting timeline"), e("small", null, `Session ${troubleshootingTimeline.sessionId}`), e("ol", null, ...troubleshootingTimeline.entries.slice(0, 24).map((entry) => e("li", { key: `${entry.sequence}-${entry.eventId ?? entry.action}` }, e("span", null, `${entry.sequence}. ${entry.category} · ${entry.action}`), e("small", null, entry.detail ?? entry.outcome ?? "Actual event"))))) : null,
