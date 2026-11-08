@@ -2536,6 +2536,128 @@ def main():
             require(import_race.evaluate('window.__yadilabProjectStore.writes') == 0,
                     'UX-064 import Workbench implicitly wrote a .yadilab file')
             import_race.close()
+
+            # PROJECT-065: A typed but unapplied Inspector/JSON form is user
+            # data absent from canonical source. Save must not claim those
+            # visible edits reached native disk; New must warn even though the
+            # underlying Builder source is still byte-for-byte unchanged.
+            pending = context.new_page()
+            pending.add_init_script(MOCK)
+            pending.on("pageerror", lambda error: errors.append(str(error)))
+            pending.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            pc = pending.locator('[data-project-file-controls="ready"]')
+            expect(pc).to_be_visible(timeout=45000)
+            require(pc.get_attribute("data-project-dirty") == "false",
+                    "PROJECT-065 initial project unexpectedly dirty")
+            pending.evaluate("""() => {
+              const inspector = document.querySelector(
+                '[data-builder-inspector="mission"]');
+              if (!inspector) throw new Error('PROJECT065_MISSION_INSPECTOR_MISSING');
+              let ancestor = inspector.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            inspector = pending.locator('[data-builder-inspector="mission"]')
+            expect(inspector).to_be_visible(timeout=15000)
+            title_field = inspector.locator('label.inspector-field',
+                has_text="Title").locator("input")
+            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            expect(inspector).to_have_attribute("data-builder-unapplied", "true")
+            expect(pc.locator("[data-project-status]")).to_contain_text(
+                "UNAPPLIED FORM EDITS")
+            pc.locator('[data-project-action="save-as"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_UNAPPLIED_DRAFT", timeout=15000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "PROJECT-065 Save As falsely wrote an unapplied Inspector edit")
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.suggestedName") is None,
+                "PROJECT-065 Save As opened native picker despite pending draft")
+            pending.once("dialog", lambda dialog: dialog.dismiss())
+            pc.locator('[data-project-action="new"]').click()
+            expect(pending.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            require("PROJECT-065 staged" not in
+                    pending.locator(".mission-strip").inner_text(),
+                    "PROJECT-065 pending title had already mutated canonical source")
+            inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            expect(pending.locator(".mission-strip")).to_contain_text(
+                "PROJECT-065 staged mission never auto-saved")
+            pc.locator('[data-project-action="save-as"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 1,
+                "PROJECT-065 explicit post-Apply Save did not persist title")
+            require(json.loads(pending.evaluate(
+                "window.__yadilabProjectStore.text"))["content"]["source"]["metadata"]["title"]
+                == "PROJECT-065 staged mission never auto-saved",
+                "PROJECT-065 verified file contains stale mission title")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+
+            pending.evaluate("""() => {
+              const notes = document.querySelector(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]');
+              if (!notes) throw new Error('PROJECT065_NOTES_EDITOR_MISSING');
+              let ancestor = notes.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            note_field = pending.locator(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]')
+            tests_field = pending.locator(
+                '.builder-authoring textarea[aria-label="Test JSON"]')
+            original_tests_json = tests_field.input_value()
+            note_field.fill('[{"id":"project065_note","text":"Staged evidence"}]')
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            pc.locator('[data-project-action="save"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_UNAPPLIED_DRAFT", timeout=15000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 1,
+                "PROJECT-065 un-applied JSON note triggered a native write")
+            # If two independent JSON panels have staged edits, applying
+            # one would remount the editor and discard the other. Refuse
+            # this multi-panel source mutation until one draft is reverted.
+            pending.evaluate("""() => {
+              const tests = document.querySelector(
+                '.builder-authoring textarea[aria-label="Test JSON"]');
+              tests.closest('details').open = true;
+            }""")
+            tests_field.fill(original_tests_json + " ")
+            note_panel = note_field.locator("xpath=ancestor::details")
+            note_panel.get_by_role(
+                "button", name="Apply Anteckningar JSON").click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_AUTHORING_MULTIPLE_UNAPPLIED", timeout=15000)
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            tests_field.fill(original_tests_json)
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            note_panel.get_by_role(
+                "button", name="Apply Anteckningar JSON").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            pc.locator('[data-project-action="save"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            verified = json.loads(pending.evaluate(
+                "window.__yadilabProjectStore.text"))
+            require(any(note.get("id") == "project065_note" for note in
+                        verified["content"]["source"].get("notes", [])),
+                    "PROJECT-065 Apply+verified Save did not include note")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+            pending.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -2565,6 +2687,11 @@ def main():
                 "crossEntryImportStaleActivationDenied": True,
                 "obsoleteCompileCannotOverwriteNewImport": True,
                 "sameFilenameCanBeReimported": True,
+                "unappliedInspectorSaveBlocked": True,
+                "unappliedDraftNewRequiresConfirmation": True,
+                "unappliedJsonSaveBlocked": True,
+                "multiPanelDraftLossBlocked": True,
+                "postApplyNativeSaveIncludesDraft": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
