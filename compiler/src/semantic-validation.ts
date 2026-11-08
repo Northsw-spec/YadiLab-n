@@ -467,6 +467,64 @@ function validateFoundationTestParams(
     return value;
   };
 
+  const requireStringParam = (key: string): void => {
+    if (typeof params[key] !== "string" || (params[key] as string).length === 0)
+      diagnostics.push(error("TEST_PARAM_REQUIRED", `${path}.params.${key}`,
+        `Test '${test.type}' requires non-empty string params.${key}.`));
+  };
+  // Foundation Engine consumes these selectors directly. Previously invalid
+  // or dangling references could pass Compiler and produce an unexpected
+  // UNKNOWN (or be silently treated as omitted by a runtime default).
+  if (test.type === "network.reachability" || test.type === "network.segmentation"
+      || test.type === "network.route_test") {
+    requireStringResource("from");
+    requireStringResource("to");
+    const protocol = params.protocol;
+    if (protocol === undefined) {
+      if (test.type !== "network.route_test")
+        diagnostics.push(error("TEST_PARAM_REQUIRED", `${path}.params.protocol`,
+          `${test.type} requires an explicit protocol.`));
+    } else if (protocol !== "tcp" && protocol !== "udp"
+        && protocol !== "icmp" && protocol !== "any") {
+      diagnostics.push(error("TEST_PARAM_INVALID", `${path}.params.protocol`,
+        "Network protocol must be tcp, udp, icmp or any."));
+    }
+    if (params.port !== undefined && !validPort(params.port))
+      diagnostics.push(error("TEST_PARAM_INVALID", `${path}.params.port`,
+        "An explicitly declared test port must be an integer from 1 to 65535."));
+    if (protocol === "udp" && !validPort(params.port))
+      diagnostics.push(error("TEST_PARAM_REQUIRED", `${path}.params.port`,
+        "UDP reachability requires an explicitly declared destination port."));
+    if (protocol === "icmp" && params.port !== undefined)
+      diagnostics.push(error("TEST_PARAM_INVALID", `${path}.params.port`,
+        "ICMP is portless; remove the competing port declaration."));
+    return;
+  }
+  if (test.type === "identity.authentication_test") {
+    requireStringResource("subject");
+    requireStringResource("target");
+    return;
+  }
+  if (test.type === "identity.privilege_path" || test.type === "identity.permission") {
+    requireStringResource("subject");
+    requireStringResource("resource");
+    requireStringParam("permission");
+    return;
+  }
+  if (test.type === "identity.membership") {
+    requireStringResource("subject");
+    requireStringResource("group");
+    return;
+  }
+  if (test.type === "windows.hardening_check" || test.type === "linux.hardening_check") {
+    requireStringResource("target");
+    requireStringParam("path");
+    if (!Object.prototype.hasOwnProperty.call(params, "equals"))
+      diagnostics.push(error("TEST_PARAM_REQUIRED", `${path}.params.equals`,
+        "Hardening comparison requires a declared equals value."));
+    return;
+  }
+
   if (test.type === "network.port_scan") {
     requireStringResource("from");
     requireStringResource("to");
@@ -480,6 +538,15 @@ function validateFoundationTestParams(
     if (!singleValid && !listValid) {
       diagnostics.push(error("TEST_PARAM_REQUIRED", `${path}.params`, "network.port_scan requires params.port or a non-empty params.ports array of integers 1..65535."));
     }
+    if (params.port !== undefined && !singleValid)
+      diagnostics.push(error("TEST_PARAM_INVALID", `${path}.params.port`,
+        "An explicit port cannot silently be dropped in favor of a ports array."));
+    if (ports !== undefined && !listValid)
+      diagnostics.push(error("TEST_PARAM_INVALID", `${path}.params.ports`,
+        "An invalid ports list cannot silently be dropped in favor of port."));
+    if (params.port !== undefined && ports !== undefined)
+      diagnostics.push(error("TEST_PARAM_AMBIGUOUS", `${path}.params`,
+        "Specify either port or ports, not both conflicting source declarations."));
     return;
   }
 
