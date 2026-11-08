@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { Normalizedscenariorule } from "../../core-model/src/generated/contracts.js";
 import { jsonEqual } from "./json.js";
 import { queryAuthentication, queryMembership, queryPermission } from "./identity-engine.js";
@@ -22,7 +23,7 @@ export function evaluateRule(rule: Normalizedscenariorule, context: RuleEvaluati
       return { truth: truthNot(child.truth), explanation: child.explanation };
     }
     case "equals": {
-      const resource = context.state.resources[rule.target];
+      const resource = context.ownResource(state, rule.target);
       if (!resource) return { truth: "UNKNOWN", explanation: [`Rule target '${rule.target}' is absent from runtime state.`] };
       const read = readPath(resource, rule.path);
       if (!read.found) return { truth: "UNKNOWN", explanation: [`Path '${rule.path}' is not declared on '${rule.target}'.`] };
