@@ -30,7 +30,16 @@ explicitly invalid selectors are supplied, not a misleading defaulted TCP
 or portless result. This is source integrity, not evidence that any physical
 network probe has succeeded.
 
-Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py). The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
+Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
+
+Builder Inspector, resource assets and JSON authoring editors are scoped to the
+current project generation, not just the source revision (which restarts at
+zero on New/Open). A queued click from an old project cannot apply its stale
+settings or JSON to the replacement project. JSON editors capture the latest
+input synchronously for same-event Apply before React repaints; only an
+explicit valid Apply changes canonical source, and verified Save still uses
+that canonical source. These safeguards do not constitute autosave of
+unapplied form text or proof of Engine execution. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports
 
