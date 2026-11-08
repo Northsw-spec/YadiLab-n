@@ -6,6 +6,25 @@ export const PROJECT_MAX_BYTES = 64 * 1024 * 1024;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
+// Mirror core-model/src/operation-policy.ts at the native MJS boundary.
+// A SHA-256-correct project can still contain an authored repair operation
+// that would rewrite canonical identities; reject it on BOTH Save and Open.
+const forbiddenOperationSegments = new Set(["__proto__", "prototype", "constructor"]);
+const immutableInterfaceOperationFields = new Set(["id", "name", "label", "type"]);
+function mutableSolutionOperationPath(path) {
+  if (typeof path !== "string" || !path.length || path.trim() !== path) return false;
+  const parts = path.split(".");
+  if (parts.some(part => !part || forbiddenOperationSegments.has(part))) return false;
+  if (parts[0] === "properties") return parts.length >= 2;
+  if (parts[0] !== "interfaces" || parts.length < 3) return false;
+  const index = parts[1];
+  if (!/^(0|[1-9][0-9]*)$/.test(index) || !Number.isSafeInteger(Number(index)))
+    return false;
+  const field = parts[2];
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(field) &&
+    !immutableInterfaceOperationFields.has(field);
+}
+
 function blocked(code) {
   const error = new Error("PROJECT_" + code);
   error.code = "PROJECT_" + code;
@@ -263,6 +282,8 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
   // device; keep the same reference constraints as Compiler validation.
   for (const operation of source.canonicalSolution?.operations ?? []) {
     if (!resourceIds.has(operation.target)) blocked("UNKNOWN_SOLUTION_TARGET");
+    if (!mutableSolutionOperationPath(operation.path))
+      blocked("SOLUTION_OPERATION_PATH_FORBIDDEN");
   }
   // These are source-defined layout hints, distinct from the separately
   // validated editable layout overrides. Targets may be zones or resources,
