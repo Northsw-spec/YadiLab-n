@@ -810,6 +810,8 @@ def main():
                 "data-runtime-scenario-id", "new_project")
             expect(isolated_controls).to_have_attribute(
                 "data-project-dirty", "true")
+            expect(isolated_controls).to_have_attribute(
+                "data-project-pending-drafts", "false")
             expect(old_title).to_have_value("New YadiLab project")
             require(json.loads(tests_editor.input_value()) == [],
                     "BUILDER-051 leaked old project tests into new editor")
