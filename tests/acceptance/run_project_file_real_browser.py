@@ -2571,6 +2571,17 @@ def main():
             expect(inspector).to_have_attribute("data-builder-unapplied", "true")
             expect(pc.locator("[data-project-status]")).to_contain_text(
                 "UNAPPLIED FORM EDITS")
+            # A deliberate Revert is the operator's explicit escape hatch
+            # when a form draft is abandoned; it must not modify source.
+            pending.once("dialog", lambda dialog: dialog.accept())
+            inspector.get_by_role(
+                "button", name="Förkasta inspektörsutkast").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            require("PROJECT-065 staged" not in title_field.input_value(),
+                    "Inspector Revert kept the discarded staged value")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
 
             # A separate editor may not commit a newer source revision
             # while Inspector holds typed but unapplied mission metadata.
@@ -2702,7 +2713,11 @@ def main():
             expect(pending.locator(".diagnostic")).to_contain_text(
                 "BUILDER_AUTHORING_MULTIPLE_UNAPPLIED", timeout=15000)
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
-            tests_field.fill(original_tests_json)
+            tests_panel = tests_field.locator("xpath=ancestor::details")
+            pending.once("dialog", lambda dialog: dialog.accept())
+            tests_panel.get_by_role(
+                "button", name="Förkasta utkast: Test JSON").click()
+            expect(tests_field).to_have_value(original_tests_json)
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
             note_panel.get_by_role(
                 "button", name="Apply Anteckningar JSON").click()
@@ -2748,6 +2763,8 @@ def main():
                 "obsoleteCompileCannotOverwriteNewImport": True,
                 "sameFilenameCanBeReimported": True,
                 "unappliedInspectorSaveBlocked": True,
+                "explicitInspectorDraftRevertNoWrite": True,
+                "explicitJsonDraftRevertPreservesOtherDraft": True,
                 "crossEditorUnappliedApplyBlocked": True,
                 "canvasSelectionPreservesUnappliedFields": True,
                 "unappliedCompileExportDenied": True,
