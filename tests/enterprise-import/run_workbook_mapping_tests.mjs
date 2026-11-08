@@ -401,4 +401,47 @@ assert.equal(mapNetworkWorkbookToScenario(explicitManagement).source.connections
   "management", "Never change a valid explicit link type");
 console.log("PASS IMPORT-040: explicit typed values fail closed; blank optionals and valid link kinds preserve semantics");
 
+// IMPORT-041: layout target and rank integrity MUST run in required CI.
+// A malformed nonblank target, or an explicit rank with no target, cannot
+// silently disappear from the canonical source.
+const validLayoutTarget = workbook(2);
+const validTargetResult = mapNetworkWorkbookToScenario(validLayoutTarget);
+assert.equal(validTargetResult.ok, true, JSON.stringify(validTargetResult.diagnostics));
+assert.deepEqual(validTargetResult.source.layoutHints[0],
+  { target: "node_1", rank: 0 },
+  "Valid, explicit layout target and rank must survive mapping");
+for (const { target, rank, code } of [
+  { target: true, rank: 2, code: "WORKBOOK_LAYOUT_TARGET_INVALID" },
+  { target: false, rank: 2, code: "WORKBOOK_LAYOUT_TARGET_INVALID" },
+  { target: "", rank: 2, code: "WORKBOOK_LAYOUT_TARGET_MISSING" },
+  { target: "  ", rank: "3", code: "WORKBOOK_LAYOUT_TARGET_MISSING" },
+  { target: null, rank: 0, code: "WORKBOOK_LAYOUT_TARGET_MISSING" },
+]) {
+  const document = workbook(2);
+  const first = document.tables.find(t => t.tableId === "Layout").records[0];
+  first.fields.nodeId = cell(target);
+  first.fields.rank = cell(rank);
+  const result = mapNetworkWorkbookToScenario(document);
+  assert.equal(result.ok, false,
+    `Explicit layout rank with target ${JSON.stringify(target)} must fail closed`);
+  assert.ok(result.diagnostics.some(d =>
+    d.code === code && d.table === "Layout" &&
+    d.row === 1 && d.field === "nodeId"),
+    `Missing localized ${code} for unrepresentable layout declaration`);
+  assert.equal(result.preview.rejectedRows.Layout, 1,
+    "One invalid layout declaration rejects precisely one physical source row");
+  assert.ok(result.preview.errors >= 1);
+  assert.equal(result.source, undefined,
+    "Invalid layout data may not activate a canonical Builder source");
+}
+const blankLayoutRow = workbook(2);
+const optionalLayout = blankLayoutRow.tables.find(t => t.tableId === "Layout").records[0];
+optionalLayout.fields.nodeId = cell(" ");
+optionalLayout.fields.rank = cell(null);
+const emptyLayoutResult = mapNetworkWorkbookToScenario(blankLayoutRow);
+assert.equal(emptyLayoutResult.ok, true, JSON.stringify(emptyLayoutResult.diagnostics));
+assert.deepEqual(emptyLayoutResult.source.layoutHints, [{ target: "node_2", rank: 1 }],
+  "A truly empty optional layout row must not create a target or invalidate good rows");
+console.log("PASS IMPORT-041: required CI validates explicit layout targets and orphan ranks");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
