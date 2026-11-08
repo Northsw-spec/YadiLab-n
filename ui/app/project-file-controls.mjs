@@ -227,7 +227,9 @@ export function ProjectFileControls({
       };
       // The source is verified; compilation is deliberately NOT restored.
       onReplace(next);
-      resetAssociation(next, projectFilename(file.name), handle, content.fileSha256);
+      // Open is an existing physical file, not a newly suggested name:
+      // retain its exact OS filename instead of sanitizing/truncating it.
+      resetAssociation(next, file.name, handle, content.fileSha256);
       setMessage("Opened editable source; recompile to verify Engine truth.");
       setDiagnostics([diag("PROJECT_SOURCE_OPENED", "Project reopened as editable source. Archived runtime and Engine PASS were not restored.", "warning")]);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
@@ -309,8 +311,9 @@ export function ProjectFileControls({
       if (fileEpochRef.current !== epoch || projectSnapshot(getWorkspace()) !== original)
         throw new Error("PROJECT_STALE_BEFORE_WRITE");
     };
-    const filename = forceSaveAs || !handleRef.current
-      ? projectFilename(before.source.scenarioId) : nameRef.current;
+    // The filename displayed for New/imported/opened projects must be the
+    // same name proposed to the native Save picker (no invented rename).
+    const filename = nameRef.current;
     // Native picker MUST be started in the direct user-activation call stack.
     let picker;
     if (forceSaveAs || !handleRef.current) {
