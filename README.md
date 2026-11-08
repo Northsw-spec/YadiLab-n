@@ -34,7 +34,16 @@ addresses are not inferred from a gateway or nearby nodes.
 An explicit `Interface ID` must be a stable lowercase canonical ID for
 link-port references. An `Interface Name` may instead be a descriptive label.
 A Devices row represents **at most one interface**; use a canonical
-`Interfaces` workbook sheet for devices with multiple documented interfaces.
+`Metadata` + `Nodes` + `Interfaces` workbook for devices with multiple
+documented interfaces. Shorthand `Devices` input may include an explicit
+`Links` table, but **populated additional sheets** such as `Routes`,
+`VLANs`, `STP`, `Firewall`, `Interfaces`, `Metadata` or vendor-specific
+tabs are not silently included: their original source rows block activation
+until the data is transformed into a supported canonical workbook. A selected
+explicit `Links` table likewise blocks when it has populated unsupported
+columns (e.g. bandwidth or VLAN); these are not modeled connection facts.
+Truly blank optional template sheets and blank link rows are ignored without
+fabricating a link or creating an artificial conflict with `Connected To`.
 Both compact and full IPv6 notation, with an optional `/0` through `/128`
 prefix, are validated before Builder activation. Invalid, competing,
 or orphan address/prefix declarations are blocked. IPv6 zone identifiers
