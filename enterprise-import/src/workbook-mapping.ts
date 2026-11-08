@@ -189,6 +189,12 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_INVALID",
         "Layout.nodeId must be a declared node or zone identifier; an invalid typed value cannot be discarded.",
         "Layout", record.recordIndex, "nodeId"));
+    // A declared rank without a target is not an empty optional layout row.
+    // Silently dropping it would lose an explicit source layout assertion.
+    if (blank(value(record, "nodeId")) && !blank(value(record, "rank")))
+      diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_MISSING",
+        "Layout.nodeId is required when Layout.rank is declared; no target will be inferred.",
+        "Layout", record.recordIndex, "nodeId"));
     if (target && !nodeIds.has(target) && !zoneIds.has(target))
       diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_UNKNOWN",
         "Layout.nodeId references no declared node or zone.",
