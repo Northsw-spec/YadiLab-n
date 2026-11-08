@@ -83,6 +83,15 @@ reachability evidence or an exception. Explicitly declared resources with
 those names remain usable. This guards Engine query boundaries, not physical
 network connectivity.
 
+Path evaluation has explicit CPU-work, pending-path and in-memory path-node
+budgets in addition to a returned-path limit. A linear-time topology
+connectivity check first proves that even dense disconnected components are
+FALSE, without enumerating all their simple paths. Topologically connected
+meshes cannot cause unbounded factorial path enumeration. When a work budget
+prevents proving an actual usable path or exhaustive blocking, reachability
+and local L2 broadcast queries report **UNKNOWN** with a cutoff explanation,
+not a fabricated FALSE/isolation. Confirmed viable paths still prove TRUE.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the
