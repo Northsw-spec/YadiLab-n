@@ -188,7 +188,7 @@ export function previewNetworkWorkbook(document: ImportDocument, diagnostics: re
     const rejected = table.records.filter((record) => invalidRowIds.has(record.recordIndex)).length;
     rowsPerSheet[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) + table.records.length;
     rejectedRows[table.tableId] = (rejectedRows[table.tableId] ?? 0) + rejected;
-    mappedRows[table.tableId] = rowsPerSheet[table.tableId] - rejectedRows[table.tableId];
+    mappedRows[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) - (rejectedRows[table.tableId] ?? 0);
   }
   return { mode: "PREVIEW", sheetsFound: document.tables.map((x) => x.tableId), sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
 }
