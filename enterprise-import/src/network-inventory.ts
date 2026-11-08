@@ -160,6 +160,19 @@ export function normalizeNetworkInventoryDocument(
     }
     const address = cidrHost ?? ipHost;
     const subnetPrefix = cidrParts?.[2] ?? inline?.[2] ?? prefix;
+    // An explicit prefix is meaningful only alongside an explicit IPv4 host.
+    // Preserve an orphan declaration for canonical workbook validation rather
+    // than silently dropping it when the device has no IP (even if it has MAC).
+    if (!address && subnetPrefix !== undefined) diagnostics.push({
+      code: "NETWORK_IMPORT_PREFIX_WITHOUT_IP", severity: "error",
+      message: "A declared subnet prefix requires a documented IPv4 address; no host or network was inferred.",
+      table: inventory.tableId, row: row.recordIndex,
+    });
+    if (populatedSourceCell(fields.prefix?.value) && prefix === undefined) diagnostics.push({
+      code: "NETWORK_IMPORT_PREFIX_INVALID", severity: "error",
+      message: "A nonblank subnet prefix must be text or a finite number; the declaration cannot be ignored.",
+      table: inventory.tableId, row: row.recordIndex,
+    });
     const mac = stringCell(fields.mac);
     const invalidMac = mac !== undefined && !MAC_ADDRESS.test(mac);
     if (invalidMac) diagnostics.push({
@@ -170,7 +183,7 @@ export function normalizeNetworkInventoryDocument(
     // A MAC is a declared interface attribute even when no IPv4 address
     // exists. Preserve the fact as a generic interface, but do not infer
     // an IP, physical port, connection, routing state or Engine result.
-    if (address || mac) {
+    if (address || mac || subnetPrefix !== undefined) {
       if (address && (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(address) ||
           address.split(".").some((x) => Number(x) > 255) ||
           (subnetPrefix !== undefined && !positiveInt(subnetPrefix)))) {
@@ -180,7 +193,7 @@ export function normalizeNetworkInventoryDocument(
           nodeId: { value: id, source: fields.id }, interfaceId: { value: "primary", source: fields.id }, name: { value: "primary", source: fields.id },
         };
         if (address) values.IPv4 = { value: address, source: fields.ip ?? fields.cidr };
-        if (address && subnetPrefix) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr };
+        if (subnetPrefix !== undefined) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr ?? fields.ip };
         if (mac) values.MAC = { value: mac, source: fields.mac };
         interfaces.push(canonicalRecord(row.recordIndex, "Interfaces", values));
       }
