@@ -340,4 +340,61 @@ assert.equal(linkShadow.source.objectives[0].id,
   "imported_topology_manual_verification_1", "Generated objective must not shadow link ID");
 console.log("PASS IMPORT-039: link namespace enforced; generated objective/notes never shadow source identities");
 
+// IMPORT-040: a nonblank but nontext spreadsheet value is NOT a missing
+// declaration. In particular Links.kind=true/false previously became a
+// fabricated "network" link because the text helper ignored booleans.
+const invalidTypedWorkbook = (table, field, invalid) => {
+  const candidate = workbook(2);
+  if (table === "Zones") candidate.tables.push({ tableId: "Zones", records: [
+    record(1, { zoneId: "floor_a", displayName: "Floor A" }),
+  ] });
+  candidate.tables.find(t => t.tableId === table).records[0].fields[field] = cell(invalid);
+  return candidate;
+};
+for (const { table, field, invalid, code } of [
+  { table: "Links", field: "kind", invalid: true, code: "WORKBOOK_LINK_KIND_INVALID" },
+  { table: "Links", field: "kind", invalid: false, code: "WORKBOOK_LINK_KIND_INVALID" },
+  { table: "Zones", field: "kind", invalid: false, code: "WORKBOOK_ZONE_KIND_INVALID" },
+  { table: "Interfaces", field: "MAC", invalid: true, code: "WORKBOOK_MAC_INVALID" },
+  { table: "Metadata", field: "scenarioId", invalid: true, code: "WORKBOOK_SCENARIO_ID_INVALID" },
+  { table: "Metadata", field: "schemaVersion", invalid: false, code: "WORKBOOK_SCHEMA_VERSION_UNSUPPORTED" },
+]) {
+  const mapped = mapNetworkWorkbookToScenario(
+    invalidTypedWorkbook(table, field, invalid));
+  assert.equal(mapped.ok, false,
+    `Explicit ${table}.${field}=${JSON.stringify(invalid)} cannot be omitted or defaulted`);
+  assert.ok(mapped.diagnostics.some(d => d.code === code &&
+    d.table === table && d.row === 1 && d.field === field),
+    `Typed invalid source must report its actual ${table} row, field and error`);
+  assert.equal(mapped.preview.rejectedRows[table], 1,
+    "One invalid typed declaration rejects one actual source row");
+  assert.ok(mapped.preview.errors > 0);
+  assert.equal(mapped.source, undefined,
+    "An explicit invalid field must never enter canonical Builder source");
+}
+const optionalBlankKind = workbook(2);
+optionalBlankKind.tables.find(t => t.tableId === "Links").records[0].fields.kind =
+  cell("  ");
+optionalBlankKind.tables.find(t => t.tableId === "Interfaces").records[0].fields.MAC =
+  cell(null);
+optionalBlankKind.tables[0].records[0].fields.schemaVersion = cell("");
+optionalBlankKind.tables[0].records[0].fields.scenarioId = cell("");
+optionalBlankKind.tables.push({ tableId: "Zones", records: [
+  record(1, { zoneId: "floor_a", displayName: "Floor A", kind: "" }),
+] });
+const blankKindResult = mapNetworkWorkbookToScenario(optionalBlankKind);
+assert.equal(blankKindResult.ok, true, JSON.stringify(blankKindResult.diagnostics));
+assert.equal(blankKindResult.source.scenarioId, "workbook_scenario",
+  "Truly absent scenario identity retains the documented fallback");
+assert.equal(blankKindResult.source.connections[0].kind, "network",
+  "Only an actually blank link kind may use the documented default");
+assert.equal(blankKindResult.source.zones[0].kind, undefined);
+assert.equal(blankKindResult.source.resources[0].interfaces[0].mac, undefined);
+const explicitManagement = workbook(2);
+explicitManagement.tables.find(t => t.tableId === "Links").records[0].fields.kind =
+  cell("management");
+assert.equal(mapNetworkWorkbookToScenario(explicitManagement).source.connections[0].kind,
+  "management", "Never change a valid explicit link type");
+console.log("PASS IMPORT-040: explicit typed values fail closed; blank optionals and valid link kinds preserve semantics");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
