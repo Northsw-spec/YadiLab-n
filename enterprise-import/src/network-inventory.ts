@@ -69,6 +69,7 @@ function canonicalRecord(index: number, table: string, values: Record<string, { 
   return { recordIndex: index, fields };
 }
 const positiveInt = (text: string | undefined): boolean => text !== undefined && /^\d+$/.test(text) && Number(text) >= 0 && Number(text) <= 32;
+const MAC_ADDRESS = /^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/;
 
 export type NetworkLinkSourceDecision = "LINKS_SHEET" | "INLINE_CONNECTED_TO";
 export interface NetworkLinkSourceConflict {
@@ -159,15 +160,28 @@ export function normalizeNetworkInventoryDocument(
     }
     const address = cidrHost ?? ipHost;
     const subnetPrefix = cidrParts?.[2] ?? inline?.[2] ?? prefix;
-    if (address) {
-      if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(address) || address.split(".").some((x) => Number(x) > 255) || (subnetPrefix !== undefined && !positiveInt(subnetPrefix))) {
+    const mac = stringCell(fields.mac);
+    const invalidMac = mac !== undefined && !MAC_ADDRESS.test(mac);
+    if (invalidMac) diagnostics.push({
+      code: "NETWORK_IMPORT_MAC_INVALID", severity: "error",
+      message: "Invalid documented MAC address; expected six hexadecimal octets separated by colons. Original address and device identity are not shown.",
+      table: inventory.tableId, row: row.recordIndex,
+    });
+    // A MAC is a declared interface attribute even when no IPv4 address
+    // exists. Preserve the fact as a generic interface, but do not infer
+    // an IP, physical port, connection, routing state or Engine result.
+    if (address || mac) {
+      if (address && (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(address) ||
+          address.split(".").some((x) => Number(x) > 255) ||
+          (subnetPrefix !== undefined && !positiveInt(subnetPrefix)))) {
         diagnostics.push({ code: "NETWORK_IMPORT_IP_INVALID", severity: "error", message: "Invalid documented IPv4 address or prefix. Original address and device identity are not shown.", table: inventory.tableId, row: row.recordIndex });
-      } else {
+      } else if (!invalidMac) {
         const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
-          nodeId: { value: id, source: fields.id }, interfaceId: { value: "primary", source: fields.id }, name: { value: "primary", source: fields.id }, IPv4: { value: address, source: fields.ip ?? fields.cidr },
+          nodeId: { value: id, source: fields.id }, interfaceId: { value: "primary", source: fields.id }, name: { value: "primary", source: fields.id },
         };
-        if (subnetPrefix) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr };
-        const mac = stringCell(fields.mac); if (mac) values.MAC = { value: mac, source: fields.mac };
+        if (address) values.IPv4 = { value: address, source: fields.ip ?? fields.cidr };
+        if (address && subnetPrefix) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr };
+        if (mac) values.MAC = { value: mac, source: fields.mac };
         interfaces.push(canonicalRecord(row.recordIndex, "Interfaces", values));
       }
     }
