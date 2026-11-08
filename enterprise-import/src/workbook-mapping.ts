@@ -18,7 +18,10 @@ const LINK_KINDS = new Set(["network", "management", "trust", "authentication", 
 const byTable = (document: ImportDocument) => new Map(document.tables.map((table) => [table.tableId, table] as const));
 const value = (record: ImportRecord, field: string): unknown => record.fields[field]?.value;
 const text = (record: ImportRecord, field: string): string | undefined => { const v = value(record, field); return typeof v === "string" && v.trim() !== "" ? v.trim() : typeof v === "number" ? String(v) : undefined; };
-const integer = (record: ImportRecord, field: string): number | undefined => { const v = value(record, field); const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isSafeInteger(n) ? n : undefined; };
+const integer = (record: ImportRecord, field: string): number | undefined => { const v = value(record, field); const n = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isSafeInteger(n) ? n : undefined; };
+// Optional source fields may be blank in CSV/XLSX/ODS; blank is not a
+// declaration. Nonblank malformed values must still be rejected explicitly.
+const blank = (v: unknown): boolean => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
 const bool = (record: ImportRecord, field: string): boolean | undefined => { const v = value(record, field); return typeof v === "boolean" ? v : v === "true" ? true : v === "false" ? false : undefined; };
 function diagnostic(code: string, message: string, table: string, row: number, field?: string): ImportDiagnostic { return { code, severity: "error", message, table, row, ...(field ? { field } : {}) }; }
 function rows(table: ReturnType<typeof byTable>, name: string): readonly ImportRecord[] { return table.get(name)?.records ?? []; }
@@ -69,7 +72,7 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       interfacesByNode.set(nodeId, declared);
     }
     const mtu = integer(record, "MTU");
-    if (value(record, "MTU") !== undefined && (mtu === undefined || mtu < 1))
+    if (!blank(value(record, "MTU")) && (mtu === undefined || mtu < 1))
       diagnostics.push(diagnostic("WORKBOOK_MTU_INVALID",
         "Interfaces.MTU must be a positive integer.", "Interfaces", record.recordIndex, "MTU"));
     const mac = text(record, "MAC");
@@ -116,6 +119,10 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       diagnostics.push(diagnostic("WORKBOOK_LAYOUT_TARGET_UNKNOWN",
         "Layout.nodeId references no declared node or zone.",
         "Layout", record.recordIndex, "nodeId"));
+    if (!blank(value(record, "rank")) && integer(record, "rank") === undefined)
+      diagnostics.push(diagnostic("WORKBOOK_LAYOUT_RANK_INVALID",
+        "Layout.rank must be a signed safe integer; no layout order will be inferred.",
+        "Layout", record.recordIndex, "rank"));
   }
   for (const record of rows(tables, "Links")) {
     const id = text(record, "linkId"), a = text(record, "nodeA"), b = text(record, "nodeB");

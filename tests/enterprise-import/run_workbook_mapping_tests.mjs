@@ -102,4 +102,42 @@ for (const { table, field, invalid, code } of [
 }
 console.log("PASS IMPORT-034: valid MAC/MTU/link kinds preserved; malformed schema fields fail before activation");
 
+// IMPORT-035: optional empty MTU cells are not declarations. Keep the exact
+// topology importable when CSV/XLSX/ODS supplies blank optional columns,
+// while a signed Layout.rank from source must remain a documented integer.
+for (const empty of ["", "  ", null]) {
+  const blankOptional = workbook(2);
+  blankOptional.tables.find(x => x.tableId === "Interfaces").records[0].fields.MTU = cell(empty);
+  blankOptional.tables.find(x => x.tableId === "Layout").records[0].fields.rank = cell("-3");
+  const result = mapNetworkWorkbookToScenario(blankOptional);
+  assert.equal(result.ok, true,
+    `Blank optional MTU ${JSON.stringify(empty)} must not reject real inventory: ${JSON.stringify(result.diagnostics)}`);
+  assert.equal(result.source.resources[0].interfaces[0].mtu, undefined,
+    "Do not manufacture a default MTU from an empty source cell");
+  assert.equal(result.source.resources[1].interfaces[0].mtu, 1500,
+    "Do not change another explicitly documented MTU");
+  assert.equal(result.source.layoutHints[0].rank, -3,
+    "Preserve an explicitly declared signed layout rank from a text cell");
+}
+for (const invalidRank of ["first", "1.5", true]) {
+  const badRank = workbook(2);
+  badRank.tables.find(x => x.tableId === "Layout").records[0].fields.rank = cell(invalidRank);
+  const result = mapNetworkWorkbookToScenario(badRank);
+  assert.equal(result.ok, false,
+    `Malformed explicit layout rank ${JSON.stringify(invalidRank)} must fail before Builder activation`);
+  assert.ok(result.diagnostics.some(x => x.code === "WORKBOOK_LAYOUT_RANK_INVALID" &&
+    x.table === "Layout" && x.row === 1 && x.field === "rank"),
+    "Malformed rank needs a row- and field-specific diagnostic");
+  assert.ok(result.preview.errors > 0);
+  assert.equal(result.source, undefined, "Invalid layout rank must not be silently omitted");
+}
+const badExplicitMtu = workbook(2);
+badExplicitMtu.tables.find(x => x.tableId === "Interfaces").records[0].fields.MTU = cell("not-a-number");
+const badExplicitResult = mapNetworkWorkbookToScenario(badExplicitMtu);
+assert.equal(badExplicitResult.ok, false, "An explicit invalid MTU is still rejected");
+assert.ok(badExplicitResult.diagnostics.some(x => x.code === "WORKBOOK_MTU_INVALID"));
+console.log("PASS IMPORT-035: blank optional MTU accepted; signed layout rank preserved; invalid explicit fields rejected");
+
+
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
