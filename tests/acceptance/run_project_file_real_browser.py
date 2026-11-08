@@ -893,16 +893,19 @@ def main():
             expect(resource_inspector).to_be_visible(timeout=20000)
             resource_inspector.locator(
                 'label.inspector-field', has_text="Asset ID").locator(
-                    "input").fill("endpoint.windows")
+                    "input").fill("windows.rds_host")
             resource_inspector.locator(
                 'label.inspector-field', has_text="Asset version/range").locator(
                     "input").fill("1.0.0")
             resource_inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(asset_controls).to_have_attribute("data-project-dirty", "true")
-            # Apply changes inspector key/sourceRevision; ReactFlow may
-            # clear transient selection while nodes are re-projected. Select
-            # the same source-backed resource again before the second edit.
+            # A canonical resource edit invalidates the compiled projection;
+            # ReactFlow nodes disappear until explicit recompilation. Rebuild
+            # the modeled view, then select the same real resource again.
+            asset_compile.click()
+            expect(asset_compile).to_be_disabled(timeout=30000)
+            expect(resource_node).to_be_visible(timeout=30000)
             resource_node.click(force=True)
             expect(resource_inspector).to_be_visible(timeout=20000)
             resource_inspector.locator(
@@ -919,7 +922,7 @@ def main():
             saved_asset = next(resource for resource in saved_asset_source["resources"]
                                if resource["id"] == "rds01")
             require(saved_asset["asset"] == {
-                "id": "endpoint.windows", "version": "1.0.0"},
+                "id": "windows.rds_host", "version": "1.0.0"},
                 "BUILDER-052 visual unrelated resource edit lost asset in .yadilab")
             require(saved_asset["label"] == "RDS with retained asset",
                     "BUILDER-052 Save omitted the requested resource label")
