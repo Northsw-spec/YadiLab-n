@@ -1784,8 +1784,21 @@ def main():
             preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
             expect(preview).to_be_enabled(timeout=30000)
             preview.click()
-            expect(restore_race.locator(".app-frame")).not_to_have_attribute(
-                "data-runtime-scenario-hash", "builder", timeout=20000)
+            try:
+                expect(restore_race.locator(".app-frame")).not_to_have_attribute(
+                    "data-runtime-scenario-hash", "builder", timeout=20000)
+            except AssertionError as error:
+                # An enabled Preview button does not prove that Runtime
+                # activated. Preserve the actual Compiler/Engine diagnostics
+                # so a failing CI run is actionable instead of an opaque
+                # "remained builder" timeout.
+                draft_status = restore_race.locator(
+                    "[data-studio-draft-revision]").inner_text()
+                diagnostic_text = restore_race.locator(
+                    ".diagnostic").all_text_contents()
+                raise AssertionError(
+                    "PROJECT_RUNTIME_PREVIEW_BLOCKED: " + draft_status
+                    + " | diagnostics=" + repr(diagnostic_text[-20:])) from error
             export_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
                 "summary", has_text="Import / Export"))
             if export_menu.get_attribute("open") is None:

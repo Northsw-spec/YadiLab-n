@@ -145,7 +145,33 @@ const handle={
   },
   async getFile() { return file("network.yadilab", stored); },
 };
-assert.equal(await writeProjectFile(handle,text),true);
+// PROJECT-038: the exported writer is a disk-trust boundary, not just an
+// internal helper. An omitted destination policy would otherwise allow
+// unchecked overwrite of arbitrary existing .yadilab files.
+let unguardedReadCalls = 0;
+let unguardedWriteCalls = 0;
+const unguardedExistingFile = {
+  async getFile() {
+    unguardedReadCalls++;
+    return file("other-project.yadilab", "IRREPLACEABLE OTHER PROJECT");
+  },
+  async createWritable() {
+    unguardedWriteCalls++;
+    throw Error("A write without destination policy must never open a stream");
+  },
+};
+await assert.rejects(writeProjectFile(unguardedExistingFile, text),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "Omitting the write policy must be rejected before inspecting/touching the disk");
+await assert.rejects(writeProjectFile(unguardedExistingFile, text, { requireEmptyTarget: false }),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "Explicit false is not permission to overwrite an unassociated file");
+assert.equal(unguardedReadCalls, 0,
+  "Missing write policy must fail before any native file handle interaction");
+assert.equal(unguardedWriteCalls, 0,
+  "Missing write policy must never create a writable stream");
+assert.equal(await writeProjectFile(handle,text,{requireEmptyTarget:true}),true,
+  "A verified empty destination remains available for first Save As");
 assert.equal(stored,text);
 const fromDisk = await readProjectFile(await handle.getFile(),opts);
 assert.deepEqual(fromDisk.source,restored.source);
@@ -196,6 +222,11 @@ await assert.rejects(writeProjectFile(handle,text,{expectedFileSha256:fromDisk.f
 assert.equal(stored,firstWrite+"\\n","Refused overwrite must leave external modification intact");
 stored=firstWrite;
 assert.equal(await writeProjectFile(handle,text,{expectedFileSha256:fromDisk.fileSha256}),true);
+await assert.rejects(writeProjectFile(handle, "MUST_NOT_REPLACE_REAL_FILE"),
+  /PROJECT_DESTINATION_POLICY_REQUIRED/,
+  "A caller must not overwrite an associated non-empty file without exact disk fingerprint");
+assert.equal(stored, firstWrite, "Unchecked native write must preserve the existing project");
+console.log("PASS PROJECT-038: native writer fails closed unless empty-target or exact SHA-256 policy is explicit");
 const samePhysicalFile = { ...handle };
 handle.isSameEntry = async other => other === handle || other === samePhysicalFile;
 samePhysicalFile.isSameEntry = async other => other === handle || other === samePhysicalFile;
@@ -319,9 +350,15 @@ assert.equal(raceWriteCount, 0, "No application bytes may be written on a stale 
 assert.equal(raceAbortCount, 1, "Provisional stream must be aborted after race detection");
 assert.equal(raceDisk, firstWrite + " EXTERNAL_MODIFICATION_DURING_OPEN",
   "Independent writer's bytes must survive failed application Save");
+let alteredReadbackCount = 0;
 await assert.rejects(writeProjectFile({ ...handle, async getFile() {
-  return file("network.yadilab",stored+"CORRUPT");
-}}, text),/PROJECT_READBACK_MISMATCH/);
+  // The two prewrite checks must see the legitimate associated file. The
+  // replacement happens only after the app's write has completed.
+  alteredReadbackCount++;
+  return file("network.yadilab", alteredReadbackCount <= 2 ? stored : stored+"CORRUPT");
+}}, text, { expectedFileSha256: fromDisk.fileSha256 }), /PROJECT_READBACK_MISMATCH/);
+assert.equal(alteredReadbackCount, 3,
+  "Readback mismatch must happen after both mandatory exact-digest conflict checks");
 // PROJECT-029: UTF-8 TextDecoder silently removes a leading BOM. After the
 // native write has closed, an external process can change the physical bytes
 // without changing the decoded JSON text. Save must fail the exact-byte
@@ -332,23 +369,30 @@ writtenWithBom.set(new TextEncoder().encode(text), 3);
 assert.equal(new TextDecoder("utf-8", {fatal:true}).decode(writtenWithBom), text,
   "BOM readback fixture must prove that decoded text alone hides disk change");
 let bomReadbackWrites = 0;
+let bomReadbackChecks = 0;
 await assert.rejects(writeProjectFile({
   async createWritable() { return {
     async write() { bomReadbackWrites++; },
     async close() {},
   }; },
-  async getFile() { return {
-    name: "network.yadilab", size: writtenWithBom.byteLength,
-    async arrayBuffer() { return writtenWithBom.buffer.slice(0); },
-  }; },
-}, text), /PROJECT_READBACK_MISMATCH/,
+  async getFile() {
+    bomReadbackChecks++;
+    // Save As explicitly verifies both empty-target checks before writing;
+    // an external BOM insertion after close must still fail exact readback.
+    if (bomReadbackChecks <= 2) return file("network.yadilab", "");
+    return {
+      name: "network.yadilab", size: writtenWithBom.byteLength,
+      async arrayBuffer() { return writtenWithBom.buffer.slice(0); },
+    };
+  },
+}, text, { requireEmptyTarget: true }), /PROJECT_READBACK_MISMATCH/,
 "Save must refuse post-write BOM insertion even when decoded JSON is unchanged");
 assert.equal(bomReadbackWrites, 1,
   "Post-write readback must check the single explicit completed write");
 console.log("PASS PROJECT-029: native Save readback verifies byte-for-byte equality, not decoder-normalized JSON");
 await assert.rejects(writeProjectFile({ ...handle,async createWritable() {
   return {async write(){throw Error("DISK_FULL");},async abort(){},async close(){}};
-}},text),/DISK_FULL/);
+}},text, { expectedFileSha256: fromDisk.fileSha256 }),/DISK_FULL/);
 // PROJECT-023: an external process can replace a verified project file with
 // a very large one just before Save or during createWritable. Reject its
 // advertised size BEFORE arrayBuffer() allocates memory, and never write into
@@ -391,14 +435,19 @@ assert.equal(midWriteAborts, 1);
 
 let oversizedReadbackReads = 0;
 let oversizedReadbackWrites = 0;
+let oversizedReadbackChecks = 0;
 await assert.rejects(writeProjectFile({
   async createWritable() { return {
     async write() { oversizedReadbackWrites++; },
     async close() {},
   }; },
-  async getFile() { return { size: PROJECT_MAX_BYTES + 1,
-    async arrayBuffer() { oversizedReadbackReads++; throw Error("unsafe allocation"); } }; },
-}, text), /PROJECT_READBACK_INVALID/,
+  async getFile() {
+    oversizedReadbackChecks++;
+    if (oversizedReadbackChecks <= 2) return file("network.yadilab", "");
+    return { size: PROJECT_MAX_BYTES + 1,
+      async arrayBuffer() { oversizedReadbackReads++; throw Error("unsafe allocation"); } };
+  },
+}, text, { requireEmptyTarget: true }), /PROJECT_READBACK_INVALID/,
 "An oversized post-write file must not be read into browser memory");
 assert.equal(oversizedReadbackWrites, 1);
 assert.equal(oversizedReadbackReads, 0);
