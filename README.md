@@ -59,7 +59,18 @@ The action is rejected with the dependency category and the original source
 remains unchanged; explicitly update the dependent declarations before
 deleting their targets. An unreferenced resource or zone can still be
 deleted normally, and an explicit connection cascade still removes only
-the chosen topology edges, never unrelated test or evidence declarations. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
+the chosen topology edges, never unrelated test or evidence declarations.
+
+ReactFlow canvas selection and pane-click events act on the live, synchronously
+published Builder/Runtime workspace, not a source snapshot captured before a
+recent Inspector Apply. That avoids rolling back an authored source revision
+or losing the UNSAVED status when canvas selection fires before React rerenders.
+Drag, connect, and zone-resize gestures are additionally blocked if the
+canonical source has changed since the displayed topology projection, and all
+canvas mutations are denied across a New/Open/import project generation.
+The actual UI and a mandatory same-turn regression test enforce this behavior.
+It is a specific stale-event fix, not proof that every intermittent dirty
+status issue has been diagnosed. The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports
 

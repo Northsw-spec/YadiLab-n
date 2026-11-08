@@ -10,6 +10,7 @@
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectFileControls } from "./project-file-controls.mjs";
+import { liveCanvasWorkspace, liveBuilderCanvasMutationWorkspace } from "./topology-workspace-guard.mjs";
 import { markApplicationReady, markApplicationStopped } from "../src/browser/runtime-readiness.mjs";
 import { createRoot } from "react-dom/client";
 import {
@@ -627,7 +628,15 @@ function pretty(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function Topology({ workspace, setWorkspace, setDiagnostics, journey, stateFocus, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
+function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, setWorkspace, setDiagnostics, journey, stateFocus, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
+  // ReactFlow may deliver an onSelectionChange/pane click or drag callback
+  // from a render that predates an inspector Apply, New/Open, or source import.
+  // Never publish the closed-over workspace: it may silently restore a stale
+  // canonical source and falsely clear the project's unsaved state.
+  const liveTopologyWorkspace = () =>
+    liveCanvasWorkspace(workspace, getWorkspace(), projectGeneration, getScenarioTransitionId());
+  const liveTopologyMutationWorkspace = () =>
+    liveBuilderCanvasMutationWorkspace(workspace, getWorkspace(), projectGeneration, getScenarioTransitionId());
   const flowApi = useRef(null);
   const topologyPanelRef = useRef(null);
   const topologyViewportRef = useRef(null);
@@ -976,7 +985,11 @@ function Topology({ workspace, setWorkspace, setDiagnostics, journey, stateFocus
             ...node.data,
             builderEditable: true,
             onResizeEnd: (params) => {
-              const result = resizeBuilderZone(workspace, {
+              const active = liveTopologyMutationWorkspace();
+              // A geometry callback from a retired projection cannot edit a
+              // newer canonical graph, even within the same project.
+              if (!active) return;
+              const result = resizeBuilderZone(active, {
                 id: node.id,
                 x: params.x,
                 y: params.y,
@@ -1079,18 +1092,24 @@ function Topology({ workspace, setWorkspace, setDiagnostics, journey, stateFocus
     }),
   };
   const onSelectionChange = ({ nodes, edges }) => {
+    const active = liveTopologyWorkspace();
+    if (!active) return;
     const nodeIds = nodes.map((node) => node.id);
     const edgeIds = edges.map((edge) => edge.id);
     const primary = [...nodeIds, ...edgeIds].at(-1);
-    if (workspace.mode === "builder") {
-      setWorkspace(applyBuilderCanvasSelection(workspace, { nodeIds, edgeIds, primary }));
+    // Selection carries no authority to replace the canonical source.
+    // Apply it to the synchronously published current workspace only.
+    if (active.mode === "builder") {
+      setWorkspace(applyBuilderCanvasSelection(active, { nodeIds, edgeIds, primary }));
     } else {
-      setWorkspace(setRuntimeSelection(workspace, [...nodeIds, ...edgeIds], primary));
+      setWorkspace(setRuntimeSelection(active, [...nodeIds, ...edgeIds], primary));
     }
   };
   const onNodeDragStop = (_event, node) => {
-    if (workspace.mode !== "builder" || validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
-    setWorkspace(setLayoutOverride(workspace, {
+    const active = liveTopologyMutationWorkspace();
+    if (!active ||
+        validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
+    setWorkspace(setLayoutOverride(active, {
       id: node.id,
       x: node.position.x,
       y: node.parentId ? Math.max(node.position.y, ZONE_HEADER_RESERVED_HEIGHT) : node.position.y,
@@ -1099,22 +1118,34 @@ function Topology({ workspace, setWorkspace, setDiagnostics, journey, stateFocus
     }));
   };
   const onConnect = (connection) => {
-    if (workspace.mode !== "builder" || validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
-    const result = createBuilderConnectionFromCanvas(workspace, connection);
+    const active = liveTopologyMutationWorkspace();
+    if (!active ||
+        validThousandFocus || fiveThousandWorkspace || tenThousandGuard) return;
+    const result = createBuilderConnectionFromCanvas(active, connection);
     setDiagnostics(result.diagnostics);
     if (result.ok) setWorkspace(result.workspace);
   };
   const clearSelection = () => {
-    if (workspace.mode === "builder") setWorkspace(applyBuilderCanvasSelection(workspace, {}));
-    else setWorkspace(setRuntimeSelection(workspace, []));
+    const active = liveTopologyWorkspace();
+    if (!active) return;
+    if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, {}));
+    else setWorkspace(setRuntimeSelection(active, []));
   };
   const focusTopologyResult = (result) => {
+    const active = liveTopologyWorkspace();
+    if (!active) return;
     const target = baseFlow.nodes.find((node) => node.id === result.nodeId);
     if (!target) return;
+    const known = active.mode === "builder"
+      ? active.source.resources.some((item) => item.id === target.id) ||
+        active.source.zones.some((item) => item.id === target.id)
+      : active.scenario.resources.some((item) => item.id === target.id) ||
+        active.scenario.zones.some((item) => item.id === target.id);
+    if (!known) return;
     const position = target.position ?? { x: 0, y: 0 };
     flowApi.current?.setCenter?.(position.x + (target.width ?? 160) / 2, position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 260 });
-    if (workspace.mode === "builder") setWorkspace(setBuilderSelection(workspace, [result.nodeId], result.nodeId));
-    else setWorkspace(setRuntimeSelection(workspace, [result.nodeId], result.nodeId));
+    if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [result.nodeId], result.nodeId));
+    else setWorkspace(setRuntimeSelection(active, [result.nodeId], result.nodeId));
   };
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
@@ -6726,7 +6757,10 @@ function App() {
           e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
         ) : null,
       ),
-      e(Topology, { workspace, setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
+      e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+        projectGeneration: scenarioTransitionRef.current,
+        getScenarioTransitionId: () => scenarioTransitionRef.current,
+        setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
         scaledThousandFocus: scaledOfficeThousandFocus,
         scaledFiveThousandFocus:scaledOfficeFiveThousandFocus,
         scaledTenThousandFocus,scaledTenThousandSessionActive,
