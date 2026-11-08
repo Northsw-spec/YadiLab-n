@@ -32,6 +32,10 @@ jobs:
           set -Eeuo pipefail
           node tests/dependencies/run_dependency_tests.mjs
           node tests/dependencies/run_dependency_adversarial.mjs
+          # Compile-time Foundation test semantics are a durable release gate.
+          # A valid JSON schema alone does not reject dangling test subjects,
+          # ignored port arrays, or an invalid protocol being defaulted.
+          npm run test:compiler
           npm run test:engine
           npm run test:enterprise-import
           npm run test:import-helper
