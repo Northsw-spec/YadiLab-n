@@ -49,7 +49,7 @@ MOCK = r"""
         async close() {
           // External writer changes bytes after the app has written but
           // before readback; TextDecoder will erase this leading UTF-8 BOM.
-          store.text = store.injectBomAfterClose ? "\\uFEFF" + pending : pending;
+          store.text = store.injectBomAfterClose ? String.fromCharCode(0xFEFF) + pending : pending;
           store.writes++;
         },
         async abort() { store.abortedWrites++; },
@@ -562,7 +562,7 @@ def main():
             expect(rbc).to_have_attribute("data-project-dirty", "true")
             original_bom_disk = readback_bom.evaluate(
                 "window.__yadilabProjectStore.text")
-            require(original_bom_disk.startswith("\\ufeff"),
+            require(original_bom_disk.startswith(chr(0xFEFF)),
                     "PROJECT-029 fixture did not add physical UTF-8 BOM")
             require(readback_bom.evaluate("window.__yadilabProjectStore.writes") == 1,
                     "Readback rejection must preserve the attempted native disk write")
