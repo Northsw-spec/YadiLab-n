@@ -14,6 +14,20 @@ const KINDS = new Set(["internet", "wan", "dmz", "lan", "server", "management", 
 // workbook mapping emits, so preview does not accept a source Save will reject.
 const RESOURCE_TYPE = /^[a-z][a-z0-9_.-]{0,127}$/;
 const MAC_ADDRESS = /^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}$/;
+// IPv4 and its optional CIDR mask are explicit imported facts. Validate
+// before mapping instead of silently accepting invalid octets or inventing
+// a second mask for an already-qualified source address.
+const validPrefix = (prefix: string): boolean => /^\d{1,2}$/.test(prefix) && Number(prefix) <= 32;
+function parseIPv4(source: string): { host: string; mask?: string } | undefined {
+  const pieces = source.split("/");
+  if (pieces.length > 2) return undefined;
+  const host = pieces[0];
+  const mask = pieces[1];
+  if (!host || !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) ||
+      host.split(".").some(octet => Number(octet) > 255) ||
+      (mask !== undefined && !validPrefix(mask))) return undefined;
+  return { host, ...(mask === undefined ? {} : { mask }) };
+}
 const LINK_KINDS = new Set(["network", "management", "trust", "authentication", "dependency", "data_flow"]);
 const byTable = (document: ImportDocument) => new Map(document.tables.map((table) => [table.tableId, table] as const));
 const value = (record: ImportRecord, field: string): unknown => record.fields[field]?.value;
@@ -107,6 +121,27 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       diagnostics.push(diagnostic("WORKBOOK_MAC_INVALID",
         "Interfaces.MAC must contain six colon-separated hexadecimal octets.",
         "Interfaces", record.recordIndex, "MAC"));
+    const ipv4 = text(record, "IPv4");
+    const prefix = text(record, "prefix");
+    const parsedIPv4 = ipv4 === undefined ? undefined : parseIPv4(ipv4);
+    if (!blank(value(record, "IPv4")) && !parsedIPv4)
+      diagnostics.push(diagnostic("WORKBOOK_IPV4_INVALID",
+        "Interfaces.IPv4 must be four valid octets, optionally with a /0 through /32 CIDR mask.",
+        "Interfaces", record.recordIndex, "IPv4"));
+    if (!blank(value(record, "prefix"))) {
+      if (ipv4 === undefined)
+        diagnostics.push(diagnostic("WORKBOOK_IPV4_PREFIX_WITHOUT_ADDRESS",
+          "Interfaces.prefix cannot establish an IPv4 address when Interfaces.IPv4 is absent.",
+          "Interfaces", record.recordIndex, "prefix"));
+      else if (prefix === undefined || !validPrefix(prefix))
+        diagnostics.push(diagnostic("WORKBOOK_IPV4_PREFIX_INVALID",
+          "Interfaces.prefix must be a documented IPv4 prefix from 0 through 32.",
+          "Interfaces", record.recordIndex, "prefix"));
+      else if (parsedIPv4?.mask !== undefined && Number(parsedIPv4.mask) !== Number(prefix))
+        diagnostics.push(diagnostic("WORKBOOK_IPV4_PREFIX_CONFLICT",
+          "Separate Interfaces.prefix conflicts with the mask already declared by Interfaces.IPv4.",
+          "Interfaces", record.recordIndex, "prefix"));
+    }
   }
   // Zone references belong to the same canonical namespace as nodes. A
   // valid-looking workbook must not promise an importable Builder source that
@@ -199,7 +234,7 @@ export function mapNetworkWorkbookToScenario(document: ImportDocument): Workbook
   const zones = rows(tables, "Zones").map((record) => ({ id: text(record, "zoneId")!, label: text(record, "displayName") ?? text(record, "zoneId")!, ...(text(record, "kind") ? { kind: text(record, "kind") as never } : {}) }));
   const resourceMap = new Map<string, Scenariosourceresource>();
   for (const record of rows(tables, "Nodes")) { const id = text(record, "nodeId")!; const zone = text(record, "zoneId"); resourceMap.set(id, { id, type: text(record, "type")!, label: text(record, "displayName")!, ...(zone ? { zone } : {}), properties: {} }); }
-  for (const record of rows(tables, "Interfaces")) { const nodeId = text(record, "nodeId")!; const resource = resourceMap.get(nodeId)!; const id = text(record, "interfaceId") ?? text(record, "name")!; const label = text(record, "name"); const ipv4 = text(record, "IPv4"); const prefix = text(record, "prefix"); const ipv6 = text(record, "IPv6"); const addresses = [ipv4 && prefix ? `${ipv4}/${prefix}` : ipv4, ipv6].filter((x): x is string => Boolean(x)); const mac = text(record, "MAC"); const mtu = integer(record, "MTU"); const iface = { id, ...(label ? { label } : {}), ...(addresses.length ? { addresses } : {}), ...(mac ? { mac } : {}), ...(mtu !== undefined ? { mtu } : {}) }; resourceMap.set(nodeId, { ...resource, interfaces: [...(resource.interfaces ?? []), iface] }); }
+  for (const record of rows(tables, "Interfaces")) { const nodeId = text(record, "nodeId")!; const resource = resourceMap.get(nodeId)!; const id = text(record, "interfaceId") ?? text(record, "name")!; const label = text(record, "name"); const ipv4 = text(record, "IPv4"); const prefix = text(record, "prefix"); const ipv6 = text(record, "IPv6"); const addresses = [ipv4 && prefix && !ipv4.includes("/") ? `${ipv4}/${prefix}` : ipv4, ipv6].filter((x): x is string => Boolean(x)); const mac = text(record, "MAC"); const mtu = integer(record, "MTU"); const iface = { id, ...(label ? { label } : {}), ...(addresses.length ? { addresses } : {}), ...(mac ? { mac } : {}), ...(mtu !== undefined ? { mtu } : {}) }; resourceMap.set(nodeId, { ...resource, interfaces: [...(resource.interfaces ?? []), iface] }); }
   const connections: Scenariosourceconnection[] = rows(tables, "Links").map((record) => { const interfaceA = text(record, "interfaceA"); const interfaceB = text(record, "interfaceB"); return { id: text(record, "linkId")!, kind: (text(record, "kind") as Scenariosourceconnection["kind"] | undefined) ?? "network", from: { resource: text(record, "nodeA")!, ...(interfaceA ? { port: interfaceA } : {}) }, to: { resource: text(record, "nodeB")!, ...(interfaceB ? { port: interfaceB } : {}) }, properties: {} }; });
   // Imported source declarations establish modeled nodes/links, not that
   // cabling, network operation or the operator's expected topology was verified.
