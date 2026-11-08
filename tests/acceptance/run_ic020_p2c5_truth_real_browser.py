@@ -512,6 +512,98 @@ def case_declared_inline_link_ports(browser,url):
             "originalBuilderUnchanged":True,"physicalProbes":False,
             "externalRequests":0}
 
+def case_unknown_device_columns_fail_closed(browser,url):
+    """A real Devices file with undeclared topology facts can never be READY."""
+    cases=[
+        ("unsupported_vlan_and_rack.csv","text/csv",(
+          "Asset ID,Hostname,Device Type,IP Address,Access VLAN,Rack\n"
+          "edge01,Edge,Router,192.0.2.10,100,Site A\n"
+          "host01,Host,Server,192.0.2.11,,\n").encode("utf-8"),
+         ["Devices / row 1 / field Access VLAN",
+          "Devices / row 1 / field Rack"],2),
+        ("unsupported_json_object.json","application/json",json.dumps({
+          "Devices":[
+            {"Asset ID":"edge01","Hostname":"Edge","Device Type":"Router",
+             "VLAN ID":0, "Switchport":{"id":"Gi1/0/1"}},
+            {"Asset ID":"host01","Hostname":"Host","Device Type":"Server"},
+          ]},separators=(",",":")).encode("utf-8"),
+         ["Devices / row 1 / field VLAN ID",
+          "Devices / row 1 / field Switchport"],2),
+    ]
+    page,errors,outside=setup(browser,url)
+    try:
+        original=exported_source(page)
+        for name,mime,data,locations,column_count in cases:
+            with page.expect_file_chooser(timeout=20000) as future:
+                page.locator('[data-network-import-primary="true"]').click()
+            future.value.set_files({"name":name,"mimeType":mime,"buffer":data})
+            review=page.locator('[data-network-import-preview]')
+            expect(review).to_have_attribute(
+                "data-network-import-preview","BLOCKED",timeout=30000)
+            message=review.inner_text()
+            require("NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED" in message,
+                    "Unknown populated Devices field was allowed: "+name)
+            for position in locations:
+                require(position in message,
+                        "Original unsupported source column was not disclosed: "+position)
+            require(page.locator(
+                '[data-network-import-unmapped]').get_attribute(
+                'data-network-import-unmapped')==str(column_count),
+                "Actual unknown source column count was hidden: "+name)
+            require(hashlib.sha256(data).hexdigest() in
+                    page.locator('[data-network-import-sha]').inner_text(),
+                    "Original source hash mismatch: "+name)
+            require(page.locator('[data-network-import-activate]').is_disabled(),
+                    "Partial Devices import offered editable Builder: "+name)
+            require(page.locator('[data-network-import-runtime]').is_disabled(),
+                    "Partial Devices import offered modeled Runtime: "+name)
+            page.get_by_role("button",name="Close network import").click()
+            expect(page.locator('[data-network-import-panel]')).to_have_count(0)
+            require(exported_source(page)==original,
+                    "Blocked unsupported source modified Builder: "+name)
+        require(not errors,"Browser errors on unknown Devices columns "+repr(errors))
+        require(not outside,"Unexpected external network requests "+repr(outside))
+    finally:page.close()
+    # Truly blank extra columns are optional producer templates, not lost facts.
+    valid_data=(
+      "Asset ID,Hostname,Device Type,IP Address,Rack,Access VLAN\n"
+      "edge01,Edge,Router,192.0.2.10, ,\n"
+      "host01,Host,Server,192.0.2.11,,\n").encode("utf-8")
+    allowed,errors,outside=setup(browser,url)
+    try:
+        with allowed.expect_file_chooser(timeout=20000) as future:
+            allowed.locator('[data-network-import-primary="true"]').click()
+        future.value.set_files({"name":"empty-extra-headers.csv",
+                                "mimeType":"text/csv","buffer":valid_data})
+        review=allowed.locator('[data-network-import-preview]')
+        expect(review).to_have_attribute(
+            "data-network-import-preview","READY",timeout=30000)
+        require(review.locator('[data-network-import-unmapped="0"]').count()==1,
+                "Empty optional producer columns counted as source facts")
+        require(allowed.locator('[data-network-import-activate]').is_enabled(),
+                "Empty extra column templates blocked documented nodes")
+        allowed.locator('[data-network-import-activate]').click()
+        expect(allowed.locator('[data-network-import-panel]')).to_have_count(
+            0,timeout=45000)
+        source=exported_source(allowed)
+        resources={r["id"]:r for r in source["resources"]}
+        require(set(resources)=={"edge01","host01"} and
+                resources["edge01"]["interfaces"][0]["addresses"]==
+                ["192.0.2.10"] and
+                resources["host01"]["interfaces"][0]["addresses"]==
+                ["192.0.2.11"],
+                "Valid source IPs or device identities were lost")
+        require(len(source["connections"])==0,
+                "Blank extra columns fabricated an undocumented cable")
+        require(not errors,"Browser errors on blank Devices extras "+repr(errors))
+        require(not outside,"Unexpected external network requests "+repr(outside))
+    finally:allowed.close()
+    return {"case":"unknown_devices_source_columns_fail_closed",
+            "status":"PASS","blocked":[x[0] for x in cases],
+            "emptyExtraHeadersAccepted":True,
+            "builderUnchangedOnBlockedSource":True,
+            "inventedPhysicalLinks":False,"externalRequests":0}
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--url",required=True)
@@ -537,6 +629,7 @@ def main():
             cases.append(case_unprojected_workbook(browser,args.url))
             cases.append(case_shorthand_supplemental_source_truth(browser,args.url))
             cases.append(case_declared_inline_link_ports(browser,args.url))
+            cases.append(case_unknown_device_columns_fail_closed(browser,args.url))
         finally:browser.close()
     report={"status":"PASS","kind":"Actual compiled Chromium five-format P2c5 source-bound modeled verdicts",
             "environment":"GitHub Actions Ubuntu; Parrot-native/physical network NOT_RUN",
