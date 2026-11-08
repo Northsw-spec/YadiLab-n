@@ -113,6 +113,127 @@ export function duplicateResource(
   return addResource(workspace, duplicate);
 }
 
+// Source-driven dependencies must survive Builder deletions. Otherwise a
+// successful Delete leaves dangling test/rule/evidence identities which the
+// Compiler and native .yadilab Save/Open correctly reject later. Deleting
+// connections through an explicitly selected cascade does NOT authorize
+// removing authored tests, proof, notes, solution steps or layout declarations.
+const resourceSelectorsByTestType: Readonly<Record<string, readonly string[]>> = {
+  "network.reachability": ["from", "to"],
+  "network.segmentation": ["from", "to"],
+  "network.route_test": ["from", "to"],
+  "network.port_scan": ["from", "to"],
+  "virtualization.management_exposure": ["from", "to"],
+  "identity.authentication_test": ["subject", "target"],
+  "identity.privilege_path": ["subject", "resource"],
+  "identity.permission": ["subject", "resource"],
+  "identity.membership": ["subject", "group"],
+  "windows.hardening_check": ["target"],
+  "linux.hardening_check": ["target"],
+  "identity.password_audit": ["target"],
+  "logging.visibility_test": ["target"],
+  "logging.alert_test": ["target"],
+  "backup.restore_test": ["target"],
+};
+
+function deletionSourceDependency(
+  source: ScenarioSource,
+  removedResources: ReadonlySet<string>,
+  removedZones: ReadonlySet<string>,
+): BrowserDiagnostic | undefined {
+  const resourceRemoved = (id: unknown): id is string =>
+    typeof id === "string" && removedResources.has(id);
+  const entityRemoved = (id: unknown): id is string =>
+    typeof id === "string" && (removedResources.has(id) || removedZones.has(id));
+  const problem = (code: string, origin: string, target: string): BrowserDiagnostic =>
+    diagnostic(code, `Cannot delete '${target}': retained ${origin} references it. Update that declaration first.`, target);
+
+  for (const test of source.tests) {
+    for (const key of resourceSelectorsByTestType[test.type] ?? []) {
+      const target = test.params[key];
+      if (resourceRemoved(target))
+        return problem("BUILDER_DELETE_TEST_REFERENCED", `test '${test.id}' parameter '${key}'`, target);
+    }
+  }
+
+  // Walk nested rules iteratively to avoid stack-overflow on deep source
+  // trees and to cover findings, objectives and completion consistently.
+  const pending: Scenariosourcerule[] = [
+    ...source.findings.map((item) => item.when),
+    ...source.objectives.map((item) => item.condition),
+    source.completion,
+  ];
+  while (pending.length) {
+    const rule = pending.pop()!;
+    if (rule.op === "all" || rule.op === "any") {
+      pending.push(...rule.rules);
+      continue;
+    }
+    if (rule.op === "not") {
+      pending.push(rule.rule);
+      continue;
+    }
+    const selectors = rule.op === "equals" || rule.op === "service_enabled"
+      ? [rule.target]
+      : rule.op === "reachable" ? [rule.from, rule.to]
+      : rule.op === "member_of" ? [rule.subject, rule.group]
+      : rule.op === "has_permission" ? [rule.subject, rule.resource] : [];
+    const target = selectors.find(resourceRemoved);
+    if (target)
+      return problem("BUILDER_DELETE_RULE_REFERENCED", `rule '${rule.op}'`, target);
+  }
+
+  for (const operation of source.canonicalSolution?.operations ?? []) {
+    if (resourceRemoved(operation.target))
+      return problem("BUILDER_DELETE_SOLUTION_REFERENCED",
+        `canonical solution operation '${operation.op}'`, operation.target);
+  }
+  for (const objective of source.troubleshootingObjectives ?? []) {
+    for (const requirement of objective.requirements) {
+      const selectors = requirement.kind === "observation"
+        ? [requirement.targetId] : [requirement.sourceId, requirement.destinationId];
+      const target = selectors.find(resourceRemoved);
+      if (target)
+        return problem("BUILDER_DELETE_TROUBLESHOOTING_REFERENCED",
+          `troubleshooting requirement '${requirement.id}'`, target);
+    }
+  }
+  for (const note of source.notes ?? []) {
+    if (entityRemoved(note.target))
+      return problem("BUILDER_DELETE_NOTE_REFERENCED", `note '${note.id}'`, note.target);
+  }
+  for (const hint of source.layoutHints ?? []) {
+    if (entityRemoved(hint.target))
+      return problem("BUILDER_DELETE_LAYOUT_REFERENCED", "layout hint target", hint.target);
+    if (entityRemoved(hint.parent))
+      return problem("BUILDER_DELETE_LAYOUT_REFERENCED", "layout hint parent", hint.parent);
+  }
+
+  // Explicit modeled neighbor/conntrack declarations on retained resources
+  // and source-backed fault bindings also carry semantic resource identity.
+  for (const resource of source.resources) {
+    if (removedResources.has(resource.id)) continue;
+    for (const neighbor of resource.properties.neighbors ?? []) {
+      if (resourceRemoved(neighbor.targetResourceId))
+        return problem("BUILDER_DELETE_NEIGHBOR_REFERENCED",
+          `resource '${resource.id}' neighbor '${neighbor.id}'`, neighbor.targetResourceId);
+    }
+    for (const entry of resource.properties.conntrack?.entries ?? []) {
+      if (resourceRemoved(entry.destination))
+        return problem("BUILDER_DELETE_CONNTRACK_REFERENCED",
+          `resource '${resource.id}' conntrack '${entry.id}'`, entry.destination);
+    }
+  }
+  for (const instance of source.faultOrigin?.instances ?? []) {
+    for (const target of Object.values(instance.bindings)) {
+      if (entityRemoved(target))
+        return problem("BUILDER_DELETE_FAULT_BINDING_REFERENCED",
+          `fault instance '${instance.instanceId}' binding`, target);
+    }
+  }
+  return undefined;
+}
+
 export function deleteResource(workspace: BuilderWorkspace, resourceId: string, cascadeConnections = false): BrowserCommandResult<BuilderWorkspace> {
   if (!workspace.source.resources.some((x) => x.id === resourceId)) return failure(workspace, diagnostic("BUILDER_RESOURCE_UNKNOWN", `Resource '${resourceId}' does not exist.`, resourceId));
   const references = workspace.source.connections.filter((x) => x.from.resource === resourceId || x.to.resource === resourceId);
@@ -122,6 +243,8 @@ export function deleteResource(workspace: BuilderWorkspace, resourceId: string, 
   const troubleshootingReferences = (workspace.source.troubleshootingObjectives ?? []).flatMap((objective) => objective.requirements).filter((requirement) =>
     requirement.kind === "observation" ? requirement.targetId === resourceId : requirement.sourceId === resourceId || requirement.destinationId === resourceId);
   if (troubleshootingReferences.length > 0) return failure(workspace, diagnostic("BUILDER_RESOURCE_TROUBLESHOOTING_REFERENCED", `Resource '${resourceId}' is referenced by ${troubleshootingReferences.length} troubleshooting evidence requirement(s); edit those requirements before deleting the resource.`, resourceId));
+  const dependency = deletionSourceDependency(workspace.source, new Set([resourceId]), new Set());
+  if (dependency) return failure(workspace, dependency);
   const source: ScenarioSource = {
     ...workspace.source,
     resources: workspace.source.resources.filter((x) => x.id !== resourceId),
@@ -392,6 +515,8 @@ export function deleteZone(workspace: BuilderWorkspace, zoneId: string, cascade 
   if ((hasChildren || hasResources) && !cascade) {
     return failure(workspace, diagnostic("BUILDER_ZONE_NOT_EMPTY", `Zone '${zoneId}' contains child zones/resources; explicit cascade is required.`, zoneId));
   }
+  const dependency = deletionSourceDependency(workspace.source, resourcesToDelete, zonesToDelete);
+  if (dependency) return failure(workspace, dependency);
   const source: ScenarioSource = {
     ...workspace.source,
     zones: workspace.source.zones.filter((x) => !zonesToDelete.has(x.id)),
