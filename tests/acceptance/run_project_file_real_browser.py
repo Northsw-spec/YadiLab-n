@@ -860,8 +860,8 @@ def main():
             isolated.close()
 
             # BUILDER-052: real rendered resource Inspector must preserve
-            # source-backed asset requirements, including through a subsequent
-            # unrelated label edit and verified native .yadilab Save.
+            # source-backed asset requirements on label editing and through
+            # a verified native .yadilab Save.
             asset_page = context.new_page()
             asset_page.add_init_script(MOCK)
             asset_page.on("pageerror", lambda error: errors.append(str(error)))
@@ -897,22 +897,15 @@ def main():
             resource_inspector.locator(
                 'label.inspector-field', has_text="Asset version/range").locator(
                     "input").fill("1.0.0")
-            resource_inspector.get_by_role(
-                "button", name="Verkställ inspektörsändringar").click()
-            expect(asset_controls).to_have_attribute("data-project-dirty", "true")
-            # A canonical resource edit invalidates the compiled projection;
-            # ReactFlow nodes disappear until explicit recompilation. Rebuild
-            # the modeled view, then select the same real resource again.
-            asset_compile.click()
-            expect(asset_compile).to_be_disabled(timeout=30000)
-            expect(resource_node).to_be_visible(timeout=30000)
-            resource_node.click(force=True)
-            expect(resource_inspector).to_be_visible(timeout=20000)
             resource_inspector.locator(
                 'label.inspector-field', has_text="Label").locator(
                     "input").fill("RDS with retained asset")
             resource_inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
+            # Source mutations deliberately invalidate the compiled topology,
+            # so the next assertion is on canonical .yadilab Save, not on a
+            # now-unmounted resource inspector. Node-level regressions also
+            # cover subsequent edits where the asset pair is not resupplied.
             expect(asset_controls).to_have_attribute("data-project-dirty", "true")
             asset_page.locator('[data-project-action="save-as"]').click()
             expect(asset_page.locator('[data-project-message]')).to_contain_text(
@@ -923,7 +916,7 @@ def main():
                                if resource["id"] == "rds01")
             require(saved_asset["asset"] == {
                 "id": "windows.rds_host", "version": "1.0.0"},
-                "BUILDER-052 visual unrelated resource edit lost asset in .yadilab")
+                "BUILDER-052 visual resource edit lost asset in .yadilab")
             require(saved_asset["label"] == "RDS with retained asset",
                     "BUILDER-052 Save omitted the requested resource label")
             expect(asset_controls).to_have_attribute(
