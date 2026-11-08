@@ -4817,8 +4817,19 @@ function App() {
     }
     const startedWorkspace = workspace;
     const startedTransition = scenarioTransitionRef.current;
-    const isLiveCompile = () => scenarioTransitionRef.current === startedTransition
-      && latestDrawioWorkspaceRef.current === startedWorkspace;
+    const isLiveCompile = () => {
+      if (scenarioTransitionRef.current !== startedTransition ||
+          latestDrawioWorkspaceRef.current !== startedWorkspace) return false;
+      // React state/source identity is unchanged by an unapplied form edit.
+      // Recheck after every compile/layout await: otherwise a late draft may
+      // be silently discarded by the compiled Builder replacement.
+      if (hasPendingBuilderDrafts()) {
+        setDiagnostics([{ severity: "error", code: "BUILDER_COMPILE_LATE_UNAPPLIED_DRAFT",
+          message: "Compilation was abandoned because Inspector/JSON text changed while the operation was running. Apply or revert that draft, then compile again." }]);
+        return false;
+      }
+      return true;
+    };
     setBusy(true);
     try {
       let next = await compileBuilderWorkspace(workspace, compilerOptions);
@@ -4941,6 +4952,7 @@ function App() {
   const openPackage = async (file) => {
     if (!file || !projectGuardRef.current()) return;
     const startedIn = latestDrawioWorkspaceRef.current;
+    const startedTransition = scenarioTransitionRef.current;
     try {
       const result = await openRuntimePackage(file, {
         packageIO,
@@ -4951,14 +4963,23 @@ function App() {
           revokeObjectURL: (url) => URL.revokeObjectURL(url),
         },
       });
-      if (latestDrawioWorkspaceRef.current !== startedIn) {
+      if (latestDrawioWorkspaceRef.current !== startedIn ||
+          scenarioTransitionRef.current !== startedTransition) {
         result.media?.release?.();
         setDiagnostics([{ severity: "error", code: "PACKAGE_OPEN_STALE_WORKSPACE", message: "Workspace changed during asynchronous package read. Package was not opened." }]);
         return;
       }
+      if (hasPendingBuilderDrafts()) {
+        result.media?.release?.();
+        setDiagnostics([{ severity: "error", code: "PACKAGE_OPEN_LATE_UNAPPLIED_DRAFT",
+          message: "Package opening was cancelled because unapplied Builder text appeared during the file read. Apply or revert it before replacing the workspace." }]);
+        return;
+      }
       setDiagnostics(result.diagnostics);
       if (result.ok) {
-        releaseMedia();
+        // Imported Runtime is a new scenario generation. Old pending
+        // callbacks must not mutate it after the asynchronous import.
+        beginScenarioTransition();
         mediaRef.current = result.media ?? null;
         setRuntimeMedia(result.media ?? null);
         setWorkspace(result.workspace);

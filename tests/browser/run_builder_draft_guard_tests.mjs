@@ -62,6 +62,8 @@ for (const marker of [
   "BUILDER_AUTHORING_DRAFT_REVERTED",
   "Förkasta inspektörsutkast",
   "Förkasta utkast: ",
+  "BUILDER_COMPILE_LATE_UNAPPLIED_DRAFT",
+  "PACKAGE_OPEN_LATE_UNAPPLIED_DRAFT",
   "pendingBuilderDraftsRef.current.beginGeneration(transitionId)",
   "onPendingDraftChange(draftOwnerRef.current, false, projectGeneration)",
 ]) {
@@ -69,6 +71,7 @@ for (const marker of [
 }
 for (const marker of [
   "PROJECT_UNAPPLIED_DRAFT",
+  "PROJECT_UNAPPLIED_DRAFT_DURING_SAVE",
   "getPendingDraftChanges()",
   "data-project-pending-drafts",
   "UNAPPLIED FORM EDITS",
