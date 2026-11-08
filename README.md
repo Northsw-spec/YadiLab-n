@@ -100,8 +100,16 @@ zero on New/Open). A queued click from an old project cannot apply its stale
 settings or JSON to the replacement project. JSON editors capture the latest
 input synchronously for same-event Apply before React repaints; only an
 explicit valid Apply changes canonical source, and verified Save still uses
-that canonical source. These safeguards do not constitute autosave of
-unapplied form text or proof of Engine execution.
+that canonical source. Scenario Studio Create likewise uses the latest
+entered scenario ID/title within the same event turn and rejects callbacks
+from a superseded project generation. Native Scenario JSON import has
+explicit READING and COMPILING states, shares one request epoch between the
+main menu and Import Workbench, and ignores obsolete File.text() or
+Compiler results. A newly selected file immediately disables activation
+of an older READY import, even before React repaints. No import preview
+automatically replaces the active project or writes a .yadilab file.
+These safeguards do not constitute autosave of unapplied form text or
+proof of Engine execution.
 
 Resource Inspector preserves an existing catalog asset when editing unrelated
 fields, writes explicitly supplied asset ID/version pairs, and removes an asset
