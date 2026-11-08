@@ -288,6 +288,16 @@ export function projectSnapshot(workspace) {
   if (!workspace || workspace.mode !== "builder") return null;
   return JSON.stringify({ source: workspace.source, layoutOverrides: workspace.layoutOverrides ?? [] });
 }
+// Read the *live* Builder published by the app, not just the last painted
+// snapshot. An inspector Apply followed immediately by Save/New/Close in the
+// same JavaScript event can precede React's scheduled state commit. Runtime
+// previews retain the last editable Builder snapshot instead.
+export function projectHasLiveUnsavedChanges(activeWorkspace, lastBuilderSnapshot,
+  savedSnapshot, unpersisted = false) {
+  const current = activeWorkspace?.mode === "builder"
+    ? projectSnapshot(activeWorkspace) : lastBuilderSnapshot;
+  return projectHasUnsavedChanges(current, savedSnapshot, unpersisted);
+}
 async function sha256Bytes(bytes) {
   if (!globalThis.crypto?.subtle) blocked("CRYPTO_UNAVAILABLE");
   if (!(bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) ||
