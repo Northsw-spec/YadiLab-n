@@ -223,6 +223,34 @@ def case_unprojected_workbook(browser,url):
         ("blank_optional_template",
          {**original,"Routes":[{"destination":"","nextHop":None}]},
          None, "READY"),
+        ("boolean_metadata_title",
+         {**original,"Metadata":[{**original["Metadata"][0],"title":False}]},
+         "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", "BLOCKED"),
+        ("object_metadata_description",
+         {**original,"Metadata":[{**original["Metadata"][0],
+                                  "description":{"owner":"operations"}}]},
+         "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", "BLOCKED"),
+        ("boolean_zone_label",
+         {**original,"Zones":[{"zoneId":"site_a",
+                               "displayName":False,"kind":"lan"}]},
+         "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", "BLOCKED"),
+        ("boolean_interface_label",
+         {**original,"Interfaces":[{"nodeId":"node01",
+                                    "interfaceId":"eth0","name":True}]},
+         "WORKBOOK_PROJECTED_FIELD_TYPE_INVALID", "BLOCKED"),
+        ("conflicting_gateway_columns",
+         {**original,"Nodes":[{**original["Nodes"][0],
+                               "gateway":"192.0.2.1",
+                               "Default Gateway":"192.0.2.254"}]},
+         "WORKBOOK_GATEWAY_DECLARATION_CONFLICT", "BLOCKED"),
+        ("matching_gateway_columns",
+         {**original,"Nodes":[{**original["Nodes"][0],
+                               "gateway":"192.0.2.1",
+                               "Default Gateway":" 192.0.2.1 "}]},
+         None, "READY"),
+        ("blank_metadata_title",
+         {**original,"Metadata":[{**original["Metadata"][0],"title":" "}]},
+         None, "READY"),
     ]
     checks=[]
     for name,document,code,expected in variants:
@@ -244,8 +272,16 @@ def case_unprojected_workbook(browser,url):
             if code:
                 require(code in preview.inner_text(),
                         "Canonical source fact was discarded without error: "+name)
-                original_location=("Routes / row 1" if name=="declared_routes"
-                                   else "Nodes / row 1 / field rack")
+                original_locations={
+                    "declared_routes":"Routes / row 1",
+                    "unmapped_node_field":"Nodes / row 1 / field rack",
+                    "boolean_metadata_title":"Metadata / row 1 / field title",
+                    "object_metadata_description":"Metadata / row 1 / field description",
+                    "boolean_zone_label":"Zones / row 1 / field displayName",
+                    "boolean_interface_label":"Interfaces / row 1 / field name",
+                    "conflicting_gateway_columns":"Nodes / row 1 / field Default Gateway",
+                }
+                original_location=original_locations[name]
                 require(original_location in preview.inner_text(),
                         "The actual import UI did not locate the source row/field: "+name)
                 require(page.locator('[data-network-import-activate]').is_disabled(),

@@ -17,6 +17,16 @@ const projectedWorkbookFields: Readonly<Record<string, ReadonlySet<string>>> = {
   Links: new Set(["linkId", "nodeA", "nodeB", "interfaceA", "interfaceB", "kind"]),
   Layout: new Set(["nodeId", "rank"]),
 };
+// These optional *projected* text fields used to become fallback labels/IDs
+// or disappear when a producer supplies a populated boolean/object/nonfinite
+// number. Missing/blank optional cells are not claims and retain the documented
+// defaults. Mandatory fields have their own existing field-level validation.
+const optionalProjectedTextFields: Readonly<Record<string, readonly string[]>> = {
+  Metadata: ["title", "description"],
+  Zones: ["displayName"],
+  Nodes: ["gateway", "Default Gateway"],
+  Interfaces: ["name"],
+};
 
 export interface WorkbookImportResult { readonly ok: boolean; readonly source?: ScenarioSource; readonly diagnostics: readonly ImportDiagnostic[]; readonly preview: WorkbookPreview; }
 export interface WorkbookPreview { readonly mode: "PREVIEW"; readonly sheetsFound: readonly string[]; readonly sheetsRequired: readonly string[]; readonly sheetsOptional: readonly string[]; readonly rowsPerSheet: Readonly<Record<string, number>>; readonly mappedRows: Readonly<Record<string, number>>; readonly rejectedRows: Readonly<Record<string, number>>; readonly errors: number; readonly warnings: number; }
@@ -68,7 +78,11 @@ function validIPv6(source: string): boolean {
 const LINK_KINDS = new Set(["network", "management", "trust", "authentication", "dependency", "data_flow"]);
 const byTable = (document: ImportDocument) => new Map(document.tables.map((table) => [table.tableId, table] as const));
 const value = (record: ImportRecord, field: string): unknown => record.fields[field]?.value;
-const text = (record: ImportRecord, field: string): string | undefined => { const v = value(record, field); return typeof v === "string" && v.trim() !== "" ? v.trim() : typeof v === "number" ? String(v) : undefined; };
+const text = (record: ImportRecord, field: string): string | undefined => {
+  const v = value(record, field);
+  return typeof v === "string" && v.trim() !== "" ? v.trim() :
+    typeof v === "number" && Number.isFinite(v) ? String(v) : undefined;
+};
 const integer = (record: ImportRecord, field: string): number | undefined => { const v = value(record, field); const n = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isSafeInteger(n) ? n : undefined; };
 // Optional source fields may be blank in CSV/XLSX/ODS; blank is not a
 // declaration. Nonblank malformed values must still be rejected explicitly.
@@ -104,6 +118,20 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       }
     }
   }
+  // Do not transform a populated but unrepresentable declaration into a
+  // seemingly blank field. A boolean metadata title, for example, was
+  // silently replaced with scenarioId while preview still reported READY.
+  for (const table of document.tables) {
+    const optionalFields = optionalProjectedTextFields[table.tableId] ?? [];
+    for (const record of table.records) {
+      for (const field of optionalFields) {
+        if (!blank(value(record, field)) && text(record, field) === undefined)
+          diagnostics.push(diagnostic("WORKBOOK_PROJECTED_FIELD_TYPE_INVALID",
+            "A populated projected text field is not representable; the declaration must be corrected before Builder activation.",
+            table.tableId, record.recordIndex, field));
+      }
+    }
+  }
   for (const required of ["Metadata", "Nodes"] as const) if (!tables.has(required)) diagnostics.push({ code: "WORKBOOK_REQUIRED_SHEET_MISSING", severity: "error", message: `Required sheet '${required}' is missing.`, table: required });
   // The Metadata sheet is a single authoritative workbook identity.
   // Do not drop competing records or reinterpret an explicitly newer schema.
@@ -135,6 +163,14 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   const seen = new Map<string, number>();
   for (const table of document.tables) { const prior = seen.get(table.tableId) ?? 0; if (prior > 0) diagnostics.push({ code: "WORKBOOK_DUPLICATE_SHEET", severity: "error", message: `Duplicate sheet/table '${table.tableId}'.`, table: table.tableId }); seen.set(table.tableId, prior + 1); }
   for (const record of rows(tables, "Nodes")) {
+    const gateway = text(record, "gateway");
+    const gatewayAlias = text(record, "Default Gateway");
+    // These names describe the same source fact. If both are populated and
+    // disagree, never silently prefer one note or assert a modeled route.
+    if (gateway && gatewayAlias && gateway !== gatewayAlias)
+      diagnostics.push(diagnostic("WORKBOOK_GATEWAY_DECLARATION_CONFLICT",
+        "Nodes.gateway and Nodes.Default Gateway disagree; the source must choose one gateway declaration.",
+        "Nodes", record.recordIndex, "Default Gateway"));
     const id = text(record, "nodeId");
     const type = text(record, "type");
     if (!id || !ID.test(id))
