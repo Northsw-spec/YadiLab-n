@@ -71,6 +71,14 @@ falling back to generated labels. When both `Nodes.gateway` and
 blocked before Builder activation. Genuinely empty optional template rows and
 columns are permitted.
 
+A populated unrecognized `Devices` column (such as Access VLAN,
+Rack, Switch Port, Site or firewall-zone metadata) **blocks** shorthand
+topology activation with the original sheet, row and field shown in preview.
+These facts cannot be silently omitted while declaring the inventory fully
+imported. Empty optional template columns are allowed; for unsupported
+populated fields, use a supported canonical mapping or revise the source.
+A CSV, Excel or JSON file can be inspected without changing the Builder.
+
 An imported address, MAC or interface label is a declaration, **not**
 evidence of physical cabling, routing, reachability or successful Engine probes.
 Connections require explicit source endpoint IDs and do not gain physical port
