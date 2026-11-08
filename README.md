@@ -118,6 +118,20 @@ its contents without first choosing an unrelated file.
 These safeguards do not constitute autosave of unapplied form text or
 proof of Engine execution.
 
+Unapplied Builder Inspector fields and JSON authoring text are tracked as
+pending form drafts distinct from canonical project changes. While such
+drafts exist, the project controls explicitly display UNAPPLIED FORM EDITS:
+Save/Save As fail without opening a picker or writing an incomplete file,
+New/Open and other source replacements require discard confirmation, and
+closing warns that visible text is at risk. Applying or reverting staged
+fields clears this warning; only an explicit successful Apply modifies the
+canonical source, and native Save then verifies the resulting bytes.
+Inspector Create/Delete/Duplicate cannot silently discard a pending Inspector
+edit, and changing two JSON panels simultaneously cannot accidentally
+discard one when only the other is applied: apply one panel at a time, or
+revert other staged text first. Real compiled Chromium tests cover these
+cases; neither form tracking nor a discarded draft constitutes autosave.
+
 Resource Inspector preserves an existing catalog asset when editing unrelated
 fields, writes explicitly supplied asset ID/version pairs, and removes an asset
 only when both visible fields are cleared. Incomplete asset pairs are rejected
