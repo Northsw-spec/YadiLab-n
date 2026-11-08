@@ -2204,6 +2204,15 @@ function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
   const model = buildBuilderInspectorModel(workspace);
   const configuration = configurationSummary(workspace.source);
   const [form, setForm] = useState(() => ({ ...model }));
+  // Keep the latest typed values synchronously. A fast Apply click in the
+  // same event turn as an input change must not commit the previous render's
+  // form object and silently leave the project marked unchanged.
+  const latestFormRef = useRef(form);
+  const editForm = (key, value) => {
+    const next = { ...latestFormRef.current, [key]: value };
+    latestFormRef.current = next;
+    setForm(next);
+  };
   const [cascade, setCascade] = useState(false);
   const [duplicateId, setDuplicateId] = useState("");
   const [duplicateLabel, setDuplicateLabel] = useState("");
@@ -2220,24 +2229,25 @@ function BuilderInspector({ workspace, setWorkspace, setDiagnostics }) {
     if (result.ok) setWorkspace(result.workspace);
   };
   const field = (label, key, extra = {}) => e("label", { className: "inspector-field" }, label,
-    e("input", { value: form[key] ?? "", onChange: (event) => setForm({ ...form, [key]: event.target.value }), ...extra }));
+    e("input", { value: form[key] ?? "", onChange: (event) => editForm(key, event.target.value), ...extra }));
   const textArea = (label, key) => e("label", { className: "inspector-field" }, label,
-    e("textarea", { rows: 6, value: form[key] ?? "", onChange: (event) => setForm({ ...form, [key]: event.target.value }) }));
+    e("textarea", { rows: 6, value: form[key] ?? "", onChange: (event) => editForm(key, event.target.value) }));
   const selectField = (label, key, values, allowEmpty = false) => e("label", { className: "inspector-field" }, label,
-    e("select", { value: form[key] ?? "", onChange: (event) => setForm({ ...form, [key]: event.target.value }) },
+    e("select", { value: form[key] ?? "", onChange: (event) => editForm(key, event.target.value) },
       ...(allowEmpty ? [e("option", { key: "__empty", value: "" }, "—")] : []),
       ...values.map((value) => e("option", { key: value, value }, value))));
 
   const apply = () => {
-    if (model.kind === "mission") return run(applyMissionInspector(workspace, form));
-    if (model.kind === "zone") return run(applyZoneInspector(workspace, model.id, { label: form.label, kind: form.zoneKind, parent: form.parent }));
+    const draft = latestFormRef.current;
+    if (model.kind === "mission") return run(applyMissionInspector(workspace, draft));
+    if (model.kind === "zone") return run(applyZoneInspector(workspace, model.id, { label: draft.label, kind: draft.zoneKind, parent: draft.parent }));
     if (model.kind === "resource") return run(applyResourceInspector(workspace, model.id, {
-      label: form.label, type: form.resourceType, zone: form.zone, profile: form.profile, vendor: form.vendor, product: form.product,
-      assetId: form.assetId, assetVersion: form.assetVersion, propertiesJson: form.propertiesJson, interfacesJson: form.interfacesJson,
+      label: draft.label, type: draft.resourceType, zone: draft.zone, profile: draft.profile, vendor: draft.vendor, product: draft.product,
+      assetId: draft.assetId, assetVersion: draft.assetVersion, propertiesJson: draft.propertiesJson, interfacesJson: draft.interfacesJson,
     }));
     return run(applyConnectionInspector(workspace, model.id, {
-      kind: form.connectionKind, fromResource: form.fromResource, fromPort: form.fromPort,
-      toResource: form.toResource, toPort: form.toPort, propertiesJson: form.propertiesJson,
+      kind: draft.connectionKind, fromResource: draft.fromResource, fromPort: draft.fromPort,
+      toResource: draft.toResource, toPort: draft.toPort, propertiesJson: draft.propertiesJson,
     }));
   };
 
