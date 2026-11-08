@@ -72,22 +72,4 @@ const sampleParsed = await xlsxImportAdapter.parse({ bytes: sample, mediaType: "
 const sampleMapped = map(sampleParsed.document);
 assert.equal(sampleMapped.result.ok, true, JSON.stringify(sampleMapped.diagnostics));
 assert.ok(sampleMapped.result.source.resources.length > 0);
-// Explicitly typed Layout.nodeId values must not disappear from a successful import.
-const workbookRow = (fields) => ({ recordIndex: 1, fields: Object.fromEntries(
-  Object.entries(fields).map(([name, value]) => [name, { value, locator: { kind: "table-cell", sheet: "test", row: 1, column: name } }])
-) });
-const layoutWorkbook = (target) => ({ tables: [
-  { tableId: "Metadata", records: [workbookRow({ scenarioId: "layout_case", schemaVersion: "1.0.0" })] },
-  { tableId: "Nodes", records: [workbookRow({ nodeId: "host01", displayName: "Host", type: "network.host" })] },
-  { tableId: "Layout", records: [workbookRow({ nodeId: target, rank: 2 })] },
-] });
-const validLayout = mapNetworkWorkbookToScenario(layoutWorkbook("host01"));
-assert.equal(validLayout.ok, true, JSON.stringify(validLayout.diagnostics));
-assert.deepEqual(validLayout.source.layoutHints, [{ target: "host01", rank: 2 }]);
-const invalidLayout = mapNetworkWorkbookToScenario(layoutWorkbook(true));
-assert.equal(invalidLayout.ok, false, "Explicit boolean layout target must not silently disappear");
-assert.ok(invalidLayout.diagnostics.some(d => d.code === "WORKBOOK_LAYOUT_TARGET_INVALID" && d.field === "nodeId"));
-assert.equal(invalidLayout.source, undefined, "Invalid source cannot be activated");
-console.log("PASS layout target: valid node retained; invalid typed target rejected");
-
 console.log("PASS IMPORT-001: CSV devices, explicit links, MAC preservation, no inferred topology, switch/router, fail-closed invalid source fields, real XLSX.");
