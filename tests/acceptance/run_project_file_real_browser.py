@@ -1582,7 +1582,26 @@ def main():
             }""")
             different_scenario.locator(
                 '[data-studio-scenario-id]').fill("project_013_unrelated")
-            different_scenario.locator('[data-studio-action="create"]').click()
+            # PROJECT-048: the new source is visible synchronously, before
+            # the React effect detaches the previous physical .yadilab handle.
+            # Save must reject the unresolved association immediately,
+            # without touching the original native destination.
+            different_scenario.evaluate("""() => {
+                const create = document.querySelector('[data-studio-action="create"]');
+                const save = document.querySelector('[data-project-action="save"]');
+                if (!create || !save || save.disabled)
+                    throw new Error("PROJECT048_DIFFERENT_ID_CONTROLS_UNAVAILABLE");
+                create.click();
+                save.click();
+            }""")
+            expect(different_scenario.locator(".diagnostic")).to_contain_text(
+                "PROJECT_FILE_ASSOCIATION_PENDING", timeout=15000)
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.text") == previous_bytes,
+                "Same-turn new project overwrote previously saved project bytes")
+            require(different_scenario.evaluate(
+                "window.__yadilabProjectStore.writes") == previous_writes,
+                "Same-turn project replacement triggered old native file write")
             expect(different_scenario.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", "project_013_unrelated")
             expect(different_controls).to_have_attribute(
@@ -1651,7 +1670,22 @@ def main():
             }""")
             reused_id.locator(
                 '[data-studio-scenario-id]').fill(prior_scenario_id)
-            reused_id.locator('[data-studio-action="create"]').click()
+            reused_id.evaluate("""() => {
+                const create = document.querySelector('[data-studio-action="create"]');
+                const save = document.querySelector('[data-project-action="save"]');
+                if (!create || !save || save.disabled)
+                    throw new Error("PROJECT048_REUSED_ID_CONTROLS_UNAVAILABLE");
+                create.click();
+                save.click();
+            }""")
+            expect(reused_id.locator(".diagnostic")).to_contain_text(
+                "PROJECT_FILE_ASSOCIATION_PENDING", timeout=15000)
+            require(reused_id.evaluate(
+                "window.__yadilabProjectStore.text") == prior_file_bytes,
+                "Same-ID pending project switch overwrote prior physical bytes")
+            require(reused_id.evaluate(
+                "window.__yadilabProjectStore.writes") == prior_file_writes,
+                "Same-ID pending project switch reused previous native handle")
             expect(reused_id.locator(".app-frame")).to_have_attribute(
                 "data-runtime-scenario-id", prior_scenario_id)
             expect(ric).to_have_attribute(
