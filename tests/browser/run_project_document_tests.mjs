@@ -677,6 +677,32 @@ await assert.rejects(createProjectDocument(
   /PROJECT_UNKNOWN_SOLUTION_TARGET/,
   "Save must reject a repair operation targeting a non-existent resource");
 
+// PROJECT-060: a correct JSON schema and exact SHA-256 cannot authorize
+// canonical repair operations that Engine will reject as identity rewrites.
+for (const badPath of [
+  "id", "type", "zone", "label", "interfaces", "interfaces.0.id",
+  "interfaces.0.name", "properties.__proto__.polluted",
+  "properties.constructor.prototype.access",
+  "interfaces.9999999999999999999999999.addresses",
+]) {
+  const unsafe = structuredClone(source);
+  unsafe.canonicalSolution.operations[0].path = badPath;
+  assert.equal(validateSource(unsafe), true, "unsafe solution path remains schema-valid: " + badPath);
+  await assert.rejects(createProjectDocument({ ...workspace, source: unsafe }, opts),
+    /PROJECT_SOLUTION_OPERATION_PATH_FORBIDDEN/,
+    "Save refuses unsupported canonical repair path before any native write: " + badPath);
+}
+const safeOperations = structuredClone(source);
+safeOperations.canonicalSolution.operations = [
+  { op: "set", target: "rds01", path: "properties.nla", value: true },
+  { op: "set", target: "rds01", path: "interfaces.0.addresses", value: ["192.0.2.7"] },
+];
+const safeOperationText = await createProjectDocument({ ...workspace, source: safeOperations }, opts);
+assert.deepEqual((await readProjectDocument(safeOperationText, opts)).source.canonicalSolution,
+  safeOperations.canonicalSolution,
+  "Save/Open preserves canonical repair edits that stay inside mutable state");
+
+
 const invalidHintTarget = structuredClone(source);
 invalidHintTarget.layoutHints[0].target = "missing_device";
 assert.equal(validateSource(invalidHintTarget), true, "layout target orphan is schema-valid");
@@ -707,6 +733,12 @@ assert.deepEqual((await readProjectDocument(validLayoutText, opts)).source,
 for (const [kind, mutate, expected] of [
   ["solution target", d => { d.content.source.canonicalSolution.operations[0].target = "missing_device"; },
     /PROJECT_UNKNOWN_SOLUTION_TARGET/],
+  ["solution identity rewrite", d => { d.content.source.canonicalSolution.operations[0].path = "id"; },
+    /PROJECT_SOLUTION_OPERATION_PATH_FORBIDDEN/],
+  ["solution interface identity rewrite", d => { d.content.source.canonicalSolution.operations[0].path = "interfaces.0.id"; },
+    /PROJECT_SOLUTION_OPERATION_PATH_FORBIDDEN/],
+  ["solution prototype mutation", d => { d.content.source.canonicalSolution.operations[0].path = "properties.__proto__.polluted"; },
+    /PROJECT_SOLUTION_OPERATION_PATH_FORBIDDEN/],
   ["layout target", d => { d.content.source.layoutHints[0].target = "missing_device"; },
     /PROJECT_UNKNOWN_LAYOUT_TARGET/],
   ["layout parent", d => { d.content.source.layoutHints[0].parent = "missing_zone"; },

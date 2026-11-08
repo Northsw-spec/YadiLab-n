@@ -54,6 +54,16 @@ executing REMOVE or clearing an evidence property. Explicit mutable
 `properties.*` edits and targeted interface state (including addresses,
 MAC and MTU) remain available; batched operations remain atomic.
 
+Canonical solution instructions are checked against the same immutable
+identity boundary at every source entrypoint: Builder JSON Apply, Compiler,
+native .yadilab Save and Open, and Runtime Engine execution. Even a
+correctly rehashed project document cannot authorize resource ID/type/zone,
+entire interface or interface-ID rewrites, or prototype-related JSON paths.
+Source authoring fails before modifying the current Builder; valid mutable
+configuration and interface-state edits remain supported. These source
+guards are regression-tested by required Compiler, Builder authoring and
+native project-file checks, not by inferring runtime or physical evidence.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the

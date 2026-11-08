@@ -42,6 +42,19 @@ async function expectCode(source, code, context = contextFor()) {
   s.canonicalSolution.operations[0].target = "ghost";
   await expectCode(s, "UNKNOWN_SOLUTION_TARGET");
 }
+// PROJECT-060: a schema-valid repair operation may still rewrite resource or
+// interface identity. Compiler must reject it before Runtime executes.
+for (const unsafePath of [
+  "id", "type", "zone", "label", "interfaces", "interfaces.0",
+  "interfaces.0.id", "interfaces.0.name", "interfaces.0.label",
+  "properties.__proto__.polluted", "properties.constructor.prototype.grant",
+  "interfaces.999999999999999999999999999.addresses",
+]) {
+  const s = clone(base);
+  s.canonicalSolution.operations[0].path = unsafePath;
+  await expectCode(s, "SOLUTION_OPERATION_PATH_FORBIDDEN");
+}
+
 {
   const s = clone(base);
   s.layoutHints.push({ target: "ghost", rank: 9 });
