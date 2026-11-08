@@ -58,6 +58,10 @@ for (const marker of [
   "BUILDER_COMPILE_UNAPPLIED_DRAFT",
   "BUILDER_EXPORT_UNAPPLIED_DRAFT",
   "BUILDER_ASSET_UNAPPLIED_DRAFT",
+  "BUILDER_INSPECTOR_DRAFT_REVERTED",
+  "BUILDER_AUTHORING_DRAFT_REVERTED",
+  "Förkasta inspektörsutkast",
+  "Förkasta utkast: ",
   "pendingBuilderDraftsRef.current.beginGeneration(transitionId)",
   "onPendingDraftChange(draftOwnerRef.current, false, projectGeneration)",
 ]) {
