@@ -8,6 +8,8 @@ import {
   applyResourceInspector,
   applyZoneInspector,
   createBuilderWorkspace,
+  canonicalScenarioDraftId,
+  createScenarioDraft,
   createConnectionFromInspector,
   createResourceFromInspector,
   createZoneFromInspector,
@@ -372,6 +374,26 @@ eq(allowedResourceEdit.workspace.source.connections, idGuard.source.connections,
   "ordinary property edit preserves canonical graph IDs and links");
 ok(!Object.prototype.hasOwnProperty.call(Object.prototype, prototypeMarker),
   "no global prototype mutation after all paths");
+
+// UX-064: A newly created Studio draft must be saveable under the same
+// source ID grammar used by the editable project schema and Compiler.
+// Periods and long typed names previously produced invalid canonical IDs.
+for (const typed of [
+  "My Studio Lab", "corp.lab.v1", "9-Admin Domain",
+  "x".repeat(120), "..  /   _", "Å ä ö !", "", "A.b_C-1",
+]) {
+  const id = canonicalScenarioDraftId(typed);
+  ok(/^[a-z][a-z0-9_-]{0,63}$/.test(id),
+    "Studio canonical ID always matches the source schema: " + typed);
+  eq(createScenarioDraft({ scenarioId: typed }).scenarioId, id,
+    "Studio Create uses the same ID displayed by the UI");
+}
+eq(canonicalScenarioDraftId("My Studio Lab"), "my_studio_lab",
+  "existing readable Studio ID normalization remains stable");
+eq(canonicalScenarioDraftId("corp.lab.v1"), "corp_lab_v1",
+  "dots are normalized rather than producing an unsaveable source");
+eq(canonicalScenarioDraftId("x".repeat(120)), "x".repeat(64),
+  "overlong IDs are bounded to the exact schema maximum");
 
 const ui = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(!ui.includes("dangerouslySetInnerHTML"), "Builder Inspector does not inject arbitrary HTML");

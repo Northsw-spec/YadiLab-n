@@ -136,6 +136,7 @@ import {
   compileBuilderWorkspace,
   createBuilderWorkspace,
   createScenarioDraftWorkspace,
+  canonicalScenarioDraftId,
   createScenarioSourceDownload,
   previewRuntime,
   readScenarioSourceFile,
@@ -2212,13 +2213,28 @@ function BuilderAssetLibrary({ workspace, getWorkspace, setWorkspace, setDiagnos
   );
 }
 
-function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onCompile, onExport, canReplaceProject }) {
-  const [scenarioId, setScenarioId] = useState("studio_scenario");
-  const [title, setTitle] = useState("Nytt Scenario Studio-scenario");
+function ScenarioStudioToolbar({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, setWorkspace, setDiagnostics, onCompile, onExport, canReplaceProject }) {
+  const [draft, setDraft] = useState(() => ({
+    scenarioId: "studio_scenario", title: "Nytt Scenario Studio-scenario",
+  }));
+  // React can batch input followed by Create in a single native event task.
+  // Use what was actually typed, not the values captured at the last render.
+  const liveDraftRef = useRef(draft);
+  const editDraft = (key, value) => {
+    const next = { ...liveDraftRef.current, [key]: value };
+    liveDraftRef.current = next;
+    setDraft(next);
+  };
   if (workspace.mode !== "builder") return null;
   const createDraft = () => {
+    if (!scenarioLaunchStillCurrent(projectGeneration, getScenarioTransitionId(),
+      workspace, getWorkspace())) {
+      setDiagnostics([{ severity: "error", code: "STUDIO_STALE_WORKSPACE",
+        message: "The active project changed before Create. Reopen Scenario Studio on the current project." }]);
+      return;
+    }
     if (!canReplaceProject()) return;
-    setWorkspace(createScenarioDraftWorkspace({ scenarioId, title }));
+    setWorkspace(createScenarioDraftWorkspace(liveDraftRef.current));
     setDiagnostics([]);
   };
   return e("section", { className: "scenario-studio-toolbar", "data-scenario-studio": "ready" },
@@ -2227,8 +2243,10 @@ function ScenarioStudioToolbar({ workspace, setWorkspace, setDiagnostics, onComp
       e("p", { className: "studio-helper" }, "Redigera canonical source data. Validate/Compile skapar aktiv Engine truth först efter godkänd kompilering."),
     ),
     e("div", { className: "studio-actions" },
-      e("label", { className: "inspector-field" }, "Nytt scenario-ID", e("input", { value: scenarioId, onChange: (event) => setScenarioId(event.target.value), "data-studio-scenario-id": "true" })),
-      e("label", { className: "inspector-field" }, "Titel", e("input", { value: title, onChange: (event) => setTitle(event.target.value), "data-studio-scenario-title": "true" })),
+      e("label", { className: "inspector-field" }, "Nytt scenario-ID", e("input", { value: draft.scenarioId, onChange: (event) => editDraft("scenarioId", event.target.value), "data-studio-scenario-id": "true" })),
+      e("label", { className: "inspector-field" }, "Titel", e("input", { value: draft.title, onChange: (event) => editDraft("title", event.target.value), "data-studio-scenario-title": "true" })),
+      e("small", { "data-studio-canonical-id": "true", role: "status" },
+        "Kanoniskt ID i projektfilen: " + canonicalScenarioDraftId(draft.scenarioId)),
       e("button", { type: "button", onClick: createDraft, "data-studio-action": "create" }, "Nytt scenario"),
       e("button", { type: "button", onClick: onCompile, disabled: workspace.compile.status === "valid", "data-studio-action": "validate-compile" }, "Validera + kompilera"),
       e("button", { type: "button", onClick: onExport, "data-studio-action": "export" }, "Exportera canonical JSON"),
@@ -2372,23 +2390,76 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
   );
 }
 
-function ImportWorkbenchPanel({ state, setState, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject }) {
-  const parse = async (file) => { if (!file) return; const next = await parseScenarioImport(file); setState(next); setDiagnostics(next.diagnostics); };
-  const preview = () => { const next = previewScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); };
-  const compile = async () => { const next = await compileScenarioImport(state, compilerOptions); setState(next); setDiagnostics(next.diagnostics); };
-  const activate = () => { if (!canReplaceProject()) return; const next = activateScenarioImport(state); setState(next); setDiagnostics(next.diagnostics); if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace); };
+function ImportWorkbenchPanel({ state, setState, getImportState, importRequestEpochRef, onParse, setWorkspace, setDiagnostics, compilerOptions, canReplaceProject }) {
+  const parse = onParse;
+  const preview = () => {
+    const active = getImportState();
+    if (!active || active.status === "COMPILING" || active.status === "READING") return;
+    // An explicit Preview after a previous compile supersedes the old
+    // result; it must not be rolled back by an already queued completion.
+    importRequestEpochRef.current++;
+    const next = previewScenarioImport(active);
+    setState(next); setDiagnostics(next.diagnostics);
+  };
+  const compile = async () => {
+    const active = getImportState();
+    if (!active?.workspace || !active.source ||
+        active.status === "COMPILING" || active.status === "READING") return;
+    const ticket = ++importRequestEpochRef.current;
+    const compiling = { ...active, status: "COMPILING", diagnostics: [] };
+    setState(compiling);
+    try {
+      const next = await compileScenarioImport(active, compilerOptions);
+      if (ticket !== importRequestEpochRef.current ||
+          getImportState() !== compiling) return;
+      setState(next); setDiagnostics(next.diagnostics);
+    } catch (error) {
+      if (ticket !== importRequestEpochRef.current ||
+          getImportState() !== compiling) return;
+      const failure = { ...active, status: "INVALID", diagnostics: [{
+        severity: "error", code: "IMPORT_WORKBENCH_COMPILE_FAILED",
+        message: error instanceof Error ? error.message : String(error),
+      }] };
+      setState(failure); setDiagnostics(failure.diagnostics);
+    }
+  };
+  const activate = () => {
+    const active = getImportState();
+    // Stale enabled buttons from a previously READY render cannot activate
+    // a superseded file while a new parse or compile is pending.
+    if (!active || active.status !== "READY_TO_ACTIVATE") return;
+    if (!canReplaceProject()) return;
+    importRequestEpochRef.current++;
+    const next = activateScenarioImport(active);
+    setState(next); setDiagnostics(next.diagnostics);
+    if (next.status === "ACTIVE" && next.workspace) setWorkspace(next.workspace);
+  };
   return e("section", { className: "import-workbench", "data-import-workbench": state.status },
     e("h3", null, "Import Workbench"),
     e("p", null, "Parse → Validate → Preview → Compile → Activate. Parse och preview ändrar inte aktiv Runtime."),
-    e("label", { className: "file-button" }, "Välj native JSON", e("input", { type: "file", accept: ".json,application/json", onChange: (event) => parse(event.target.files?.[0]), hidden: true })),
-    e("span", { className: "import-state", "data-import-state": state.status }, `State: ${state.status}`),
-    state.preview ? e("div", { className: "import-preview", "data-import-preview": "PREVIEW" },
+    e("label", { className: "file-button" }, "Välj native JSON", e("input", {
+      type: "file", accept: ".json,application/json",
+      onChange: (event) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (file) void parse(file);
+      }, hidden: true })),
+    e("span", { className: "import-state", "data-import-state": state.status },
+      `State: ${state.status}${state.fileName ? " · " + state.fileName : ""}`),
+    state.status === "READING" ? e("p", { role: "status", "aria-live": "polite" },
+      "Reading selected JSON. The previous import cannot be activated while the new file is loading.") :
+    state.status === "COMPILING" ? e("p", { role: "status", "aria-live": "polite" },
+      "Validating and compiling this exact import. A later file selection cancels the pending result.") : null,
+    state.preview && state.status !== "READING" ? e("div", { className: "import-preview", "data-import-preview": "PREVIEW" },
       e("strong", null, `PREVIEW · ${state.preview.title}`),
       e("span", null, `Nodes ${state.preview.nodes} · Links ${state.preview.links} · Zones ${state.preview.zones} · Flows ${state.preview.flows} · Faults ${state.preview.faults}`),
     ) : null,
     e("div", { className: "import-workbench-actions" },
-      e("button", { type: "button", onClick: preview, disabled: !state.source }, "Preview"),
-      e("button", { type: "button", onClick: compile, disabled: !state.workspace || state.status === "ACTIVE" }, "Validate + Compile"),
+      e("button", { type: "button", onClick: preview,
+        disabled: !state.source || state.status === "READING" || state.status === "COMPILING" }, "Preview"),
+      e("button", { type: "button", onClick: compile,
+        disabled: !state.workspace || state.status === "ACTIVE" ||
+          state.status === "READING" || state.status === "COMPILING" }, "Validate + Compile"),
       e("button", { type: "button", onClick: activate, disabled: state.status !== "READY_TO_ACTIVATE" }, "Activate"),
     ),
   );
@@ -3882,7 +3953,17 @@ function formatNetworkImportDiagnostic(d) {
 }
 
 function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
-  const fileAction = (label, accept, onChange, dataAttribute) => e("label", { className: "workspace-menu-action file-button" }, label, e("input", { type: "file", accept, onChange, hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
+  const fileAction = (label, accept, onChange, dataAttribute) => e("label",
+    { className: "workspace-menu-action file-button" }, label,
+    e("input", { type: "file", accept,
+      // Reset after copying the selected File in the direct event callback.
+      // Browsers do not fire change when the same physical path is selected
+      // again; users must be able to re-import a file they have just fixed.
+      onChange: (event) => {
+        try { onChange(event); }
+        finally { event.currentTarget.value = ""; }
+      },
+      hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
   const networkPickerRef = useRef(null);
   // Opening the native picker happens synchronously within the user's click,
   // not from an effect: browsers reject deferred file dialogs.
@@ -4130,6 +4211,16 @@ function App() {
     commitWorkspaceState(next);
   }, []);
   const [importWorkbench, setImportWorkbench] = useState(() => emptyImportWorkbench());
+  // Both the main Import / Export file chooser and the embedded Workbench
+  // feed the same source. A slow old File.text() or compiler promise must
+  // never overwrite the later selected file or reactivate its old preview.
+  const importWorkbenchRef = useRef(importWorkbench);
+  importWorkbenchRef.current = importWorkbench;
+  const importRequestEpochRef = useRef(0);
+  const publishImportWorkbench = (next) => {
+    importWorkbenchRef.current = next;
+    setImportWorkbench(next);
+  };
   const [networkImportOpen, setNetworkImportOpen] = useState(false);
   const [structuredXmlInspectionOpen, setStructuredXmlInspectionOpen] = useState(false);
   const [networkImportSelection, setNetworkImportSelection] = useState(null);
@@ -4692,12 +4783,23 @@ function App() {
 
   const openSource = async (file) => {
     if (!file) return;
+    const ticket = ++importRequestEpochRef.current;
+    // Invalidate an earlier READY source synchronously, before File.text()
+    // awaits and before React can repaint the disabled Activate button.
+    publishImportWorkbench({ status: "READING", fileName: file.name, diagnostics: [] });
+    setDiagnostics([]);
     try {
       const next = await parseScenarioImport(file);
-      setImportWorkbench(next);
+      if (ticket !== importRequestEpochRef.current) return;
+      publishImportWorkbench(next);
       setDiagnostics(next.diagnostics);
     } catch (error) {
-      setDiagnostics([{ severity: "error", code: "FILE_IMPORT_FAILED", message: error instanceof Error ? error.message : String(error) }]);
+      if (ticket !== importRequestEpochRef.current) return;
+      const next = { status: "INVALID", fileName: file.name,
+        diagnostics: [{ severity: "error", code: "FILE_IMPORT_FAILED",
+          message: error instanceof Error ? error.message : String(error) }] };
+      publishImportWorkbench(next);
+      setDiagnostics(next.diagnostics);
     }
   };
 
@@ -6750,8 +6852,16 @@ function App() {
           ),
         ),
         e(ControlSection, { title: "Scenario & Builder", description: "Canonical source authoring, import and builder-only controls.", searchTerms: "Scenario Studio Import Workbench Builder Inspector Fault Injection" },
-          e(ScenarioStudioToolbar, { workspace, setWorkspace: replaceProjectDocument, setDiagnostics, onCompile: compileAndLayout, onExport: exportSource, canReplaceProject: () => projectGuardRef.current() }),
-          e(ImportWorkbenchPanel, { state: importWorkbench, setState: setImportWorkbench, setWorkspace: replaceProjectDocument, setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
+          e(ScenarioStudioToolbar, { key: `studio-${scenarioTransitionRef.current}`,
+            workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+            projectGeneration: scenarioTransitionRef.current,
+            getScenarioTransitionId: () => scenarioTransitionRef.current,
+            setWorkspace: replaceProjectDocument, setDiagnostics, onCompile: compileAndLayout,
+            onExport: exportSource, canReplaceProject: () => projectGuardRef.current() }),
+          e(ImportWorkbenchPanel, { state: importWorkbench, setState: publishImportWorkbench,
+            getImportState: () => importWorkbenchRef.current,
+            importRequestEpochRef, onParse: openSource, setWorkspace: replaceProjectDocument,
+            setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
           e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),

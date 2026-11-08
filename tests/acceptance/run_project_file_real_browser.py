@@ -2327,6 +2327,215 @@ def main():
             require(restore_race.evaluate("window.__yadilabProjectStore.writes") == 0,
                     "Stale runtime restore unexpectedly wrote a project file")
             restore_race.close()
+
+            # UX-064: A native input event and Create in the SAME JS task
+            # must use the newly typed scenario ID/title, not stale React
+            # state from the preceding render. No implicit native write.
+            studio_race = context.new_page()
+            studio_race.add_init_script(MOCK)
+            studio_race.on("pageerror", lambda error: errors.append(str(error)))
+            studio_race.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            sc = studio_race.locator('[data-project-file-controls="ready"]')
+            expect(sc).to_be_visible(timeout=45000)
+            studio_race.evaluate("""() => {
+                const panel = document.querySelector('[data-scenario-studio="ready"]');
+                if (!panel) throw new Error("UX064_STUDIO_MISSING");
+                let ancestor = panel.closest('details');
+                while (ancestor) {
+                  ancestor.open = true;
+                  ancestor = ancestor.parentElement?.closest('details') ?? null;
+                }
+                const nativeSetter = Object.getOwnPropertyDescriptor(
+                  HTMLInputElement.prototype, 'value').set;
+                const id = panel.querySelector('[data-studio-scenario-id]');
+                const title = panel.querySelector('[data-studio-scenario-title]');
+                const create = panel.querySelector('[data-studio-action="create"]');
+                if (!id || !title || !create || create.disabled)
+                    throw new Error("UX064_STUDIO_FIELDS_MISSING");
+                nativeSetter.call(id, 'ux064.immediate.scenario');
+                id.dispatchEvent(new Event('input', {bubbles:true}));
+                nativeSetter.call(title, 'UX-064 latest typed mission');
+                title.dispatchEvent(new Event('input', {bubbles:true}));
+                create.click();
+            }""")
+            expect(studio_race.locator('.app-frame')).to_have_attribute(
+                'data-runtime-scenario-id', 'ux064_immediate_scenario', timeout=15000)
+            expect(studio_race.locator('.mission-strip')).to_contain_text(
+                'UX-064 latest typed mission', timeout=15000)
+            expect(sc).to_have_attribute('data-project-dirty', 'true')
+            require(studio_race.evaluate(
+                'window.__yadilabProjectStore.writes') == 0,
+                'UX-064 Studio Create wrote a native project without Save')
+            studio_race.close()
+
+            # Import Workbench's two file entrypoints must be ordered by the
+            # latest operator selection, NOT by File.text() completion order.
+            # A stale READY button must never activate the previous source
+            # after a new file was selected before React could repaint.
+            native_source = json.loads(
+                (Path(__file__).resolve().parents[2] /
+                 'tests/fixtures/valid/scenario-source.json').read_text())
+            def import_document(scenario_id, title):
+                candidate = json.loads(json.dumps(native_source))
+                candidate['scenarioId'] = scenario_id
+                candidate['metadata']['title'] = title
+                return json.dumps(candidate, ensure_ascii=False)
+            import_race = context.new_page()
+            import_race.add_init_script(MOCK)
+            import_race.on('pageerror', lambda error: errors.append(str(error)))
+            import_race.goto(a.url, wait_until='domcontentloaded', timeout=30000)
+            expect(import_race.locator('[data-project-file-controls="ready"]')).to_be_visible(
+                timeout=45000)
+            import_race.evaluate("""() => {
+              const panel = document.querySelector('.import-workbench');
+              if (!panel) throw new Error('UX064_WORKBENCH_MISSING');
+              let ancestor = panel.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+              const original = File.prototype.text;
+              window.__ux064 = {pending: []};
+              File.prototype.text = function() {
+                if (!this.name.startsWith('race-'))
+                  return original.call(this);
+                const file = this;
+                return new Promise(resolve => {
+                  const pending = {
+                    name: file.name, done: false,
+                    release() {
+                      if (this.done) return;
+                      this.done = true;
+                      resolve(original.call(file));
+                    }
+                  };
+                  window.__ux064.pending.push(pending);
+                });
+              };
+            }""")
+            wb = import_race.locator('.import-workbench')
+            import_input = wb.locator('input[type="file"]')
+            import_input.set_input_files({
+                'name': 'race-old-a.json', 'mimeType': 'application/json',
+                'buffer': import_document('ux064_old_a', 'OLD import must never win').encode(),
+            })
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.some(x => x.name === 'race-old-a.json')""")
+            import_input.set_input_files({
+                'name': 'race-new-b.json', 'mimeType': 'application/json',
+                'buffer': import_document('ux064_new_b', 'NEW import selected last').encode(),
+            })
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.some(x => x.name === 'race-new-b.json')""")
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            import_race.evaluate("""() => window.__ux064.pending
+              .find(x => x.name === 'race-new-b.json').release()""")
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED',
+                                         timeout=15000)
+            expect(wb.locator('[data-import-state]')).to_contain_text(
+                'race-new-b.json')
+            import_race.evaluate("""() => window.__ux064.pending
+              .find(x => x.name === 'race-old-a.json').release()""")
+            import_race.wait_for_timeout(200)
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED')
+            expect(wb.locator('[data-import-state]')).to_contain_text(
+                'race-new-b.json')
+            wb.get_by_role('button', name='Preview').click()
+            expect(wb.locator('[data-import-preview]')).to_contain_text(
+                'NEW import selected last')
+            wb.get_by_role('button', name='Validate + Compile').click()
+            expect(wb).to_have_attribute('data-import-workbench',
+                                         'READY_TO_ACTIVATE', timeout=45000)
+            # Select C through the MAIN MENU while the older READY button
+            # is still clickable in the same JS task. Its handler must
+            # resolve the synchronous live state (READING), not stale READY.
+            import_race.evaluate("""(body) => {
+              const menuFile = document.querySelector(
+                '[data-menu-action="open-scenario-json"]');
+              const oldActivate = [...document.querySelectorAll(
+                '.import-workbench button')].find(b => b.textContent.trim() === 'Activate');
+              if (!menuFile || !oldActivate || oldActivate.disabled)
+                throw new Error('UX064_SHARED_IMPORT_CONTROLS_MISSING');
+              const transfer = new DataTransfer();
+              transfer.items.add(new File([body], 'race-new-c.json',
+                {type:'application/json'}));
+              menuFile.files = transfer.files;
+              menuFile.dispatchEvent(new Event('change', {bubbles:true}));
+              oldActivate.click();
+            }""", import_document('ux064_new_c', 'THIRD import through main menu'))
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            expect(import_race.locator('.app-frame')).to_have_attribute(
+                'data-runtime-scenario-id', 'foundation_acceptance')
+            require(import_race.evaluate('window.__yadilabProjectStore.writes') == 0,
+                    'UX-064 stale Activate mutated native project')
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.some(x => x.name === 'race-new-c.json')""")
+            import_race.evaluate("""() => window.__ux064.pending
+              .find(x => x.name === 'race-new-c.json').release()""")
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED',
+                                         timeout=15000)
+            wb.get_by_role('button', name='Preview').click()
+            expect(wb.locator('[data-import-preview]')).to_contain_text(
+                'THIRD import through main menu')
+
+            # Compile C, then select D before its async Compiler promise
+            # resolves. The previous compile must not re-enable Activate
+            # or replace D's parsed source after File.text() completes.
+            import_race.evaluate("""(body) => {
+              const compile = [...document.querySelectorAll(
+                '.import-workbench button')].find(b =>
+                  b.textContent.trim() === 'Validate + Compile');
+              const input = document.querySelector('.import-workbench input[type=file]');
+              if (!compile || compile.disabled || !input)
+                throw new Error('UX064_COMPILE_RACE_UNAVAILABLE');
+              compile.click();
+              const transfer = new DataTransfer();
+              transfer.items.add(new File([body], 'race-new-d.json',
+                {type:'application/json'}));
+              input.files = transfer.files;
+              input.dispatchEvent(new Event('change', {bubbles:true}));
+            }""", import_document('ux064_new_d', 'FOURTH import must win compile race'))
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.some(x => x.name === 'race-new-d.json')""")
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            import_race.wait_for_timeout(350)
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            import_race.evaluate("""() => window.__ux064.pending
+              .find(x => x.name === 'race-new-d.json').release()""")
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED',
+                                         timeout=15000)
+            expect(wb.locator('[data-import-state]')).to_contain_text(
+                'race-new-d.json')
+            expect(wb.get_by_role('button', name='Activate')).to_be_disabled()
+            wb.get_by_role('button', name='Preview').click()
+            expect(wb.locator('[data-import-preview]')).to_contain_text(
+                'FOURTH import must win compile race')
+            require(import_input.evaluate('(el) => el.value') == '',
+                    'UX-064 Workbench chooser did not reset for same-file reimport')
+            require(import_race.evaluate("""() =>
+                document.querySelector('[data-menu-action="open-scenario-json"]').value""") == '',
+                'UX-064 main menu chooser did not reset after selection')
+            # Selecting the SAME physical filename after updating its bytes
+            # must start a new read and replace the prior parsed candidate.
+            import_input.set_input_files({
+                'name': 'race-new-d.json', 'mimeType': 'application/json',
+                'buffer': import_document('ux064_updated_d',
+                                          'SAME file reimported after edit').encode(),
+            })
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.filter(x =>
+                  x.name === 'race-new-d.json').length === 2""")
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            import_race.evaluate("""() => window.__ux064.pending
+              .filter(x => x.name === 'race-new-d.json').at(-1).release()""")
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED',
+                                         timeout=15000)
+            wb.get_by_role('button', name='Preview').click()
+            expect(wb.locator('[data-import-preview]')).to_contain_text(
+                'SAME file reimported after edit')
+            require(import_race.evaluate('window.__yadilabProjectStore.writes') == 0,
+                    'UX-064 import Workbench implicitly wrote a .yadilab file')
+            import_race.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -2351,6 +2560,11 @@ def main():
                 "staleRuntimeProgressCannotResurrectOldProject": True,
                 "threeAsyncLabStartsCannotReplaceNewProject": True,
                 "unrelatedBuilderDetachesFile": True,
+                "studioSameTaskLatestFields": True,
+                "newestFileImportWinsOutOfOrderReads": True,
+                "crossEntryImportStaleActivationDenied": True,
+                "obsoleteCompileCannotOverwriteNewImport": True,
+                "sameFilenameCanBeReimported": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
