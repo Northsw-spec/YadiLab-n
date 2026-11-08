@@ -288,12 +288,15 @@ export function projectSnapshot(workspace) {
   if (!workspace || workspace.mode !== "builder") return null;
   return JSON.stringify({ source: workspace.source, layoutOverrides: workspace.layoutOverrides ?? [] });
 }
-async function sha256(text) {
+async function sha256Bytes(bytes) {
   if (!globalThis.crypto?.subtle) blocked("CRYPTO_UNAVAILABLE");
-  const bytes = encoder.encode(text);
-  if (bytes.byteLength > PROJECT_MAX_BYTES) blocked("FILE_TOO_LARGE");
+  if (!(bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) ||
+      bytes.byteLength > PROJECT_MAX_BYTES) blocked("FILE_TOO_LARGE");
   const buffer = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(buffer)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+async function sha256(text) {
+  return sha256Bytes(encoder.encode(text));
 }
 function checkedPayload(payload, validateSource) {
   ownKeys(payload, ["source", "layoutOverrides"]);
@@ -362,7 +365,9 @@ export async function readProjectFile(file, options = {}) {
   try { text = decoder.decode(raw); }
   catch { blocked("UTF8_INVALID"); }
   const checked = await readProjectDocument(text, options);
-  return { ...checked, fileSha256: await sha256(text) };
+  // TextDecoder intentionally strips a UTF-8 BOM. The file association
+  // fingerprint must cover the actual physical bytes, not decoded JSON.
+  return { ...checked, fileSha256: await sha256Bytes(raw) };
 }
 export async function digestProjectText(text) {
   if (typeof text !== "string") blocked("FILE_INVALID");
@@ -392,10 +397,9 @@ export async function assertProjectOpenDiskUnchanged(handle, expectedFileSha256)
   if (!(bytes instanceof ArrayBuffer) ||
       bytes.byteLength < 1 || bytes.byteLength > PROJECT_MAX_BYTES)
     blocked("OPEN_READBACK_UNAVAILABLE");
-  let text;
-  try { text = decoder.decode(bytes); }
-  catch { blocked("EXTERNAL_FILE_CHANGED_DURING_OPEN"); }
-  if (await sha256(text) !== expectedFileSha256)
+  // Compare actual bytes, not TextDecoder-normalized characters. A BOM-only
+  // external edit changes the native file even though its JSON reads the same.
+  if (await sha256Bytes(bytes) !== expectedFileSha256)
     blocked("EXTERNAL_FILE_CHANGED_DURING_OPEN");
   return true;
 }
@@ -458,10 +462,10 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
     const buffer = await before.arrayBuffer();
     if (!(buffer instanceof ArrayBuffer) || buffer.byteLength > PROJECT_MAX_BYTES)
       blocked("EXTERNAL_FILE_CHANGED");
-    let earlier;
-    try { earlier = decoder.decode(buffer); }
-    catch { blocked("EXTERNAL_FILE_CHANGED"); }
-    if (await sha256(earlier) !== expectedFileSha256) blocked("EXTERNAL_FILE_CHANGED");
+    // SHA-256 on raw disk bytes prevents a BOM-only external modification
+    // from silently passing conflict detection before destructive Save.
+    if (await sha256Bytes(buffer) !== expectedFileSha256)
+      blocked("EXTERNAL_FILE_CHANGED");
   };
   if (expectedFileSha256 !== undefined) {
     if (typeof expectedFileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedFileSha256))
