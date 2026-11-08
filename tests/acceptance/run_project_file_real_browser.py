@@ -840,16 +840,28 @@ def main():
                 editor.dispatchEvent(new Event('input', {bubbles: true}));
                 apply.click();
             }""", new_note)
-            isolated.wait_for_function("""() => {
-                const editor = document.querySelector(
-                    '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
-                if (!editor) return false;
-                try {
-                    const notes = JSON.parse(editor.value);
-                    return notes.length === 1 &&
-                        notes[0].id === "builder051_fast_note";
-                } catch { return false; }
-            }""", timeout=15000)
+            try:
+                isolated.wait_for_function("""() => {
+                    const editor = document.querySelector(
+                        '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
+                    if (!editor) return false;
+                    try {
+                        const notes = JSON.parse(editor.value);
+                        return notes.length === 1 &&
+                            notes[0].id === "builder051_fast_note";
+                    } catch { return false; }
+                }""", timeout=15000)
+            except Exception as cause:
+                details = isolated.evaluate("""() => ({
+                  draftStatus: document.querySelector('[data-studio-draft-revision]')?.textContent,
+                  pending: document.querySelector('[data-project-file-controls]')?.getAttribute(
+                    'data-project-pending-drafts'),
+                  notes: document.querySelector(
+                    '[data-builder-authoring] textarea[aria-label="Anteckningar JSON"]')?.value,
+                  diagnostics: [...document.querySelectorAll('.diagnostic')].map(x => x.textContent),
+                })""")
+                raise AssertionError("BUILDER051_POST_NEW_APPLY_FAILED: " +
+                    repr(details)) from cause
             isolated.locator('[data-project-action="save-as"]').click()
             expect(isolated.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
