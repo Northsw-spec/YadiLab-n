@@ -31,6 +31,16 @@ eq(registry.hasPending(), false, "verified Save can proceed after all Apply");
 eq(registry.mark(inspector, true), 1, "new edit re-establishes pending state");
 eq(registry.mark(inspector, false), 0, "reverted fields clear the guard");
 eq(registry.mark({}, false), 0, "unmount cleanup is safe and idempotent");
+eq(registry.mark(inspector, true, 0), 1, "old project registers staged Inspector");
+eq(registry.beginGeneration(1), 0, "New/Open drops only old-generation drafts synchronously");
+eq(registry.hasPending(), false, "new project is immediately free of old form owners");
+eq(registry.mark(inspector, true, 0), 0, "delayed old-project input cannot mark the new project dirty");
+eq(registry.mark(authoring, true, 1), 1, "new project can stage and Apply its own JSON");
+eq(registry.mark(inspector, false, 0), 1, "late old-project cleanup cannot erase a new draft");
+eq(registry.hasOtherPending(authoring), false, "old-generation drafts do not block new JSON Apply");
+eq(registry.mark(authoring, false, 1), 0, "new generation Apply clears its own pending state");
+assert.throws(() => registry.beginGeneration(1), /advance/i);
+checks += 1;
 assert.throws(() => registry.mark(null, true), /owner/i);
 checks += 1;
 
@@ -48,6 +58,8 @@ for (const marker of [
   "BUILDER_COMPILE_UNAPPLIED_DRAFT",
   "BUILDER_EXPORT_UNAPPLIED_DRAFT",
   "BUILDER_ASSET_UNAPPLIED_DRAFT",
+  "pendingBuilderDraftsRef.current.beginGeneration(transitionId)",
+  "onPendingDraftChange(draftOwnerRef.current, false, projectGeneration)",
 ]) {
   eq(ui.includes(marker), true, "mounted application wires live staged draft guard: " + marker);
 }
