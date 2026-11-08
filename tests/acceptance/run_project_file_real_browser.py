@@ -758,6 +758,107 @@ def main():
                 "window.__yadilabProjectStore.writes") == 0,
                 "Never-saved new project was silently persisted")
             immediate_guard.close()
+
+            # BUILDER-051: project generations can reuse sourceRevision=0
+            # and the same "mission" selection. Authoring controls must not
+            # retain the previous project's form/JSON across New/Open.
+            # Old DOM callbacks in the *same* JS task as New must also not
+            # resurrect the previous Builder before React repaints.
+            isolated = context.new_page()
+            isolated.add_init_script(MOCK)
+            isolated.on("pageerror", lambda error: errors.append(str(error)))
+            isolated.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            isolated_controls = isolated.locator(
+                '[data-project-file-controls="ready"]')
+            expect(isolated_controls).to_be_visible(timeout=45000)
+            expect(isolated_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            builder_section = isolated.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            if builder_section.get_attribute("open") is None:
+                builder_section.locator("summary").first.click()
+            isolated_inspector = isolated.locator(
+                '[data-builder-inspector="mission"]')
+            expect(isolated_inspector).to_be_visible(timeout=15000)
+            old_title = isolated_inspector.locator(
+                "label.inspector-field", has_text="Title").locator("input")
+            initial_title = old_title.input_value()
+            tests_editor = isolated.locator(
+                '[data-builder-authoring="ready"] textarea[aria-label="Test JSON"]')
+            initial_tests = json.loads(tests_editor.input_value())
+            require(len(initial_tests) > 0 and
+                    initial_title != "New YadiLab project",
+                    "BUILDER-051 fixture lacks a distinct previous project")
+
+            isolated.evaluate("""() => {
+                const fresh = document.querySelector(
+                    '[data-project-action="new"]');
+                const applyInspector = document.querySelector(
+                    '[data-builder-inspector="mission"] button');
+                const applyTests = [...document.querySelectorAll(
+                    '[data-builder-authoring="ready"] .authoring-panel button')]
+                    .find(button => button.textContent.trim() === "Apply Test JSON");
+                if (!fresh || !applyInspector || !applyTests ||
+                    fresh.disabled)
+                    throw new Error("BUILDER051_CONTROLS_UNAVAILABLE");
+                fresh.click();
+                // Both callbacks still belong to the old mounted project.
+                applyInspector.click();
+                applyTests.click();
+            }""")
+            expect(isolated.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "new_project")
+            expect(isolated_controls).to_have_attribute(
+                "data-project-dirty", "true")
+            expect(old_title).to_have_value("New YadiLab project")
+            require(json.loads(tests_editor.input_value()) == [],
+                    "BUILDER-051 leaked old project tests into new editor")
+            expect(isolated.locator(".diagnostic")).to_contain_text(
+                "BUILDER_AUTHORING_STALE_WORKSPACE")
+            require(isolated.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "Stale Builder callbacks unexpectedly wrote a project")
+
+            # A native input event and JSON Apply in the SAME JS task must
+            # commit the latest typed bytes, not an obsolete rendered prop.
+            new_note = {"id": "builder051_fast_note",
+                        "text": "Source-backed same-turn note"}
+            isolated.evaluate("""(note) => {
+                const editor = document.querySelector(
+                    '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
+                const apply = [...document.querySelectorAll(
+                    '[data-builder-authoring="ready"] .authoring-panel button')]
+                    .find(button => button.textContent.trim() ===
+                        "Apply Anteckningar JSON");
+                if (!editor || !apply)
+                    throw new Error("BUILDER051_NOTE_CONTROLS_UNAVAILABLE");
+                const nativeSetter = Object.getOwnPropertyDescriptor(
+                    HTMLTextAreaElement.prototype, 'value').set;
+                nativeSetter.call(editor, JSON.stringify([note]));
+                editor.dispatchEvent(new Event('input', {bubbles: true}));
+                apply.click();
+            }""", new_note)
+            isolated.wait_for_function("""() => {
+                const editor = document.querySelector(
+                    '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
+                if (!editor) return false;
+                try {
+                    const notes = JSON.parse(editor.value);
+                    return notes.length === 1 &&
+                        notes[0].id === "builder051_fast_note";
+                } catch { return false; }
+            }""", timeout=15000)
+            isolated.locator('[data-project-action="save-as"]').click()
+            expect(isolated.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            saved_isolated = json.loads(isolated.evaluate(
+                "window.__yadilabProjectStore.text"))
+            require(saved_isolated["content"]["source"]["notes"] == [new_note],
+                    "Same-turn JSON Apply lost the typed note in verified Save")
+            expect(isolated_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            isolated.close()
+
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
