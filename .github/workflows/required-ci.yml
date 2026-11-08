@@ -41,6 +41,8 @@ jobs:
           npm run test:import-helper
           # Canonical Builder edits must not lose asset identity or overwrite links.
           npm run test:builder-inspector
+          # ReactFlow events must not restore an old source after Inspector Apply.
+          node tests/browser/run_topology_workspace_guard_tests.mjs
           npm run test:release-identity
           node tests/browser/run_project_document_tests.mjs
           ./node_modules/.bin/tsc -p tests/tsconfig.persistence.json
