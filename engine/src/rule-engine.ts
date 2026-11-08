@@ -45,7 +45,8 @@ export function evaluateRule(rule: Normalizedscenariorule, context: RuleEvaluati
       return queryServiceEnabled(context.state, rule.target, rule.service);
     }
     case "test_result": {
-      const actual = context.testResults[rule.test];
+      const actual = Object.prototype.hasOwnProperty.call(context.testResults, rule.test)
+        ? context.testResults[rule.test] : undefined;
       if (actual === undefined) return { truth: "UNKNOWN", explanation: [`Test '${rule.test}' has not been evaluated in this snapshot.`] };
       return { truth: actual === rule.expected ? "TRUE" : "FALSE", explanation: [`Test '${rule.test}' outcome is ${actual}; rule expects ${rule.expected}.`] };
     }
