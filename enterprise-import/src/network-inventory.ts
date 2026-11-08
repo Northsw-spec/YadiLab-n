@@ -184,7 +184,19 @@ export function normalizeNetworkInventoryDocument(
     for (const [header, cell] of Object.entries(row.fields)) {
       const normalizedHeader = key(header);
       if (!RECOGNIZED_DEVICE_HEADERS.has(normalizedHeader) &&
-          populatedSourceCell(cell.value)) nonemptyUnmappedHeaders.add(normalizedHeader);
+          populatedSourceCell(cell.value)) {
+        nonemptyUnmappedHeaders.add(normalizedHeader);
+        // A populated unknown Devices field is source evidence, not a blank
+        // template decoration. The preview once said READY while silently
+        // discarding VLAN/site/port/security declarations in the same row.
+        // Mirror the already fail-closed canonical-sheet and Links policy.
+        diagnostics.push({
+          code: "NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED",
+          severity: "error", table: inventory.tableId, row: row.recordIndex,
+          field: header,
+          message: "A populated Devices column cannot be represented by the editable topology. Resolve or explicitly remove this declaration before activation.",
+        });
+      }
     }
     const fields = (Object.keys(aliases) as (keyof typeof aliases)[]).reduce((out, name) => {
       out[name] = pick(row, aliases[name], inventory.tableId, diagnostics); return out;
@@ -345,7 +357,7 @@ export function normalizeNetworkInventoryDocument(
   const unmappedColumnCount = nonemptyUnmappedHeaders.size;
   if (unmappedColumnCount > 0) diagnostics.push({
     code: "NETWORK_IMPORT_COLUMNS_UNMAPPED", severity: "warning",
-    message: "Some source columns are unsupported, were not mapped, and do not establish modeled assets, links or Engine truth.",
+    message: "Unsupported populated Devices columns were found. Import is BLOCKED until all original declarations can be faithfully represented or removed; no assets, links or Engine truth were inferred from them.",
   });
   const explicitTables = document.tables.filter((t) => t.tableId.toLowerCase() === "links");
   const explicitLinks = explicitTables[0];
