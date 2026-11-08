@@ -13,7 +13,12 @@ const aliases = {
   ip: ["IPv4", "IP Address", "IP", "IPv4 Address"],
   cidr: ["CIDR", "IP/CIDR", "IPv4/CIDR"],
   prefix: ["prefix", "Prefix Length", "CIDR Prefix"],
+  ipv6: ["IPv6", "IPv6 Address", "IPv6 CIDR", "IP6"],
+  ipv6Prefix: ["IPv6 Prefix", "IPv6 Prefix Length", "IPv6 CIDR Prefix"],
   mac: ["MAC", "MAC Address"],
+  mtu: ["MTU", "Interface MTU"],
+  interfaceId: ["Interface ID", "Port ID"],
+  interfaceName: ["Interface Name", "Port Name", "NIC Name"],
   gateway: ["Default Gateway", "Gateway", "Default GW"],
   target: ["Connected To", "Connects To", "Link To", "Peer ID", "Peer Node"],
 } as const;
@@ -146,7 +151,8 @@ export function normalizeNetworkInventoryDocument(
     }, {} as Record<keyof typeof aliases, ImportCell | undefined>);
     // Only genuinely blank optional declarations may use documented fallbacks.
     // Invalid typed values must block activation, not disappear into defaults.
-    for (const field of ["label", "type", "ip", "cidr", "mac", "gateway", "target"] as const) {
+    for (const field of ["label", "type", "ip", "cidr", "ipv6", "ipv6Prefix",
+      "mac", "mtu", "interfaceId", "interfaceName", "gateway", "target"] as const) {
       rejectUnrepresentableField(fields[field], field, inventory.tableId, row.recordIndex, diagnostics);
     }
     const id = stringCell(fields.id), label = stringCell(fields.label), type = stringCell(fields.type);
@@ -193,6 +199,16 @@ export function normalizeNetworkInventoryDocument(
       message: "A nonblank subnet prefix must be text or a finite number; the declaration cannot be ignored.",
       table: inventory.tableId, row: row.recordIndex,
     });
+    const ipv6 = stringCell(fields.ipv6);
+    const ipv6Prefix = stringCell(fields.ipv6Prefix);
+    if (!ipv6 && ipv6Prefix !== undefined) diagnostics.push({
+      code: "NETWORK_IMPORT_IPV6_PREFIX_WITHOUT_ADDRESS", severity: "error",
+      message: "A declared IPv6 prefix requires a documented IPv6 address; an address was not inferred.",
+      table: inventory.tableId, row: row.recordIndex, field: "ipv6Prefix",
+    });
+    const mtu = stringCell(fields.mtu);
+    const interfaceId = stringCell(fields.interfaceId);
+    const interfaceName = stringCell(fields.interfaceName);
     const mac = stringCell(fields.mac);
     const invalidMac = mac !== undefined && !MAC_ADDRESS.test(mac);
     if (invalidMac) diagnostics.push({
@@ -200,21 +216,33 @@ export function normalizeNetworkInventoryDocument(
       message: "Invalid documented MAC address; expected six hexadecimal octets separated by colons. Original address and device identity are not shown.",
       table: inventory.tableId, row: row.recordIndex,
     });
-    // A MAC is a declared interface attribute even when no IPv4 address
-    // exists. Preserve the fact as a generic interface, but do not infer
-    // an IP, physical port, connection, routing state or Engine result.
-    if (address || mac || subnetPrefix !== undefined) {
+    // A documented IPv6, MTU, MAC or interface identifier is valuable even
+    // when no IPv4 address exists. A row is at most ONE declared interface;
+    // an inventory row never establishes a cable, route or Engine verdict.
+    if (address || ipv6 || mac || subnetPrefix !== undefined ||
+        ipv6Prefix !== undefined || mtu !== undefined ||
+        interfaceId || interfaceName) {
       if (address && (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(address) ||
           address.split(".").some((x) => Number(x) > 255) ||
           (subnetPrefix !== undefined && !positiveInt(subnetPrefix)))) {
         diagnostics.push({ code: "NETWORK_IMPORT_IP_INVALID", severity: "error", message: "Invalid documented IPv4 address or prefix. Original address and device identity are not shown.", table: inventory.tableId, row: row.recordIndex });
       } else if (!invalidMac) {
+        // Respect explicit stable port IDs. An explicit valid interface name
+        // may serve as the ID; otherwise retain its exact label on a generic
+        // primary interface without inventing an unsupported physical port.
+        const portId = interfaceId ?? (interfaceName && ID.test(interfaceName) ? interfaceName : "primary");
+        const portName = interfaceName ?? interfaceId ?? "primary";
         const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
-          nodeId: { value: id, source: fields.id }, interfaceId: { value: "primary", source: fields.id }, name: { value: "primary", source: fields.id },
+          nodeId: { value: id, source: fields.id },
+          interfaceId: { value: portId, source: fields.interfaceId ?? fields.interfaceName ?? fields.id },
+          name: { value: portName, source: fields.interfaceName ?? fields.interfaceId ?? fields.id },
         };
         if (address) values.IPv4 = { value: address, source: fields.ip ?? fields.cidr };
         if (subnetPrefix !== undefined) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr ?? fields.ip };
+        if (ipv6) values.IPv6 = { value: ipv6, source: fields.ipv6 };
+        if (ipv6Prefix !== undefined) values.IPv6Prefix = { value: ipv6Prefix, source: fields.ipv6Prefix };
         if (mac) values.MAC = { value: mac, source: fields.mac };
+        if (mtu !== undefined) values.MTU = { value: mtu, source: fields.mtu };
         interfaces.push(canonicalRecord(row.recordIndex, "Interfaces", values));
       }
     }
