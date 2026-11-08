@@ -2510,6 +2510,29 @@ def main():
             wb.get_by_role('button', name='Preview').click()
             expect(wb.locator('[data-import-preview]')).to_contain_text(
                 'FOURTH import must win compile race')
+            require(import_input.evaluate('(el) => el.value') == '',
+                    'UX-064 Workbench chooser did not reset for same-file reimport')
+            require(import_race.evaluate("""() =>
+                document.querySelector('[data-menu-action="open-scenario-json"]').value""") == '',
+                'UX-064 main menu chooser did not reset after selection')
+            # Selecting the SAME physical filename after updating its bytes
+            # must start a new read and replace the prior parsed candidate.
+            import_input.set_input_files({
+                'name': 'race-new-d.json', 'mimeType': 'application/json',
+                'buffer': import_document('ux064_updated_d',
+                                          'SAME file reimported after edit').encode(),
+            })
+            import_race.wait_for_function("""() =>
+                window.__ux064.pending.filter(x =>
+                  x.name === 'race-new-d.json').length === 2""")
+            expect(wb).to_have_attribute('data-import-workbench', 'READING')
+            import_race.evaluate("""() => window.__ux064.pending
+              .filter(x => x.name === 'race-new-d.json').at(-1).release()""")
+            expect(wb).to_have_attribute('data-import-workbench', 'PARSED',
+                                         timeout=15000)
+            wb.get_by_role('button', name='Preview').click()
+            expect(wb.locator('[data-import-preview]')).to_contain_text(
+                'SAME file reimported after edit')
             require(import_race.evaluate('window.__yadilabProjectStore.writes') == 0,
                     'UX-064 import Workbench implicitly wrote a .yadilab file')
             import_race.close()
@@ -2541,6 +2564,7 @@ def main():
                 "newestFileImportWinsOutOfOrderReads": True,
                 "crossEntryImportStaleActivationDenied": True,
                 "obsoleteCompileCannotOverwriteNewImport": True,
+                "sameFilenameCanBeReimported": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
