@@ -1236,13 +1236,39 @@ for (let i = 0; i < denseCount063; i++) {
   }
 }
 const denseState063 = createInitialEngineState(denseScenario063);
-const denseUnresolved063 = queryReachability(denseScenario063, denseState063,
+eq(queryReachability(denseScenario063, denseState063,
+  "dense_0", "rds01", "tcp", 3389).truth, "FALSE",
+  "linear topology check proves even a dense disconnected component is isolated");
+eq(queryLayer2BroadcastReachability(denseScenario063, denseState063,
+  "dense_0", "rds01").truth, "FALSE",
+  "dense disconnected L2 graph proves no cable path without factorial search");
+
+// Connect the dense component by a long thin tail. A path exists, but the
+// factorial mesh exposes far more partial candidates before the destination
+// can be reached than the bounded search may safely evaluate.
+const boundedScenario063 = structuredClone(denseScenario063);
+for (let i = 0; i < 3; i++)
+  boundedScenario063.resources.push({
+    id: `tail_${i}`, type: "network.switch", label: `Tail ${i}`,
+    interfaces: [], properties: {},
+  });
+const tailNodes063 = ["dense_10", "tail_0", "tail_1", "tail_2", "rds01"];
+for (let i = 0; i < tailNodes063.length - 1; i++) {
+  boundedScenario063.connections.push({
+    id: `tail_link_${i}`, kind: "network",
+    from: { resource: tailNodes063[i] },
+    to: { resource: tailNodes063[i + 1] },
+    properties: {},
+  });
+}
+const boundedState063 = createInitialEngineState(boundedScenario063);
+const denseUnresolved063 = queryReachability(boundedScenario063, boundedState063,
   "dense_0", "rds01", "tcp", 3389);
 eq(denseUnresolved063.truth, "UNKNOWN",
-  "bounded reachability cannot assert FALSE after truncating a dense graph");
+  "bounded reachability cannot assert FALSE after truncating a connected dense graph");
 ok(denseUnresolved063.explanation.some(line => line.includes("work/memory limit")),
-  "bounded reachability explains its failure to prove topology isolation");
-const denseL2063 = queryLayer2BroadcastReachability(denseScenario063, denseState063,
+  "bounded reachability explains its failure to prove a viable topology path");
+const denseL2063 = queryLayer2BroadcastReachability(boundedScenario063, boundedState063,
   "dense_0", "rds01");
 eq(denseL2063.truth, "UNKNOWN",
   "bounded L2 search cannot claim FALSE after exhausting work budget");
