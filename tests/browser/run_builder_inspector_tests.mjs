@@ -13,6 +13,7 @@ import {
   createResourceFromInspector,
   createZoneFromInspector,
   deleteSelectedBuilderObject,
+  deleteConnection,
   deleteResource,
   deleteZone,
   duplicateSelectedBuilderResource,
@@ -214,6 +215,42 @@ eq(cascade.workspace.source.completion, deleteReady.completion,
   "positive cascade preserves unrelated completion truth");
 ok(cascade.workspace.sourceRevision > deletionWorkspace.sourceRevision,
   "valid deletions still invalidate stale Compiler previews");
+
+// BUILDER-055: the reference guard must not block valid edits. A link
+// without any retained note can be removed; notes on *other* objects
+// remain unchanged. Explicit connection cascades retain this behavior.
+const removableLinkSource = structuredClone(deleteReady);
+removableLinkSource.connections = [{
+  id: "removable_link", kind: "network",
+  from: { resource: "firewall01" }, to: { resource: "rds01" },
+  properties: {},
+}];
+removableLinkSource.notes = [{
+  id: "unrelated_note", text: "Remain on admin",
+  target: "admin01",
+}];
+const removableLinkWorkspace = createBuilderWorkspace(removableLinkSource);
+const beforeNote = structuredClone(removableLinkSource.notes);
+let linkDeletion = deleteConnection(removableLinkWorkspace, "removable_link");
+ok(linkDeletion.ok, "unannotated link can be deleted normally");
+eq(linkDeletion.workspace.source.connections.length, 0,
+  "valid Delete Connection removes exactly the intended edge");
+eq(linkDeletion.workspace.source.notes, beforeNote,
+  "valid link deletion retains unrelated notes exactly");
+ok(linkDeletion.workspace.sourceRevision > removableLinkWorkspace.sourceRevision,
+  "valid link deletion invalidates old compiled projection");
+linkDeletion = deleteResource(removableLinkWorkspace, "rds01", true);
+ok(linkDeletion.ok, "Delete Resource cascade still succeeds for unannotated link");
+eq(linkDeletion.workspace.source.connections.length, 0,
+  "valid resource cascade removes child link");
+eq(linkDeletion.workspace.source.notes, beforeNote,
+  "valid resource cascade preserves unrelated note");
+linkDeletion = deleteZone(removableLinkWorkspace, "server", true);
+ok(linkDeletion.ok, "Delete Zone cascade still succeeds for unannotated link");
+eq(linkDeletion.workspace.source.connections.length, 0,
+  "valid zone cascade removes child link");
+eq(linkDeletion.workspace.source.notes, beforeNote,
+  "valid zone cascade preserves unrelated note");
 
 const mainSource = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(mainSource.includes("BuilderInspector"), "browser UI contains typed BuilderInspector component");
