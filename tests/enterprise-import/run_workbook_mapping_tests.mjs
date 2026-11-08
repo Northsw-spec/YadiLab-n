@@ -64,4 +64,42 @@ assert.ok(ghostLayoutResult.diagnostics.some(x =>
 assert.equal(ghostLayoutResult.source, undefined,
   "Unknown layout object must not be emitted into canonical layoutHints");
 console.log("PASS IMPORT-033: declared zones/layout references accepted; unknown, duplicate and colliding IDs rejected");
+
+// IMPORT-034: the workbook preview must enforce the canonical scenario
+// schema for the fields it maps. It must not advertise "ok" only for a later
+// project Save or Compile to reject malformed source data.
+const validFields = workbook(2);
+validFields.tables.find(x => x.tableId === "Interfaces").records[0].fields.MAC =
+  cell("AA:bb:CC:dd:EE:01");
+validFields.tables.find(x => x.tableId === "Interfaces").records[0].fields.MTU =
+  cell(9000);
+validFields.tables.find(x => x.tableId === "Links").records[0].fields.kind =
+  cell("management");
+const validFieldsResult = mapNetworkWorkbookToScenario(validFields);
+assert.equal(validFieldsResult.ok, true, JSON.stringify(validFieldsResult.diagnostics));
+assert.equal(validFieldsResult.source.resources[0].interfaces[0].mac,
+  "AA:bb:CC:dd:EE:01", "Preserve documented MAC case without normalization");
+assert.equal(validFieldsResult.source.resources[0].interfaces[0].mtu, 9000);
+assert.equal(validFieldsResult.source.connections[0].kind, "management");
+
+for (const { table, field, invalid, code } of [
+  { table: "Nodes", field: "type", invalid: "Server Generic", code: "WORKBOOK_NODE_TYPE_INVALID" },
+  { table: "Interfaces", field: "MAC", invalid: "AA:BB:CC:DD:EE:GG", code: "WORKBOOK_MAC_INVALID" },
+  { table: "Interfaces", field: "MTU", invalid: 0, code: "WORKBOOK_MTU_INVALID" },
+  { table: "Interfaces", field: "MTU", invalid: -1500, code: "WORKBOOK_MTU_INVALID" },
+  { table: "Links", field: "kind", invalid: "ethernet", code: "WORKBOOK_LINK_KIND_INVALID" },
+]) {
+  const invalidWorkbook = workbook(2);
+  invalidWorkbook.tables.find(x => x.tableId === table).records[0].fields[field] = cell(invalid);
+  const result = mapNetworkWorkbookToScenario(invalidWorkbook);
+  assert.equal(result.ok, false, `Invalid ${table}.${field} must fail preview`);
+  assert.ok(result.diagnostics.some(d => d.code === code &&
+    d.table === table && d.row === 1 && d.field === field),
+    `Missing ${code} source-specific row diagnostic`);
+  assert.ok(result.preview.errors > 0, "Invalid mapped fields must flag the preview");
+  assert.equal(result.source, undefined,
+    "Import must not expose canonical source with invalid typed fields");
+}
+console.log("PASS IMPORT-034: valid MAC/MTU/link kinds preserved; malformed schema fields fail before activation");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");
