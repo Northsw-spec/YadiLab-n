@@ -1104,4 +1104,133 @@ for (const sheet of ["Routes", "VLANs"]) assert.ok(
   "Actual JSON adapter must retain the populated " + sheet + " source row");
 console.log("PASS IMPORT-047: supplemental inventory truth and selected link fields cannot silently disappear; genuine blank templates and source links remain valid");
 
+// IMPORT-048: Connected To is the sole authority for inline physical links.
+// Explicit ID, kind and endpoint ports must survive only if those physical
+// port identifiers are independently declared on the matching source device.
+const inlinePortSource = () => ({ tables: [
+  { tableId: "Devices", records: [
+    record(1, { "Asset ID": "edge01", Hostname: "Edge", "Device Type": "Router",
+      "Interface ID": "wan0", "IP Address": "192.0.2.10",
+      "Connected To": "peer01", "Link ID": "edge_to_peer",
+      "From Port": "wan0", "To Port": "lan0", "Link Type": "management" }),
+    record(2, { "Asset ID": "peer01", Hostname: "Peer", "Device Type": "Server",
+      "Interface ID": "lan0", "MAC Address": "AA:BB:CC:DD:EE:01" }),
+  ] },
+] });
+const portFacts = normalizeNetworkInventoryDocument(inlinePortSource());
+assert.equal(portFacts.unmappedColumnCount, 0);
+assert.equal(portFacts.diagnostics.some(d => d.severity === "error"), false,
+  JSON.stringify(portFacts.diagnostics));
+const linked = mapNetworkWorkbookToScenario(portFacts.document);
+assert.equal(linked.ok, true, JSON.stringify(linked.diagnostics));
+assert.deepEqual(linked.source.connections, [{
+  id: "edge_to_peer", kind: "management",
+  from: { resource: "edge01", port: "wan0" },
+  to: { resource: "peer01", port: "lan0" }, properties: {},
+}], "Documented link ID, exact physical port IDs and kind must survive intact");
+assert.deepEqual(linked.source.resources.find(r => r.id === "peer01").interfaces[0],
+  { id: "lan0", label: "lan0", mac: "AA:BB:CC:DD:EE:01" },
+  "A MAC-only target with declared port must not acquire an invented IPv4");
+assert.deepEqual(mapNetworkWorkbookToScenario(
+  normalizeNetworkInventoryDocument(inlinePortSource()).document).source,
+  linked.source, "Inline documented link facts must map deterministically");
+// Actual CSV adapter, not a hand-built ImportDocument fixture.
+const linkCsv = [
+  "Asset ID,Hostname,Device Type,Interface ID,Connected To,Link ID,From Port,To Port,Link Type",
+  "edge01,Edge,Router,wan0,peer01,edge_to_peer,wan0,lan0,management",
+  "peer01,Peer,Server,lan0,,,,,",
+].join("\n") + "\n";
+const parsedLinkCsv = await csvImportAdapter.parse({
+  bytes: new TextEncoder().encode(linkCsv), mediaType: "text/csv",
+}, { options: { tableName: "Devices" } });
+const csvLinked = normalizeNetworkInventoryDocument(parsedLinkCsv.document);
+assert.equal(csvLinked.diagnostics.some(d => d.severity === "error"), false,
+  JSON.stringify(csvLinked.diagnostics));
+assert.equal(csvLinked.unmappedColumnCount, 0);
+assert.deepEqual(mapNetworkWorkbookToScenario(csvLinked.document).source.connections,
+  linked.source.connections, "Real CSV must preserve exact link facts");
+// Never allow port claims to reference a synthetic generic primary interface.
+for (const { name, edit, field } of [
+  { name: "wrong source port", field: "fromPort", edit: doc =>
+    doc.tables[0].records[0].fields["From Port"] = cell("eth99") },
+  { name: "wrong target port", field: "toPort", edit: doc =>
+    doc.tables[0].records[0].fields["To Port"] = cell("eth99") },
+  { name: "generated source primary", field: "fromPort", edit: doc => {
+    doc.tables[0].records[0].fields["Interface ID"] = cell("");
+    doc.tables[0].records[0].fields["From Port"] = cell("primary");
+  } },
+  { name: "generated target primary", field: "toPort", edit: doc => {
+    doc.tables[0].records[1].fields["Interface ID"] = cell(null);
+    doc.tables[0].records[0].fields["To Port"] = cell("primary");
+  } },
+]) {
+  const doc = inlinePortSource();
+  edit(doc);
+  const rejected = normalizeNetworkInventoryDocument(doc);
+  assert.ok(rejected.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_INLINE_LINK_PORT_UNDECLARED" &&
+    d.table === "Devices" && d.row === 1 && d.field === field),
+    "An undocumented port must block activation: " + name);
+}
+for (const column of ["Link ID", "From Port", "To Port", "Link Type"]) {
+  const source = inlinePortSource();
+  delete source.tables[0].records[0].fields["Connected To"];
+  const rejected = normalizeNetworkInventoryDocument(source);
+  const canonicalField = { "Link ID": "linkId", "From Port": "fromPort",
+    "To Port": "toPort", "Link Type": "linkKind" }[column];
+  assert.ok(rejected.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_LINK_DETAIL_WITHOUT_TARGET" &&
+    d.table === "Devices" && d.row === 1 && d.field === canonicalField),
+    "Orphan " + column + " must be reported at the originating source row");
+  assert.equal(mapNetworkWorkbookToScenario(rejected.document).source.connections.length, 0,
+    "Orphan link metadata may not synthesize a physical connection");
+}
+for (const { column, bad, field } of [
+  { column: "Link ID", bad: true, field: "linkId" },
+  { column: "From Port", bad: false, field: "fromPort" },
+  { column: "To Port", bad: { port: "lan0" }, field: "toPort" },
+  { column: "Link Type", bad: ["management"], field: "linkKind" },
+]) {
+  const doc = inlinePortSource();
+  doc.tables[0].records[0].fields[column] = cell(bad);
+  const r = normalizeNetworkInventoryDocument(doc);
+  assert.ok(r.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_FIELD_TYPE_INVALID" &&
+    d.table === "Devices" && d.row === 1 && d.field === field),
+    "Malformed typed inline link field must never silently default");
+}
+for (const { column, bad, code } of [
+  { column: "Link ID", bad: "Bad Link ID!", code: "WORKBOOK_LINK_ID_INVALID" },
+  { column: "Link ID", bad: "peer01", code: "WORKBOOK_CANONICAL_ID_COLLISION" },
+  { column: "Link Type", bad: "unknown-cable", code: "WORKBOOK_LINK_KIND_INVALID" },
+  { column: "From Port", bad: "bad/port", code: "WORKBOOK_LINK_PORT_UNKNOWN" },
+]) {
+  const doc = inlinePortSource();
+  doc.tables[0].records[0].fields[column] = cell(bad);
+  const result = mapNetworkWorkbookToScenario(
+    normalizeNetworkInventoryDocument(doc).document);
+  assert.equal(result.ok, false,
+    "Invalid explicit " + column + " may never activate an editable Builder");
+  assert.ok(result.diagnostics.some(d => d.code === code && d.table === "Links"),
+    "Canonical link validator must still reject " + column);
+  assert.equal(result.source, undefined);
+}
+const canonicalNameOnly = inlinePortSource();
+delete canonicalNameOnly.tables[0].records[0].fields["Interface ID"];
+canonicalNameOnly.tables[0].records[0].fields["Interface Name"] = cell("wan0");
+assert.equal(normalizeNetworkInventoryDocument(canonicalNameOnly)
+  .diagnostics.some(d => d.severity === "error"), false);
+const validNameOnly = mapNetworkWorkbookToScenario(
+  normalizeNetworkInventoryDocument(canonicalNameOnly).document);
+assert.equal(validNameOnly.ok, true, JSON.stringify(validNameOnly.diagnostics));
+assert.equal(validNameOnly.source.connections[0].from.port, "wan0",
+  "An explicit canonical interface name can establish a real named port");
+const noLinkMetadata = deviceInventory({ "Interface ID": "wan0",
+  "Link ID": null, "From Port": "", "To Port": " ", "Link Type": null });
+const blankDetails = normalizeNetworkInventoryDocument(noLinkMetadata);
+assert.equal(blankDetails.diagnostics.some(d => d.severity === "error"), false);
+assert.equal(mapNetworkWorkbookToScenario(blankDetails.document).source.connections.length, 0,
+  "Genuinely blank optional link details do not invent a connection");
+console.log("PASS IMPORT-048: real CSV inline link IDs/endpoint ports/kinds, orphan and inferred-port denial");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");

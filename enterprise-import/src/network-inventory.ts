@@ -21,6 +21,10 @@ const aliases = {
   interfaceName: ["Interface Name", "Port Name", "NIC Name"],
   gateway: ["Default Gateway", "Gateway", "Default GW"],
   target: ["Connected To", "Connects To", "Link To", "Peer ID", "Peer Node"],
+  linkId: ["Link ID", "Connection ID"],
+  fromPort: ["From Port", "Source Port", "Local Port"],
+  toPort: ["To Port", "Target Port", "Peer Port"],
+  linkKind: ["Link Type", "Connection Type"],
 } as const;
 const RECOGNIZED_DEVICE_HEADERS = new Set(
   Object.values(aliases).flatMap((names) => names.map(key)),
@@ -170,6 +174,12 @@ export function normalizeNetworkInventoryDocument(
   }
   const nonemptyUnmappedHeaders = new Set<string>();
   const nodes: ImportRecord[] = [], interfaces: ImportRecord[] = [], inlineLinks: ImportRecord[] = [];
+  // Ports named in Connected To declarations are physical source claims. A
+  // synthesized generic "primary" interface (from an IP or MAC alone) is
+  // NOT sufficient evidence of a documented endpoint port.
+  const declaredPorts = new Map<string, string>();
+  const pendingInlinePorts: { readonly from: string; readonly to: string;
+    readonly fromPort?: string; readonly toPort?: string; readonly row: number }[] = [];
   for (const row of inventory.records) {
     for (const [header, cell] of Object.entries(row.fields)) {
       const normalizedHeader = key(header);
@@ -182,7 +192,8 @@ export function normalizeNetworkInventoryDocument(
     // Only genuinely blank optional declarations may use documented fallbacks.
     // Invalid typed values must block activation, not disappear into defaults.
     for (const field of ["label", "type", "ip", "cidr", "ipv6", "ipv6Prefix",
-      "mac", "mtu", "interfaceId", "interfaceName", "gateway", "target"] as const) {
+      "mac", "mtu", "interfaceId", "interfaceName", "gateway", "target",
+      "linkId", "fromPort", "toPort", "linkKind"] as const) {
       rejectUnrepresentableField(fields[field], field, inventory.tableId, row.recordIndex, diagnostics);
     }
     const id = stringCell(fields.id), label = stringCell(fields.label), type = stringCell(fields.type);
@@ -239,6 +250,10 @@ export function normalizeNetworkInventoryDocument(
     const mtu = stringCell(fields.mtu);
     const interfaceId = stringCell(fields.interfaceId);
     const interfaceName = stringCell(fields.interfaceName);
+    const explicitlyNamedPort = interfaceId ??
+      (interfaceName && ID.test(interfaceName) ? interfaceName : undefined);
+    if (explicitlyNamedPort && ID.test(explicitlyNamedPort))
+      declaredPorts.set(id, explicitlyNamedPort);
     const mac = stringCell(fields.mac);
     const invalidMac = mac !== undefined && !MAC_ADDRESS.test(mac);
     if (invalidMac) diagnostics.push({
@@ -282,9 +297,50 @@ export function normalizeNetworkInventoryDocument(
       else diagnostics.push({ code: "NETWORK_IMPORT_GATEWAY_NOT_LINK", severity: "warning", message: "A declared gateway is retained only as a source note; no physical connection or modeled route is inferred.", table: inventory.tableId, row: row.recordIndex });
     }
     const target = stringCell(fields.target);
-    if (target) inlineLinks.push(canonicalRecord(row.recordIndex, "Links", {
-      linkId: { value: `link_row_${row.recordIndex}`, source: fields.target }, nodeA: { value: id, source: fields.id }, nodeB: { value: target, source: fields.target },
-    }));
+    const linkId = stringCell(fields.linkId);
+    const fromPort = stringCell(fields.fromPort);
+    const toPort = stringCell(fields.toPort);
+    const linkKind = stringCell(fields.linkKind);
+    if (!target) {
+      // Source link details without an explicit destination cannot be
+      // silently dropped or turned into a fabricated physical edge.
+      for (const field of ["linkId", "fromPort", "toPort", "linkKind"] as const) {
+        if (populatedSourceCell(fields[field]?.value)) diagnostics.push({
+          code: "NETWORK_IMPORT_LINK_DETAIL_WITHOUT_TARGET",
+          severity: "error", table: inventory.tableId, row: row.recordIndex, field,
+          message: "A populated link detail requires a documented Connected To endpoint. No link was inferred.",
+        });
+      }
+    } else {
+      const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
+        linkId: { value: linkId ?? `link_row_${row.recordIndex}`,
+          source: fields.linkId ?? fields.target },
+        nodeA: { value: id, source: fields.id },
+        nodeB: { value: target, source: fields.target },
+      };
+      if (fromPort) values.interfaceA = { value: fromPort, source: fields.fromPort };
+      if (toPort) values.interfaceB = { value: toPort, source: fields.toPort };
+      if (linkKind) values.kind = { value: linkKind, source: fields.linkKind };
+      inlineLinks.push(canonicalRecord(row.recordIndex, "Links", values));
+      pendingInlinePorts.push({ from: id, to: target, row: row.recordIndex,
+        ...(fromPort ? { fromPort } : {}), ...(toPort ? { toPort } : {}) });
+    }
+  }
+  for (const claim of pendingInlinePorts) {
+    if (claim.fromPort && declaredPorts.get(claim.from) !== claim.fromPort)
+      diagnostics.push({
+        code: "NETWORK_IMPORT_INLINE_LINK_PORT_UNDECLARED",
+        severity: "error", table: inventory.tableId, row: claim.row,
+        field: "fromPort",
+        message: "The declared source-port link endpoint has no matching explicit Interface ID or canonical Interface Name on its own device; a generated primary interface is not evidence.",
+      });
+    if (claim.toPort && declaredPorts.get(claim.to) !== claim.toPort)
+      diagnostics.push({
+        code: "NETWORK_IMPORT_INLINE_LINK_PORT_UNDECLARED",
+        severity: "error", table: inventory.tableId, row: claim.row,
+        field: "toPort",
+        message: "The declared target-port link endpoint has no matching explicit Interface ID or canonical Interface Name on the target device; no port was inferred.",
+      });
   }
   const unmappedColumnCount = nonemptyUnmappedHeaders.size;
   if (unmappedColumnCount > 0) diagnostics.push({

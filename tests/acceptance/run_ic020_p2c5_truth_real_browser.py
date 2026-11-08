@@ -406,6 +406,112 @@ def case_shorthand_supplemental_source_truth(browser,url):
             "originalBuilderUnchanged":True,"physicalProbes":False,
             "externalRequests":0}
 
+def case_declared_inline_link_ports(browser,url):
+    """Real CSV ports and link kinds survive; no physical port is inferred."""
+    columns=[
+        "Asset ID","Hostname","Device Type","Interface ID","IP Address",
+        "Connected To","Link ID","From Port","To Port","Link Type",
+    ]
+    rows=[
+        ["edge01","Edge","Router","wan0","192.0.2.10",
+         "peer01","edge_to_peer","wan0","lan0","management"],
+        ["peer01","Peer","Server","lan0","","","","","",""],
+    ]
+    data=("\n".join([",".join(columns)]+[
+        ",".join(row) for row in rows])+"\n").encode("utf-8")
+    page,errors,outside=setup(browser,url)
+    try:
+        with page.expect_file_chooser(timeout=20000) as future:
+            page.locator('[data-network-import-primary="true"]').click()
+        future.value.set_files({
+            "name":"documented-inline-ports.csv","mimeType":"text/csv","buffer":data,
+        })
+        review=page.locator('[data-network-import-preview]')
+        expect(review).to_have_attribute("data-network-import-preview",
+                                         "READY",timeout=30000)
+        require(hashlib.sha256(data).hexdigest() in
+                page.locator('[data-network-import-sha]').inner_text(),
+                "Original CSV SHA not retained")
+        require(review.locator('[data-network-import-unmapped="0"]').count()==1,
+                "Link port, kind or ID columns were silently ignored")
+        page.locator('[data-network-import-activate]').click()
+        expect(page.locator('[data-network-import-panel]')).to_have_count(
+            0,timeout=45000)
+        source=exported_source(page)
+        links=source["connections"]
+        require(links==[{
+            "id":"edge_to_peer","kind":"management",
+            "from":{"resource":"edge01","port":"wan0"},
+            "to":{"resource":"peer01","port":"lan0"},
+            "properties":{},
+        }], "Compiled Builder lost exact documented physical link ID/ports/kind")
+        resources={r["id"]:r for r in source["resources"]}
+        require(resources["edge01"]["interfaces"][0]["id"]=="wan0" and
+                resources["peer01"]["interfaces"][0]["id"]=="lan0",
+                "Physical port metadata did not match independently declared interfaces")
+        require(not errors,"Positive inline link UI errors "+repr(errors))
+        require(not outside,"Unexpected external request "+repr(outside))
+    finally:page.close()
+
+    # Negative cases retain the actual source byte hash, reject both modes,
+    # and never change the preexisting Builder after closing the review.
+    cases=[
+        ("implicit_source_primary", [
+            ["edge01","Edge","Router","","192.0.2.10",
+             "peer01","edge_to_peer","primary","lan0","management"],
+            rows[1]], "NETWORK_IMPORT_INLINE_LINK_PORT_UNDECLARED",
+         "Devices / row 1 / field fromPort"),
+        ("undeclared_target_port", [
+            ["edge01","Edge","Router","wan0","192.0.2.10",
+             "peer01","edge_to_peer","wan0","eth99","management"],
+            rows[1]], "NETWORK_IMPORT_INLINE_LINK_PORT_UNDECLARED",
+         "Devices / row 1 / field toPort"),
+        ("orphan_link_details", [
+            ["edge01","Edge","Router","wan0","192.0.2.10",
+             "","edge_to_peer","wan0","lan0","management"],
+            rows[1]], "NETWORK_IMPORT_LINK_DETAIL_WITHOUT_TARGET",
+         "Devices / row 1 / field linkId"),
+    ]
+    for name,case_rows,code,locator in cases:
+        blocked_page,errors,outside=setup(browser,url)
+        try:
+            before=exported_source(blocked_page)
+            negative=("\n".join([",".join(columns)]+[
+                ",".join(row) for row in case_rows])+"\n").encode("utf-8")
+            with blocked_page.expect_file_chooser(timeout=20000) as future:
+                blocked_page.locator('[data-network-import-primary="true"]').click()
+            future.value.set_files({
+                "name":name+".csv","mimeType":"text/csv","buffer":negative,
+            })
+            review=blocked_page.locator('[data-network-import-preview]')
+            expect(review).to_have_attribute(
+                "data-network-import-preview","BLOCKED",timeout=30000)
+            text=review.inner_text()
+            require(code in text and locator in text,
+                    "Missing actual source port rejection: "+name)
+            require(blocked_page.locator(
+                '[data-network-import-activate]').is_disabled(),
+                "Invalid physical port offered Builder activation")
+            require(blocked_page.locator(
+                '[data-network-import-runtime]').is_disabled(),
+                "Invalid physical port offered modeled Runtime")
+            require(hashlib.sha256(negative).hexdigest() in
+                    blocked_page.locator('[data-network-import-sha]').inner_text(),
+                    "Blocked source did not expose its original bytes SHA")
+            blocked_page.get_by_role(
+                "button",name="Close network import").click()
+            expect(blocked_page.locator(
+                '[data-network-import-panel]')).to_have_count(0)
+            require(exported_source(blocked_page)==before,
+                    "Invalid physical link mutated original Builder: "+name)
+            require(not errors,"Negative inline port UI errors "+repr(errors))
+            require(not outside,"Unexpected external request "+repr(outside))
+        finally:blocked_page.close()
+    return {"case":"declared_inline_link_ports_exact_source",
+            "status":"PASS","positiveCSV":True,"negativeCSV":[c[0] for c in cases],
+            "originalBuilderUnchanged":True,"physicalProbes":False,
+            "externalRequests":0}
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--url",required=True)
@@ -430,6 +536,7 @@ def main():
             cases.append(case_dual_stack_source_truth(browser,args.url))
             cases.append(case_unprojected_workbook(browser,args.url))
             cases.append(case_shorthand_supplemental_source_truth(browser,args.url))
+            cases.append(case_declared_inline_link_ports(browser,args.url))
         finally:browser.close()
     report={"status":"PASS","kind":"Actual compiled Chromium five-format P2c5 source-bound modeled verdicts",
             "environment":"GitHub Actions Ubuntu; Parrot-native/physical network NOT_RUN",
