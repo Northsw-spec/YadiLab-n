@@ -872,6 +872,90 @@ for (const [caseName, corrupt, expected] of [
   await assert.rejects(readProjectDocument(JSON.stringify(forged), opts),
     expected, "Open must reject correctly hashed " + caseName);
 }
+// PROJECT-050: a checksum-valid .yadilab must not contain dangling Foundation
+// selectors, malformed network port/protocol or ambiguous scan ranges. Match
+// the Compiler's test contract on BOTH explicit Save and untrusted Open.
+const invalidProjectTests = [
+  ["network.reachability",{from:"ghost",to:"rds01",protocol:"tcp",port:3389},
+   "UNKNOWN_TEST_RESOURCE"],
+  ["network.segmentation",{from:"attacker",to:"ghost",protocol:"tcp"},
+   "UNKNOWN_TEST_RESOURCE"],
+  ["network.route_test",{from:"attacker",to:"rds01",protocol:"ftp"},
+   "TEST_PARAM_INVALID"],
+  ["network.reachability",{from:"attacker",to:"rds01"},"TEST_PARAM_REQUIRED"],
+  ["network.segmentation",{from:"attacker",to:"rds01",protocol:"tcp",port:70000},
+   "TEST_PARAM_INVALID"],
+  ["network.route_test",{from:"attacker",to:"rds01",protocol:"udp"},"TEST_PARAM_REQUIRED"],
+  ["network.route_test",{from:"attacker",to:"rds01",protocol:"icmp",port:443},
+   "TEST_PARAM_INVALID"],
+  ["identity.authentication_test",{subject:"ghost",target:"rds01"},"UNKNOWN_TEST_RESOURCE"],
+  ["identity.authentication_test",{subject:"attacker",target:"ghost"},"UNKNOWN_TEST_RESOURCE"],
+  ["identity.privilege_path",{subject:"attacker",resource:"ghost",permission:"read"},
+   "UNKNOWN_TEST_RESOURCE"],
+  ["identity.permission",{subject:"attacker",resource:"rds01"},"TEST_PARAM_REQUIRED"],
+  ["identity.permission",{subject:"ghost",resource:"rds01",permission:"read"},
+   "UNKNOWN_TEST_RESOURCE"],
+  ["identity.membership",{subject:"attacker",group:"ghost"},"UNKNOWN_TEST_RESOURCE"],
+  ["windows.hardening_check",{target:"ghost",path:"properties.nla",equals:true},
+   "UNKNOWN_TEST_RESOURCE"],
+  ["windows.hardening_check",{target:"rds01",equals:true},"TEST_PARAM_REQUIRED"],
+  ["linux.hardening_check",{target:"rds01",path:"properties.enabled"},"TEST_PARAM_REQUIRED"],
+  ["network.port_scan",{from:"attacker",to:"rds01",port:443,ports:[22]},
+   "TEST_PARAM_AMBIGUOUS"],
+  ["network.port_scan",{from:"attacker",to:"rds01",port:0,ports:[22]},
+   "TEST_PARAM_INVALID"],
+  ["network.port_scan",{from:"attacker",to:"rds01",port:443,ports:["ssh"]},
+   "TEST_PARAM_INVALID"],
+];
+for (const [kind,params,code] of invalidProjectTests) {
+  const test = {id:"project_050_test",type:kind,params};
+  const changed=structuredClone(source);
+  changed.tests.push(test);
+  assert.equal(validateSource(changed),true,
+    "JSON shape alone does not enforce " + kind + " semantics");
+  await assert.rejects(
+    createProjectDocument({...workspace,source:changed},opts),
+    new RegExp("PROJECT_" + code),
+    "Manual Save must fail before writing a broken " + kind);
+  const forged=structuredClone(doc);
+  forged.content.source.tests.push(test);
+  forged.contentSha256=Buffer.from(await webcrypto.subtle.digest(
+    "SHA-256",new TextEncoder().encode(JSON.stringify(forged.content))
+  )).toString("hex");
+  await assert.rejects(readProjectDocument(JSON.stringify(forged),opts),
+    new RegExp("PROJECT_" + code),
+    "A correctly rehashed malformed " + kind + " must not reopen");
+}
+for (const [name,test] of [
+  ["route_test implicit any protocol",
+   {id:"project_050_route",type:"network.route_test",
+    params:{from:"attacker",to:"rds01"}}],
+  ["reachability explicit ICMP without port",
+   {id:"project_050_icmp",type:"network.reachability",
+    params:{from:"attacker",to:"rds01",protocol:"icmp"}}],
+  ["permission declared subject, object and permission",
+   {id:"project_050_permission",type:"identity.permission",
+    params:{subject:"attacker",resource:"rds01",permission:"read"}}],
+  ["membership declared subject and group",
+   {id:"project_050_group",type:"identity.membership",
+    params:{subject:"attacker",group:"admin01"}}],
+  ["hardening declared property comparison",
+   {id:"project_050_hardening",type:"linux.hardening_check",
+    params:{target:"rds01",path:"properties.security.enabled",equals:false}}],
+  ["port scan exact ports list",
+   {id:"project_050_scan",type:"network.port_scan",
+    params:{from:"attacker",to:"rds01",ports:[22,443]}}],
+]) {
+  const changed=structuredClone(source);
+  changed.tests.push(test);
+  const saved=await createProjectDocument({...workspace,source:changed},opts);
+  const opened=await readProjectDocument(saved,opts);
+  assert.deepEqual(opened.source.tests.at(-1),test,
+    "Valid " + name + " must survive explicit verified hash roundtrip");
+  assert.deepEqual(opened.layoutOverrides,workspace.layoutOverrides);
+}
+console.log("PASS PROJECT-050: all Foundation test selectors/ports fail closed on native Save and correctly rehashed Open");
+
 console.log("PASS PROJECT-009: test params and troubleshooting evidence fail closed on Save/Open, valid selectors and source roundtrip");
 // PROJECT-010: JSON schema validates rule syntax, but unlike Compiler
 // semantics it does not prove that referenced test and resource IDs exist.

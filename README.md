@@ -19,6 +19,17 @@ The active YadiLab application repository, migrated to a new Git history from th
 
 The application provides user-controlled **New, Open, Save, Save As and Ctrl+S** for editable `.yadilab` documents, with schema and reference checks, unsaved-change warnings, native-disk conflict detection and byte-for-byte post-write verification. A browser fallback download is **not** treated as a verified durable save. File reopening restores editable source, **not** previous runtime evaluation or Engine PASS. There is no project autosave, silent overwrite, cloud project storage or inferred network connectivity.
 
+The built-in Foundation test types undergo the same source-reference and
+parameter checks during manual Save, Open and Compiler validation. A
+reachability, routing, segmentation, authentication, membership, permission or
+hardening test cannot silently refer to deleted resources. Invalid explicit
+ports/protocols and competing `network.port_scan` `port`/`ports` declarations
+are blocked; a genuinely omitted optional `network.route_test` protocol
+continues to mean `any`. Direct Engine consumers report **UNKNOWN** when
+explicitly invalid selectors are supplied, not a misleading defaulted TCP
+or portless result. This is source integrity, not evidence that any physical
+network probe has succeeded.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py). The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
 ## Network inventory import: IPv4, IPv6 and documented ports

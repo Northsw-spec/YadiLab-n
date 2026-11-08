@@ -94,7 +94,47 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
   };
   for (const test of source.tests) {
     const params = test.params;
-    if (test.type === "network.port_scan" ||
+    const requireParamText = key => {
+      if (typeof params[key] !== "string" || params[key].length === 0)
+        blocked("TEST_PARAM_REQUIRED");
+    };
+    // Keep native Save/Open aligned with Foundation Compiler. A syntactically
+    // valid, SHA-matching file may not carry unresolvable resource IDs or a
+    // protocol/port that Runtime would silently reinterpret as missing.
+    if (["network.reachability", "network.segmentation", "network.route_test"]
+        .includes(test.type)) {
+      checkTestResource(params, "from");
+      checkTestResource(params, "to");
+      const protocol = params.protocol;
+      if (protocol === undefined) {
+        if (test.type !== "network.route_test") blocked("TEST_PARAM_REQUIRED");
+      } else if (!["tcp", "udp", "icmp", "any"].includes(protocol)) {
+        blocked("TEST_PARAM_INVALID");
+      }
+      if (params.port !== undefined && !validPort(params.port))
+        blocked("TEST_PARAM_INVALID");
+      if (protocol === "udp" && !validPort(params.port))
+        blocked("TEST_PARAM_REQUIRED");
+      if (protocol === "icmp" && params.port !== undefined)
+        blocked("TEST_PARAM_INVALID");
+    } else if (test.type === "identity.authentication_test") {
+      checkTestResource(params, "subject");
+      checkTestResource(params, "target");
+    } else if (test.type === "identity.privilege_path"
+        || test.type === "identity.permission") {
+      checkTestResource(params, "subject");
+      checkTestResource(params, "resource");
+      requireParamText("permission");
+    } else if (test.type === "identity.membership") {
+      checkTestResource(params, "subject");
+      checkTestResource(params, "group");
+    } else if (test.type === "windows.hardening_check"
+        || test.type === "linux.hardening_check") {
+      checkTestResource(params, "target");
+      requireParamText("path");
+      if (!Object.prototype.hasOwnProperty.call(params, "equals"))
+        blocked("TEST_PARAM_REQUIRED");
+    } else if (test.type === "network.port_scan" ||
         test.type === "virtualization.management_exposure") {
       checkTestResource(params, "from");
       checkTestResource(params, "to");
@@ -103,10 +143,17 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
         blocked("TEST_PARAM_INVALID");
       if (test.type === "virtualization.management_exposure") {
         if (!validPort(params.port)) blocked("TEST_PARAM_REQUIRED");
-      } else if (!validPort(params.port) &&
-          !(Array.isArray(params.ports) && params.ports.length > 0 &&
-            params.ports.every(validPort))) {
-        blocked("TEST_PARAM_REQUIRED");
+      } else {
+        const validSingle = validPort(params.port);
+        const validList = Array.isArray(params.ports) &&
+          params.ports.length > 0 && params.ports.every(validPort);
+        if (!validSingle && !validList) blocked("TEST_PARAM_REQUIRED");
+        if (params.port !== undefined && !validSingle)
+          blocked("TEST_PARAM_INVALID");
+        if (params.ports !== undefined && !validList)
+          blocked("TEST_PARAM_INVALID");
+        if (params.port !== undefined && params.ports !== undefined)
+          blocked("TEST_PARAM_AMBIGUOUS");
       }
     } else if (["identity.password_audit", "logging.visibility_test",
       "logging.alert_test", "backup.restore_test"].includes(test.type)) {
