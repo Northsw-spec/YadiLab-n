@@ -2434,7 +2434,13 @@ function ImportWorkbenchPanel({ state, setState, getImportState, importRequestEp
   return e("section", { className: "import-workbench", "data-import-workbench": state.status },
     e("h3", null, "Import Workbench"),
     e("p", null, "Parse → Validate → Preview → Compile → Activate. Parse och preview ändrar inte aktiv Runtime."),
-    e("label", { className: "file-button" }, "Välj native JSON", e("input", { type: "file", accept: ".json,application/json", onChange: (event) => parse(event.target.files?.[0]), hidden: true })),
+    e("label", { className: "file-button" }, "Välj native JSON", e("input", {
+      type: "file", accept: ".json,application/json",
+      onChange: (event) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (file) void parse(file);
+      }, hidden: true })),
     e("span", { className: "import-state", "data-import-state": state.status },
       `State: ${state.status}${state.fileName ? " · " + state.fileName : ""}`),
     state.status === "READING" ? e("p", { role: "status", "aria-live": "polite" },
@@ -3944,7 +3950,17 @@ function formatNetworkImportDiagnostic(d) {
 }
 
 function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
-  const fileAction = (label, accept, onChange, dataAttribute) => e("label", { className: "workspace-menu-action file-button" }, label, e("input", { type: "file", accept, onChange, hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
+  const fileAction = (label, accept, onChange, dataAttribute) => e("label",
+    { className: "workspace-menu-action file-button" }, label,
+    e("input", { type: "file", accept,
+      // Reset after copying the selected File in the direct event callback.
+      // Browsers do not fire change when the same physical path is selected
+      // again; users must be able to re-import a file they have just fixed.
+      onChange: (event) => {
+        try { onChange(event); }
+        finally { event.currentTarget.value = ""; }
+      },
+      hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
   const networkPickerRef = useRef(null);
   // Opening the native picker happens synchronously within the user's click,
   // not from an effect: browsers reject deferred file dialogs.
