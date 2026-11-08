@@ -3687,7 +3687,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       e("h3", null, "Preview – ", preview.filename),
       e("p", null, `Found tables: ${preview.sheets.join(", ") || "none"} · Devices: ${preview.devices} · Explicit links: ${preview.links}`),
       e("p", { "data-network-import-sha": "true", "data-network-import-byte-size": preview.sourceByteSize }, `Original SHA-256: ${preview.sourceSha256} · Bytes: ${preview.sourceByteSize}`),
-      e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Unsupported fields are excluded from modeled resources, links and probes.`),
+      e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Unsupported Devices columns are disclosed but not modeled; nonempty unprojected canonical workbook sheets/columns block activation instead of silently disappearing.`),
       preview.linkSourceConflict ? e("div", { "data-network-import-link-review": preview.linkSourceChoice ? "REVIEWED" : "REVIEW_REQUIRED" },
         e("p", null, `Two competing declared link sources: Links table ${preview.linkSourceConflict.sheetDeclaredLinks} · Connected To ${preview.linkSourceConflict.inlineDeclaredLinks}. No source is automatically preferred or combined.`),
         preview.linkSourceChoice
