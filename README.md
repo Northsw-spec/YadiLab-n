@@ -21,6 +21,31 @@ The application provides user-controlled **New, Open, Save, Save As and Ctrl+S**
 
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py). The [original feature issue](https://github.com/Northsw-spec/YadiLab-n/issues/1) is historical scope, not the current implementation status.
 
+## Network inventory import: IPv4, IPv6 and documented ports
+
+Use the **Import JSON / Excel / CSV → Network Topology** action to preview a
+`Devices` table before choosing an editable Builder or modeled Runtime. A
+device row may declare `Asset ID`, `Hostname`, `Device Type`, IPv4
+(`IP Address` / `Prefix Length`), `IPv6 Address` / `IPv6 Prefix`,
+`MAC Address`, `Interface ID`, `Interface Name`, `MTU`, and
+`Connected To`. These supported columns are preserved as original facts;
+addresses are not inferred from a gateway or nearby nodes.
+
+An explicit `Interface ID` must be a stable lowercase canonical ID for
+link-port references. An `Interface Name` may instead be a descriptive label.
+A Devices row represents **at most one interface**; use a canonical
+`Interfaces` workbook sheet for devices with multiple documented interfaces.
+Both compact and full IPv6 notation, with an optional `/0` through `/128`
+prefix, are validated before Builder activation. Invalid, competing,
+or orphan address/prefix declarations are blocked. IPv6 zone identifiers
+such as `%eth0` are not currently supported in imported addresses.
+
+An imported address, MAC or interface label is a declaration, **not**
+evidence of physical cabling, routing, reachability or successful Engine probes.
+Connections require explicit source endpoint IDs and do not gain physical port
+claims unless the source itself declares them. A preview can be READY for
+editing while operational evidence remains UNKNOWN.
+
 ## Engineering policy and cold-start
 
 **[`AGENTS.md` is the versioned development and automation entrypoint](AGENTS.md).** Read it from current GitHub `main` together with actual source, tests, schemas, current PRs and exact-commit Actions runs. Previous conversations, AI memory and old status documents are **not required** and must not be used as substitutes for those sources. The automation prompt controls workflow; GitHub contains the technical facts.
