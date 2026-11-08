@@ -442,6 +442,13 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
   const encoded = encoder.encode(text);
   if (encoded.byteLength < 1 || encoded.byteLength > PROJECT_MAX_BYTES)
     blocked("FILE_TOO_LARGE");
+  // A native write must carry one explicit non-destructive destination
+  // policy. The UI supplies one, but this exported boundary is also callable
+  // by other integrations. Without either, createWritable() would overwrite
+  // ANY existing project without comparing disk bytes or requiring an empty
+  // Save As target. Fail before even touching the native handle.
+  if (!requireEmptyTarget && expectedFileSha256 === undefined)
+    blocked("DESTINATION_POLICY_REQUIRED");
   // An unrelated Save As target may already contain a different project.
   // File-picker selection is NOT permission to silently destroy those bytes.
   // Opening the existing document is the explicit way to associate it for Save.
