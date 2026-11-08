@@ -1877,6 +1877,74 @@ def main():
                 run_menu.locator("summary").click()
             preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
             expect(preview).to_be_enabled(timeout=30000)
+            # PROJECT-047: A compiled Builder can be edited and the old
+            # enabled Preview button clicked before React repaints. Without
+            # the live-source check this starts an obsolete Runtime and can
+            # replace the newest unsaved canonical source.
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-001 runtime restore source revised")
+            restore_race.evaluate("""() => {
+                const apply = document.querySelector(
+                    '[data-builder-inspector="mission"] button');
+                const preview = [...document.querySelectorAll(
+                    '.workspace-menu button')].find(
+                    button => button.textContent.trim() === 'Förhandsvisa körläge');
+                if (!apply || !preview || preview.disabled)
+                    throw new Error("PROJECT047_STALE_PREVIEW_CONTROLS_UNAVAILABLE");
+                apply.click();
+                preview.click();
+            }""")
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder")
+            expect(restore_race.locator(".mission-strip")).to_contain_text(
+                "PROJECT-001 runtime restore source revised")
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
+            expect(restore_race.locator(".diagnostic")).to_contain_text(
+                "PROJECT_RUNTIME_PREVIEW_STALE_WORKSPACE")
+            require(restore_race.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "Stale Runtime Preview unexpectedly wrote a project")
+
+            # An immediate Source export must contain the new canonical
+            # title, not the previous render's source. Keep it an actual
+            # browser download, with no file write or manual source override.
+            export_menu = restore_race.locator(".workspace-menu", has=
+                restore_race.locator("summary", has_text="Import / Export"))
+            if export_menu.get_attribute("open") is None:
+                export_menu.locator("summary").click()
+            inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input").fill("PROJECT-001 runtime restore source exported")
+            with restore_race.expect_download(timeout=20000) as live_export:
+                restore_race.evaluate("""() => {
+                    const apply = document.querySelector(
+                        '[data-builder-inspector="mission"] button');
+                    const exportButton = [...document.querySelectorAll(
+                        '.workspace-menu button')].find(
+                        button => button.textContent.trim() === 'Exportera källfil');
+                    if (!apply || !exportButton || exportButton.disabled)
+                        throw new Error("PROJECT047_LIVE_EXPORT_CONTROLS_UNAVAILABLE");
+                    apply.click();
+                    exportButton.click();
+                }""")
+            exported = json.loads(Path(live_export.value.path()).read_text())
+            require(exported["metadata"]["title"] ==
+                    "PROJECT-001 runtime restore source exported",
+                    "Same-turn Source export silently downloaded pre-Apply JSON")
+            expect(restore_race.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-hash", "builder")
+            expect(restore_race.locator(".mission-strip")).to_contain_text(
+                "PROJECT-001 runtime restore source exported")
+            expect(rrc).to_have_attribute("data-project-dirty", "true")
+            require(restore_race.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "A Source JSON export unexpectedly wrote native .yadilab bytes")
+
+            # The newly edited Builder has an invalidated compile result:
+            # explicit recompile is required before a genuine Runtime launch.
+            expect(compile_button).to_be_enabled(timeout=20000)
+            compile_button.click()
+            expect(compile_button).to_be_disabled(timeout=30000)
+            expect(preview).to_be_enabled(timeout=30000)
             preview.click()
             try:
                 expect(restore_race.locator(".app-frame")).not_to_have_attribute(
