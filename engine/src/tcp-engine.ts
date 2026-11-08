@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type {
   EngineQueryResult,
   EngineState,
@@ -33,7 +34,7 @@ const TCP_STATES = new Set<TcpLifecycleState>([
 ]);
 
 function resourceAddresses(state: EngineState, resourceId: string): readonly string[] {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return [];
   const addresses: string[] = [];
   for (const iface of resource.interfaces) {
@@ -91,7 +92,7 @@ export function queryTcpStateMachine(
     sequenceAckTimeline: "NOT_MODELED" as const,
     retransmissionMarkers: "NOT_MODELED" as const,
   };
-  if (!state.resources[sourceId] || !state.resources[destinationId]) {
+  if (!ownResource(state, sourceId) || !ownResource(state, destinationId)) {
     const explanation = [`TCP state-machine query cannot bind source '${sourceId}' and destination '${destinationId}' to runtime resources.`];
     return result("UNKNOWN", { ...base, truth: "UNKNOWN", model: "SERVICE_DECLARATIONS", complete: false, disposition: "RESOURCE_ABSENT", listenerTruth: "UNKNOWN", socketRows: [], selectedSocketIds: [], currentStates: [], explanation });
   }
