@@ -283,6 +283,25 @@ export function sameEditableProjectRevision(previous, next, sourceReplaced = fal
     previous.source.scenarioId.length > 0 &&
     next.source?.scenarioId === previous.source.scenarioId;
 }
+// The native file association is reconciled after React paints, but a new
+// authored project can be committed synchronously before that effect runs.
+// Save must not reuse the old file handle during that window, including when
+// the new project reuses the previous public scenarioId. Ordinary in-place
+// edits and non-source Builder updates remain authorized.
+export function projectFileAssociationStillCurrent(previous, active,
+  associatedTransition, currentTransition) {
+  if (!Number.isSafeInteger(associatedTransition) || associatedTransition < 0 ||
+      !Number.isSafeInteger(currentTransition) || currentTransition < 0 ||
+      associatedTransition !== currentTransition) return false;
+  if (previous === active) return true;
+  if (!previous || !active || previous.mode !== active.mode) return false;
+  if (previous.mode === "builder")
+    return previous.source === active.source ||
+      sameEditableProjectRevision(previous, active);
+  if (previous.mode === "runtime")
+    return previous.source === active.source;
+  return false;
+}
 
 export function projectSnapshot(workspace) {
   if (!workspace || workspace.mode !== "builder") return null;
