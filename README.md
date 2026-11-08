@@ -133,8 +133,11 @@ simultaneously cannot accidentally discard one when only the other is
 applied: commit one editor at a time or revert other staged text first.
 Topology selection, canvas edits, Compile, Runtime Preview and canonical
 JSON Export are blocked while staged Builder form text remains; the
-operator must explicitly Apply or revert it. A blocked action preserves
-the visible draft instead of silently saving or compiling older source.
+operator must explicitly Apply or revert it. Each Inspector/JSON editor
+has a confirmed **Förkasta utkast** action that restores only that editor's
+original form text without changing the canonical project; other staged
+editors keep their pending state. A blocked action preserves the visible
+draft instead of silently saving or compiling older source.
 A confirmed project transition clears old pending drafts synchronously;
 late editor callbacks and React unmounts from the superseded project
 cannot mark the newly opened document dirty or erase its fresh edits.
