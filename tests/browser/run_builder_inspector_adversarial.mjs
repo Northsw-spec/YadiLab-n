@@ -12,6 +12,7 @@ import {
   createResourceFromInspector,
   createZoneFromInspector,
   deleteSelectedBuilderObject,
+  deleteConnection,
   deleteResource,
   deleteZone,
   duplicateSelectedBuilderResource,
@@ -266,6 +267,38 @@ for (const [label, code, modify] of zoneDeleteCases) {
 }
 eq(JSON.stringify(unreferenced.source), assetBeforeDelete,
   "reference test fixtures do not mutate the unreferenced baseline");
+
+// BUILDER-055: a link is an independently addressable canonical object.
+// Its notes remain after Delete Connection or either cascading Delete path.
+// These actions must fail *before* changing the topology or source revision.
+const annotatedSource = structuredClone(deletionBase);
+annotatedSource.connections = [{
+  id: "critical_link", kind: "network",
+  from: { resource: "firewall01" }, to: { resource: "rds01" },
+  properties: {},
+}];
+annotatedSource.notes = [{ id: "link_evidence", target: "critical_link",
+  text: "Documented link must not lose its annotation" }];
+const annotated = createBuilderWorkspace(annotatedSource);
+const linkBytes = JSON.stringify(annotated.source);
+for (const [label, perform] of [
+  ["Delete Connection", workspace => deleteConnection(workspace, "critical_link")],
+  ["selected Delete Connection", workspace =>
+    deleteSelectedBuilderObject(setBuilderSelection(workspace, ["critical_link"], "critical_link"), true)],
+  ["cascading Delete Resource", workspace => deleteResource(workspace, "rds01", true)],
+  ["cascading Delete Zone", workspace => deleteZone(workspace, "server", true)],
+]) {
+  const denied = perform(annotated);
+  ok(!denied.ok, label + " must reject a link with surviving targeted note");
+  ok(denied.diagnostics.some(item => item.code === "BUILDER_DELETE_NOTE_REFERENCED"),
+    label + " reports the actual dependent note");
+  eq(JSON.stringify(denied.workspace.source), linkBytes,
+    label + " leaves canonical source byte-for-byte unchanged");
+  eq(denied.workspace.sourceRevision, annotated.sourceRevision,
+    label + " does not advance source revision");
+}
+eq(JSON.stringify(annotated.source), linkBytes,
+  "all rejected deletion pathways leave original annotated project untouched");
 
 const ui = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(!ui.includes("dangerouslySetInnerHTML"), "Builder Inspector does not inject arbitrary HTML");
