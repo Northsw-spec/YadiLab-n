@@ -951,4 +951,157 @@ for (const { code, table, field } of [
 assert.equal(actualBlocked.source, undefined);
 console.log("PASS IMPORT-046: optional projected text and conflicting gateway aliases fail closed; valid blanks, finite text and matching declarations preserved");
 
+// IMPORT-047: a shorthand Devices workbook previously discarded every
+// accompanying sheet except Links. Even an explicit route, VLAN or second
+// interface disappeared while the preview offered editable Builder/Runtime.
+const shorthand = () => ({ tables: [
+  { tableId: "Devices", records: [
+    record(1, { "Asset ID": "device_1", Hostname: "Edge", "Device Type": "Router",
+      "Connected To": "device_2" }),
+    record(2, { "Asset ID": "device_2", Hostname: "Host", "Device Type": "Server" }),
+  ] },
+] });
+const normalizedEligible = data => {
+  const n = normalizeNetworkInventoryDocument(data);
+  const mapped = mapNetworkWorkbookToScenario(n.document);
+  return { normalized: n, mapped, ok: mapped.ok &&
+    ![...n.diagnostics, ...mapped.diagnostics].some(d => d.severity === "error") };
+};
+for (const { sheet, fields, expectedRow } of [
+  { sheet: "Routes", fields: { destination: "0.0.0.0/0", nextHop: "192.0.2.1" }, expectedRow: 7 },
+  { sheet: "VLANs", fields: { vlanId: 20, name: "Guest" }, expectedRow: 7 },
+  { sheet: "STP", fields: { rootBridge: "sw01" }, expectedRow: 7 },
+  { sheet: "Firewall", fields: { action: "allow" }, expectedRow: 7 },
+  { sheet: "NAT", fields: { translatedAddress: "198.51.100.8" }, expectedRow: 7 },
+  { sheet: "Flows", fields: { flow: "documented path" }, expectedRow: 7 },
+  { sheet: "Services", fields: { serviceId: "dns" }, expectedRow: 7 },
+  { sheet: "Interfaces", fields: { nodeId: "device_1", interfaceId: "eth1",
+      IPv6: "2001:db8::1" }, expectedRow: 7 },
+  { sheet: "Metadata", fields: { scenarioId: "customer_site", title: "Customer" }, expectedRow: 7 },
+  { sheet: "Zones", fields: { zoneId: "floor_a", kind: "lan" }, expectedRow: 7 },
+  { sheet: "Layout", fields: { nodeId: "device_1", rank: 2 }, expectedRow: 7 },
+  { sheet: "VendorInventory", fields: { ownership: "Customer A" }, expectedRow: 7 },
+]) {
+  const document = shorthand();
+  document.tables.push({ tableId: sheet, records: [record(expectedRow, fields)] });
+  const result = normalizedEligible(document);
+  assert.equal(result.ok, false,
+    "Populated supplementary " + sheet + " must block, not disappear");
+  assert.ok(result.normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED" &&
+    d.table === sheet && d.row === expectedRow && d.severity === "error"),
+    "Original sheet and physical row must survive: " + sheet);
+  // Canonical Metadata and Interfaces are *always* created by Devices
+  // normalization. They must not be confused with accepted original sheets.
+  assert.deepEqual(result.normalized.document.tables.map(t => t.tableId),
+    ["Metadata", "Nodes", "Interfaces", "Links"],
+    "Only supported canonical destination sheets may be generated");
+  if (sheet === "Interfaces") assert.equal(
+    result.normalized.document.tables.find(t => t.tableId === "Interfaces").records.length,
+    0, "An original extra port is NOT silently promoted to a canonical interface");
+  assert.deepEqual(result.mapped.source?.connections.map(x =>
+    [x.from.resource, x.to.resource]), [["device_1", "device_2"]],
+    "A blocked supplementary sheet cannot be treated as a physical link source");
+}
+for (const bad of [false, true, 0, { detail: "exists" }, ["unknown"]]) {
+  const document = shorthand();
+  document.tables.push({ tableId: "Routes", records: [record(9, {
+    nextHop: bad, destination: " ",
+  })] });
+  const r = normalizedEligible(document);
+  assert.equal(r.ok, false, "Structured and numeric populated supplemental cells cannot disappear");
+  assert.ok(r.normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED" &&
+    d.table === "Routes" && d.row === 9));
+}
+for (const sheet of ["Routes", "Interfaces", "Metadata", "VendorInventory"]) {
+  const document = shorthand();
+  document.tables.push({ tableId: sheet, records: [
+    record(3, { note: null, address: " \t" }), record(5, { note: "" }),
+  ] });
+  const result = normalizedEligible(document);
+  assert.equal(result.ok, true, JSON.stringify(result.normalized.diagnostics));
+  assert.deepEqual(result.mapped.source.connections.map(c => [c.from.resource, c.to.resource]),
+    [["device_1", "device_2"]],
+    "Empty " + sheet + " template must not fabricate or lose real inline connection");
+}
+for (const { header, value } of [
+  { header: "speedMbps", value: 1000 }, { header: "VLAN", value: 20 },
+  { header: "Circuit ID", value: "ISP-02" }, { header: "Source PoE", value: false },
+  { header: "Vendor Tag", value: { site: "headquarters" } },
+]) {
+  const doc = sheetInventory({ [header]: value });
+  const result = normalizedEligible(doc);
+  assert.equal(result.ok, false,
+    "Selected Links sheet with undocumented " + header + " must fail");
+  assert.ok(result.normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_LINK_FIELD_UNMAPPED" &&
+    d.table === "Links" && d.row === 1 && d.field === header),
+    "Unknown selected Link field must retain its source locator");
+  assert.equal(result.mapped.source?.connections[0]?.kind, "management",
+    "Never silently reinterpret documented link type");
+}
+const validExplicitSheet = normalizedEligible(sheetInventory({
+  "Circuit ID": " ", bandwidth: null, "Source PoE": undefined,
+}));
+assert.equal(validExplicitSheet.ok, true,
+  "Blank extra selected-Link template columns are not claims");
+assert.equal(validExplicitSheet.mapped.source.connections.length, 1);
+
+const inlineAndBlankLinks = shorthand();
+inlineAndBlankLinks.tables.push({ tableId: "Links", records: [
+  record(1, { nodeA: " ", nodeB: null, kind: "", "Circuit ID": " " }),
+  record(2, { nodeA: null, nodeB: undefined }),
+] });
+const blankSheet = normalizedEligible(inlineAndBlankLinks);
+assert.equal(blankSheet.ok, true, JSON.stringify(blankSheet.normalized.diagnostics));
+assert.equal(blankSheet.normalized.linkSourceConflict, undefined,
+  "A blank Links tab must not demand an artificial choice between sources");
+assert.equal(blankSheet.mapped.source.connections.length, 1,
+  "Inline Connected To must remain the single explicit connection");
+assert.equal(blankSheet.mapped.source.connections[0].id, "link_row_1");
+const onlyBlankLinkSheet = deviceInventory({});
+onlyBlankLinkSheet.tables.push({ tableId: "Links", records: [
+  record(4, { kind: " ", nodeA: null, nodeB: "" }),
+] });
+const noLink = normalizedEligible(onlyBlankLinkSheet);
+assert.equal(noLink.ok, true);
+assert.equal(noLink.mapped.source.connections.length, 0);
+assert.ok(noLink.normalized.diagnostics.some(d =>
+  d.code === "NETWORK_IMPORT_NO_EXPLICIT_LINKS"));
+
+const explicitLinkAndBlankSupplement = sheetInventory({
+  "Circuit ID": null, "Bandwidth": " ",
+});
+explicitLinkAndBlankSupplement.tables.push({
+  tableId: "Routes", records: [record(3, { destination: " ", nextHop: null })],
+});
+const withBlankExtra = normalizedEligible(explicitLinkAndBlankSupplement);
+assert.equal(withBlankExtra.ok, true,
+  "Blank supplemental template is allowed alongside fully declared explicit links");
+assert.deepEqual(withBlankExtra.mapped.source.connections.map(x => x.id), ["edge_1"]);
+
+// Real multitable JSON source, not just objects assembled directly in tests.
+const supplementalJson = JSON.stringify({
+  Devices: [
+    { "Asset ID": "device_1", Hostname: "Edge", "Device Type": "Router",
+      "Connected To": "device_2" },
+    { "Asset ID": "device_2", Hostname: "Host", "Device Type": "Server" },
+  ],
+  Routes: [{ destination: "0.0.0.0/0", nextHop: "192.0.2.1" }],
+  VLANs: [{ vlanId: 20, name: "Guests" }],
+});
+const parsedSupplemental = await jsonImportAdapter.parse({
+  bytes: new TextEncoder().encode(supplementalJson),
+  mediaType: "application/json",
+}, { options: { tableName: "Devices" } });
+const parsedUnmapped = normalizedEligible(parsedSupplemental.document);
+assert.equal(parsedUnmapped.ok, false);
+for (const sheet of ["Routes", "VLANs"]) assert.ok(
+  parsedUnmapped.normalized.diagnostics.some(d =>
+    d.code === "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED" &&
+    d.table === sheet && d.row === 1),
+  "Actual JSON adapter must retain the populated " + sheet + " source row");
+console.log("PASS IMPORT-047: supplemental inventory truth and selected link fields cannot silently disappear; genuine blank templates and source links remain valid");
+
 console.log("PASS dev2 workbook mapping: 15 assertions across 30/50/80 nodes and fail-closed references.");

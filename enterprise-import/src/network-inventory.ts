@@ -26,6 +26,20 @@ const RECOGNIZED_DEVICE_HEADERS = new Set(
   Object.values(aliases).flatMap((names) => names.map(key)),
 );
 const INVENTORY_TABLE_IDS = new Set(["devices", "nodes", "records"]);
+// Only an explicit Links sheet may accompany a shorthand Devices inventory.
+// Everything else must be accounted for rather than silently disappearing
+// when the shorthand is transformed into canonical Nodes/Interfaces/Links.
+const LINK_ALIASES = {
+  id: ["linkId", "Link ID", "Connection ID"],
+  from: ["nodeA", "From", "Source", "From Device", "Source Device"],
+  to: ["nodeB", "To", "Destination", "To Device", "Target Device"],
+  portA: ["interfaceA", "From Port", "Source Port"],
+  portB: ["interfaceB", "To Port", "Target Port"],
+  kind: ["kind", "Link Type", "Connection Type"],
+} as const;
+const RECOGNIZED_LINK_HEADERS = new Set(
+  Object.values(LINK_ALIASES).flatMap(names => names.map(key)),
+);
 function populatedSourceCell(value: unknown): boolean {
   // A false, 0 or structured original value is not an empty cell.
   return value !== null && value !== undefined &&
@@ -138,6 +152,22 @@ export function normalizeNetworkInventoryDocument(
     message: "Expected one supported Devices or Nodes table, or a CSV/TSV device inventory.",
   }] };
   const diagnostics: ImportDiagnostic[] = [];
+  // Canonical workbook validation rejects unsupported populated sheets, but
+  // it runs *after* shorthand normalization, which used to erase all other
+  // source tabs. Reject them here with original table and physical row before
+  // the normalized document is allowed to become an editable Builder source.
+  for (const table of document.tables) {
+    if (table === inventory || table.tableId.toLowerCase() === "links") continue;
+    for (const row of table.records) {
+      if (Object.values(row.fields).some(cell => populatedSourceCell(cell?.value))) {
+        diagnostics.push({
+          code: "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED",
+          severity: "error", table: table.tableId, row: row.recordIndex,
+          message: "A populated supplementary sheet is not projected by Devices inventory import. Use a canonical workbook or remove the unsupported declarations before activation.",
+        });
+      }
+    }
+  }
   const nonemptyUnmappedHeaders = new Set<string>();
   const nodes: ImportRecord[] = [], interfaces: ImportRecord[] = [], inlineLinks: ImportRecord[] = [];
   for (const row of inventory.records) {
@@ -267,11 +297,16 @@ export function normalizeNetworkInventoryDocument(
     code: "NETWORK_IMPORT_LINK_SHEET_AMBIGUOUS", severity: "error",
     message: "Multiple Links tables are present; resolve the duplicate source tables before import.",
   });
-  const conflicted = inlineLinks.length > 0 && explicitLinks !== undefined;
+  // A blank Links template row is not a real source assertion. It must not
+  // cause an artificial conflict with documented Devices.Connected To edges
+  // or turn into a generated link with missing endpoints.
+  const declaredSheetLinks = explicitLinks?.records.filter(row =>
+    Object.values(row.fields).some(cell => populatedSourceCell(cell?.value))) ?? [];
+  const conflicted = inlineLinks.length > 0 && declaredSheetLinks.length > 0;
   const linkSourceConflict: NetworkLinkSourceConflict | undefined =
-    inlineLinks.length > 0 && explicitLinks !== undefined ? Object.freeze({
+    conflicted ? Object.freeze({
       inlineDeclaredLinks: inlineLinks.length,
-      sheetDeclaredLinks: explicitLinks.records.length,
+      sheetDeclaredLinks: declaredSheetLinks.length,
     }) : undefined;
   if (!validChoice || (choice !== undefined && !conflicted)) diagnostics.push({
     code: "NETWORK_IMPORT_LINK_SOURCE_CHOICE_INVALID", severity: "error",
@@ -288,15 +323,27 @@ export function normalizeNetworkInventoryDocument(
       : "Operator chose inline Connected To declarations only; the explicit Links table was excluded.",
   });
   // A discarded source does not contribute any modeled link.
-  const useSheet = Boolean(explicitLinks) && (!conflicted || choice === "LINKS_SHEET");
-  const links = useSheet ? explicitLinks!.records.map((row) => {
+  const useSheet = declaredSheetLinks.length > 0 && (!conflicted || choice === "LINKS_SHEET");
+  const links = useSheet ? declaredSheetLinks.map((row) => {
+    // The operator explicitly chose these link declarations. Unknown populated
+    // columns such as bandwidth/VLAN must not vanish without a blocking error.
+    // The alternative deliberately unselected source is excluded by the
+    // existing visible source-review decision instead.
+    for (const [header, cell] of Object.entries(row.fields)) {
+      if (!RECOGNIZED_LINK_HEADERS.has(key(header)) && populatedSourceCell(cell?.value))
+        diagnostics.push({
+          code: "NETWORK_IMPORT_LINK_FIELD_UNMAPPED",
+          severity: "error", table: explicitLinks!.tableId, row: row.recordIndex, field: header,
+          message: "A populated Links column cannot be projected onto a source connection; the declaration was not accepted as imported.",
+        });
+    }
     const pickLink = (names: readonly string[]) => pick(row, names, explicitLinks!.tableId, diagnostics);
-    const id = pickLink(["linkId", "Link ID", "Connection ID"]);
-    const from = pickLink(["nodeA", "From", "Source", "From Device", "Source Device"]);
-    const to = pickLink(["nodeB", "To", "Destination", "To Device", "Target Device"]);
-    const portA = pickLink(["interfaceA", "From Port", "Source Port"]);
-    const portB = pickLink(["interfaceB", "To Port", "Target Port"]);
-    const kind = pickLink(["kind", "Link Type", "Connection Type"]);
+    const id = pickLink(LINK_ALIASES.id);
+    const from = pickLink(LINK_ALIASES.from);
+    const to = pickLink(LINK_ALIASES.to);
+    const portA = pickLink(LINK_ALIASES.portA);
+    const portB = pickLink(LINK_ALIASES.portB);
+    const kind = pickLink(LINK_ALIASES.kind);
     // Do not manufacture a row-based ID or default network link kind from
     // an explicit but nontext declaration in a separate Links sheet.
     for (const [field, cell] of [
