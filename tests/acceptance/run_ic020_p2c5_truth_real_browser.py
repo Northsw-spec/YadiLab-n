@@ -244,6 +244,10 @@ def case_unprojected_workbook(browser,url):
             if code:
                 require(code in preview.inner_text(),
                         "Canonical source fact was discarded without error: "+name)
+                original_location=("Routes / row 1" if name=="declared_routes"
+                                   else "Nodes / row 1 / field rack")
+                require(original_location in preview.inner_text(),
+                        "The actual import UI did not locate the source row/field: "+name)
                 require(page.locator('[data-network-import-activate]').is_disabled(),
                         "Unmapped canonical facts offered partial Builder activation")
                 require(page.locator('[data-network-import-runtime]').is_disabled(),
