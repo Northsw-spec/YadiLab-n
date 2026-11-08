@@ -5270,17 +5270,35 @@ function App() {
   const exportPackage = async (distribution) => {
     const origin = latestDrawioWorkspaceRef.current;
     if (origin.mode !== "builder") return;
+    // A verified compiled source does not imply that the visible Inspector
+    // and JSON form inputs were applied. Never package only the old canonical
+    // values while implying the exported package includes those edits.
+    if (hasPendingBuilderDrafts()) {
+      setDiagnostics([{ severity: "error", code: "PROJECT_PACKAGE_EXPORT_UNAPPLIED_DRAFT",
+        message: "Apply or revert the pending Builder form text before exporting a package. No package was downloaded." }]);
+      return;
+    }
+    const startedTransition = scenarioTransitionRef.current;
     const result = await buildBuilderPackageExport(origin, {
       packageIO,
       distribution,
       scenarioExtension: branding.scenarioExtension,
     });
-    // Package building suspends at async I/O. A newer edit or replacement must
-    // not yield a download which falsely appears to include that new source.
-    if (latestDrawioWorkspaceRef.current !== origin) {
+    // Package serialization can await; both a replacement and an ordinary
+    // in-place edit invalidate the original source identity. Also recheck
+    // the project generation for a same-ID replacement with equal source.
+    if (scenarioTransitionRef.current !== startedTransition ||
+        latestDrawioWorkspaceRef.current !== origin) {
       setDiagnostics([{ severity: "error",
         code: "PROJECT_PACKAGE_EXPORT_STALE_WORKSPACE",
         message: "Builder changed while exporting; no outdated package was downloaded. Retry from the current source." }]);
+      return;
+    }
+    // A draft can appear without changing the canonical workspace during
+    // asynchronous package serialization; its text is still user data.
+    if (hasPendingBuilderDrafts()) {
+      setDiagnostics([{ severity: "error", code: "PROJECT_PACKAGE_EXPORT_LATE_UNAPPLIED_DRAFT",
+        message: "An unapplied Builder form was edited while packaging. The stale package was not downloaded; Apply or revert the form first." }]);
       return;
     }
     setDiagnostics(result.diagnostics);
