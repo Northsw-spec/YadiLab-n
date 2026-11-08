@@ -2569,6 +2569,53 @@ def main():
             expect(inspector).to_have_attribute("data-builder-unapplied", "true")
             expect(pc.locator("[data-project-status]")).to_contain_text(
                 "UNAPPLIED FORM EDITS")
+
+            # A separate editor may not commit a newer source revision
+            # while Inspector holds typed but unapplied mission metadata.
+            # That remount would silently destroy the Inspector draft.
+            pending.evaluate("""() => {
+              const notes = document.querySelector(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]');
+              if (!notes) throw new Error('PROJECT065_CROSS_EDITOR_NOT_MOUNTED');
+              let ancestor = notes.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            cross_notes = pending.locator(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]')
+            original_note_text = cross_notes.input_value()
+            cross_notes.fill(original_note_text + " ")
+            pending.locator('.builder-authoring').get_by_role(
+                'button', name='Apply Anteckningar JSON').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_OTHER_EDITOR_UNAPPLIED", timeout=15000)
+            require("PROJECT-065 staged" not in pending.locator(
+                ".mission-strip").inner_text(),
+                "Cross-editor Apply replaced canonical source despite Inspector draft")
+            expect(inspector).to_have_attribute("data-builder-unapplied", "true")
+            cross_notes.fill(original_note_text)
+
+            # Canvas selection is also a source of Inspector unmounts:
+            # attempting it must preserve the staged mission fields.
+            canvas_node = pending.locator(".react-flow__node").first
+            expect(canvas_node).to_be_visible(timeout=15000)
+            canvas_node.click(force=True, timeout=15000)
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_CANVAS_UNAPPLIED_DRAFT", timeout=15000)
+            expect(inspector).to_have_attribute("data-builder-inspector", "mission")
+            expect(title_field).to_have_value(
+                "PROJECT-065 staged mission never auto-saved")
+
+            # Compiling or exporting before Apply can misleadingly validate
+            # or deliver a canonical source which excludes visible edits.
+            pending.locator('[data-studio-action="validate-compile"]').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_COMPILE_UNAPPLIED_DRAFT", timeout=15000)
+            pending.locator('[data-studio-action="export"]').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_EXPORT_UNAPPLIED_DRAFT", timeout=15000)
             pc.locator('[data-project-action="save-as"]').click()
             expect(pc.locator('[data-project-message]')).to_contain_text(
                 "PROJECT_UNAPPLIED_DRAFT", timeout=15000)
@@ -2688,6 +2735,9 @@ def main():
                 "obsoleteCompileCannotOverwriteNewImport": True,
                 "sameFilenameCanBeReimported": True,
                 "unappliedInspectorSaveBlocked": True,
+                "crossEditorUnappliedApplyBlocked": True,
+                "canvasSelectionPreservesUnappliedFields": True,
+                "unappliedCompileExportDenied": True,
                 "unappliedDraftNewRequiresConfirmation": True,
                 "unappliedJsonSaveBlocked": True,
                 "multiPanelDraftLossBlocked": True,
