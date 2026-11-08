@@ -67,6 +67,14 @@ This prevents Builder from accepting a deletion that a subsequent verified
 retarget or remove the authored dependency explicitly; unrelated notes remain
 intact on valid deletes.
 
+Generic Builder property-path writes are limited to resource `properties.*`,
+not canonical `id`, `zone`, `interfaces`, `asset`, or other typed fields.
+JSON path traversal accepts only own properties and refuses JavaScript
+prototype-related segments such as `__proto__`, `constructor`, and
+`prototype`. This prevents prototype pollution through the path editor
+and stops unreviewed resource identity rewrites; typed Inspector commands
+remain the supported way to edit resource identity and ports.
+
 ReactFlow canvas selection and pane-click events act on the live, synchronously
 published Builder/Runtime workspace, not a source snapshot captured before a
 recent Inspector Apply. That avoids rolling back an authored source revision

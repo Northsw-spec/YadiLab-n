@@ -17,7 +17,9 @@ import {
   deleteZone,
   duplicateSelectedBuilderResource,
   setBuilderSelection,
+  setResourceProperty,
 } from "../../dist-browser-test/ui/src/browser/index.js";
+import { setJsonPath } from "../../dist-browser-test/ui/src/browser/json.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
@@ -299,6 +301,77 @@ for (const [label, perform] of [
 }
 eq(JSON.stringify(annotated.source), linkBytes,
   "all rejected deletion pathways leave original annotated project untouched");
+
+// SECURITY-056: the old path evaluator used "segment in object" and
+// traversed "__proto__" from a JSON-owned properties object into
+// Object.prototype. No authored resource path may mutate JS prototypes.
+const prototypeMarker = "__yadilab_security_056_marker__";
+ok(!Object.prototype.hasOwnProperty.call(Object.prototype, prototypeMarker),
+  "prototype pollution marker starts absent");
+const propertyCandidate = { properties: { safe: { enabled: false } } };
+const beforeProperty = JSON.stringify(propertyCandidate);
+for (const unsafePath of [
+  `__proto__.${prototypeMarker}`,
+  `properties.__proto__.${prototypeMarker}`,
+  `properties.constructor.prototype.${prototypeMarker}`,
+  `properties.prototype.${prototypeMarker}`,
+  "properties.__proto__",
+  "properties.constructor",
+  "properties.prototype",
+  "properties.toString.missing",
+  "properties.99999999999999999999999999999",
+]) {
+  const blocked = setJsonPath(propertyCandidate, unsafePath, "polluted");
+  ok(!blocked.ok, "prototype/inherited/unsafe numeric path refused: " + unsafePath);
+  eq(blocked.value, propertyCandidate,
+    "rejected JSON path returns unchanged original input: " + unsafePath);
+  eq(JSON.stringify(propertyCandidate), beforeProperty,
+    "rejected JSON path cannot alter input bytes");
+  ok(!Object.prototype.hasOwnProperty.call(Object.prototype, prototypeMarker),
+    "rejected path never mutates Object.prototype");
+}
+const allowedNested = setJsonPath(propertyCandidate, "properties.safe.enabled", true);
+ok(allowedNested.ok, "own-property nested JSON path remains editable");
+eq(allowedNested.value.properties.safe.enabled, true,
+  "safe nested property mutation reaches only cloned resource");
+eq(propertyCandidate.properties.safe.enabled, false,
+  "safe property writes do not mutate original object");
+
+const idGuard = createBuilderWorkspace(source);
+const originalIdBytes = JSON.stringify(idGuard.source);
+for (const unsafePath of [
+  "id", "zone", "label", "type", "interfaces", "asset", "properties",
+]) {
+  const denied = setResourceProperty(idGuard, "rds01", unsafePath,
+    unsafePath === "id" ? "admin01" : "unsanctioned-change");
+  ok(!denied.ok, "generic resource editor refuses semantic identity field " + unsafePath);
+  ok(denied.diagnostics.some(item => item.code === "BUILDER_PROPERTY_PATH_FORBIDDEN"),
+    "semantic identity change produces explicit diagnostic: " + unsafePath);
+  eq(JSON.stringify(denied.workspace.source), originalIdBytes,
+    "forbidden identity edit leaves all resource/edge references unchanged");
+  eq(denied.workspace.sourceRevision, idGuard.sourceRevision,
+    "forbidden identity edit preserves source revision");
+}
+for (const unsafePath of [
+  `properties.__proto__.${prototypeMarker}`,
+  "properties.constructor.prototype.x",
+  "properties.toString.missing",
+]) {
+  const denied = setResourceProperty(idGuard, "rds01", unsafePath, true);
+  ok(!denied.ok, "generic resource path denies inherited traversal: " + unsafePath);
+  eq(denied.workspace, idGuard,
+    "dangerous property path fails with original workspace unchanged");
+  ok(!Object.prototype.hasOwnProperty.call(Object.prototype, prototypeMarker),
+    "Builder API does not pollute Object.prototype");
+}
+const allowedResourceEdit = setResourceProperty(idGuard, "rds01", "properties.nla", true);
+ok(allowedResourceEdit.ok, "legitimate Builder properties.nla edit remains possible");
+eq(allowedResourceEdit.workspace.source.resources.find(x => x.id === "rds01")?.properties.nla,
+  true, "approved property edit retained");
+eq(allowedResourceEdit.workspace.source.connections, idGuard.source.connections,
+  "ordinary property edit preserves canonical graph IDs and links");
+ok(!Object.prototype.hasOwnProperty.call(Object.prototype, prototypeMarker),
+  "no global prototype mutation after all paths");
 
 const ui = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(!ui.includes("dangerouslySetInnerHTML"), "Builder Inspector does not inject arbitrary HTML");

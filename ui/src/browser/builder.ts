@@ -286,6 +286,13 @@ export function deleteConnection(workspace: BuilderWorkspace, connectionId: stri
 export function setResourceProperty(workspace: BuilderWorkspace, resourceId: string, path: string, value: unknown): BrowserCommandResult<BuilderWorkspace> {
   const index = workspace.source.resources.findIndex((x) => x.id === resourceId);
   if (index < 0) return failure(workspace, diagnostic("BUILDER_RESOURCE_UNKNOWN", `Resource '${resourceId}' does not exist.`, resourceId));
+  // This API edits mutable resource state, never canonical identity or graph
+  // structure. Changing "id", "zone", "interfaces", or "asset" here would
+  // bypass the reference and schema checks of typed Builder commands.
+  if (typeof path !== "string" || !path.startsWith("properties.") ||
+      path.length <= "properties.".length)
+    return failure(workspace, diagnostic("BUILDER_PROPERTY_PATH_FORBIDDEN",
+      "Resource property edits must stay under 'properties.'. Use the typed Inspector to change identity, zone, ports or asset.", resourceId));
   const resource = workspace.source.resources[index]!;
   const write = setJsonPath(resource, path, value);
   if (!write.ok) return failure(workspace, diagnostic("BUILDER_PROPERTY_PATH_INVALID", write.reason ?? `Could not write '${path}'.`, resourceId));

@@ -6,13 +6,24 @@ export function isPlainObject(value: unknown): value is Readonly<Record<string, 
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Never traverse or assign inherited prototype accessors through a path
+// supplied by Builder, authored remediation, or another caller. In particular
+// "__proto__" resolves to Object.prototype on plain JSON objects; combining
+// it with "in" previously mutated the global prototype during a write.
+const forbiddenPathSegments = new Set(["__proto__", "prototype", "constructor"]);
+
 function parsePath(path: string): readonly (string | number)[] | undefined {
   if (!path || path.startsWith(".") || path.endsWith(".")) return undefined;
   const parts = path.split(".");
   const result: (string | number)[] = [];
   for (const part of parts) {
     if (!part) return undefined;
-    if (/^(0|[1-9][0-9]*)$/.test(part)) result.push(Number(part));
+    if (forbiddenPathSegments.has(part)) return undefined;
+    if (/^(0|[1-9][0-9]*)$/.test(part)) {
+      const index = Number(part);
+      if (!Number.isSafeInteger(index)) return undefined;
+      result.push(index);
+    }
     else if (/^[A-Za-z_][A-Za-z0-9_-]*$/.test(part)) result.push(part);
     else return undefined;
   }
@@ -37,7 +48,7 @@ export function setJsonPath<T>(input: T, path: string, value: unknown): JsonWrit
       if (!Array.isArray(cursor) || segment >= cursor.length) return { ok: false, value: input, reason: `Path '${path}' does not exist.` };
       cursor = cursor[segment];
     } else {
-      if (!isPlainObject(cursor) || !(segment in cursor)) return { ok: false, value: input, reason: `Path '${path}' does not exist.` };
+      if (!isPlainObject(cursor) || !Object.hasOwn(cursor, segment)) return { ok: false, value: input, reason: `Path '${path}' does not exist.` };
       cursor = (cursor as Record<string, unknown>)[segment];
     }
     if (cursor === undefined || cursor === null) return { ok: false, value: input, reason: `Path '${path}' does not exist.` };
