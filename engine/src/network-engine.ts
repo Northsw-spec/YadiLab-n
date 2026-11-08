@@ -1949,16 +1949,27 @@ function adjacency(scenario: NormalizedScenario): ReadonlyMap<string, readonly s
   return out;
 }
 
+// A graph can have factorially many simple paths even when its destination
+// is disconnected. The result must never claim FALSE if we stopped searching.
+// Limits apply to work, queue entries AND queued path-node storage.
+const PATH_SEARCH_MAX_EXPANSIONS = 16_384;
+const PATH_SEARCH_MAX_QUEUE = 4_096;
+const PATH_SEARCH_MAX_QUEUED_NODES = 250_000;
+
 function enumeratePaths(scenario: NormalizedScenario, from: string, to: string, limit = 128): { readonly paths: readonly (readonly string[])[]; readonly truncated: boolean } {
   if (from === to) return { paths: [[from]], truncated: false };
   const graph = adjacency(scenario);
   const queue: string[][] = [[from]];
   const found: string[][] = [];
-  let truncated = false;
   const maxDepth = Math.max(1, scenario.resources.length);
+  let expanded = 0;
+  let queuedNodes = 1;
 
   while (queue.length > 0) {
+    if (expanded >= PATH_SEARCH_MAX_EXPANSIONS) return { paths: found, truncated: true };
     const path = queue.shift()!;
+    queuedNodes -= path.length;
+    expanded += 1;
     if (path.length > maxDepth) continue;
     const current = path[path.length - 1]!;
     for (const next of graph.get(current) ?? []) {
@@ -1966,16 +1977,19 @@ function enumeratePaths(scenario: NormalizedScenario, from: string, to: string, 
       const candidate = [...path, next];
       if (next === to) {
         found.push(candidate);
-        if (found.length >= limit) {
-          truncated = queue.length > 0;
-          return { paths: found, truncated };
-        }
+        // It is not possible to prove exhaustiveness from the number of
+        // discovered paths alone; another path may remain unexplored.
+        if (found.length >= limit) return { paths: found, truncated: true };
       } else {
+        if (queue.length >= PATH_SEARCH_MAX_QUEUE ||
+            queuedNodes + candidate.length > PATH_SEARCH_MAX_QUEUED_NODES)
+          return { paths: found, truncated: true };
         queue.push(candidate);
+        queuedNodes += candidate.length;
       }
     }
   }
-  return { paths: found, truncated };
+  return { paths: found, truncated: false };
 }
 
 function evaluatePath(scenario: NormalizedScenario, state: EngineState, path: readonly string[], query: FlowQuery, options: PathEvaluationOptions = {}): PathVerdict {
@@ -2211,6 +2225,13 @@ function queryReachabilityOneWay(
   const query: FlowQuery = { from, to, protocol, ...(port !== undefined ? { port } : {}) };
   const { paths, truncated } = enumeratePaths(scenario, from, to);
   if (paths.length === 0) {
+    // Absence is proved only when the search exhausted the graph. A work
+    // cutoff is UNKNOWN, not evidence of isolation or a disabled service.
+    if (truncated) return {
+      truth: "UNKNOWN",
+      value: { from, to, protocol, ...(port !== undefined ? { port } : {}), networkTruthBeforeListener: "UNKNOWN" },
+      explanation: [`Topology search reached a deterministic work/memory limit before proving that no path exists from '${from}' to '${to}'.`],
+    };
     return {
       truth: "FALSE",
       value: { from, to, protocol, ...(port !== undefined ? { port } : {}), networkTruthBeforeListener: "FALSE" },
@@ -2352,7 +2373,13 @@ export function queryLayer2BroadcastReachability(
 ): EngineQueryResult<ReachabilityDetails> {
   if (!ownResource(state, from) || !ownResource(state, to)) return { truth: "UNKNOWN", explanation: [`L2 broadcast endpoint '${!ownResource(state, from) ? from : to}' is absent from Engine state.`] };
   const enumerated = enumeratePaths(scenario, from, to);
-  if (enumerated.paths.length === 0) return { truth: "FALSE", value: { from, to, protocol: "udp", port: 67 }, explanation: [`No enabled modeled topology path exists from '${from}' to '${to}' for local DHCP broadcast.`] };
+  if (enumerated.paths.length === 0) {
+    if (enumerated.truncated)
+      return { truth: "UNKNOWN", value: { from, to, protocol: "udp", port: 67 },
+        explanation: [`L2 path search hit the work/memory limit before proving no broadcast path exists from '${from}' to '${to}'.`] };
+    return { truth: "FALSE", value: { from, to, protocol: "udp", port: 67 },
+      explanation: [`No enabled modeled topology path exists from '${from}' to '${to}' for local DHCP broadcast.`] };
+  }
   const verdicts = enumerated.paths.map((path) => evaluateLayer2BroadcastPath(scenario, state, path));
   const proven = verdicts.find((item) => item.truth === "TRUE");
   if (proven) return { truth: "TRUE", value: { from, to, protocol: "udp", port: 67, path: proven.path, ...(proven.vlanDecisions?.length ? { vlanDecisions: proven.vlanDecisions } : {}), ...(proven.stpDecisions?.length ? { stpDecisions: proven.stpDecisions } : {}) }, explanation: proven.explanation };
