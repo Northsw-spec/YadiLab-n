@@ -20,6 +20,7 @@ MOCK = r"""
   const store = { text: "", writes: 0, fail: false, reads: 0,
     permissionDenied: false, cancelSave: false, cancelOpen: false,
     aliasSameEntryOnSaveAs: false, editDuringWritableOpen: false, abortedWrites: 0,
+    injectBomAfterClose: false,
     chooseAlternative: false, otherText: "", otherWrites: 0,
     pauseIdentity: false, pendingIdentity: false, releaseIdentity: null,
     pauseOpenPicker: false, pendingOpenPicker: false, releaseOpenPicker: null,
@@ -45,7 +46,12 @@ MOCK = r"""
           if (store.fail) throw new Error("DISK_FULL");
           pending = await blob.text();
         },
-        async close() { store.text = pending; store.writes++; },
+        async close() {
+          // External writer changes bytes after the app has written but
+          // before readback; TextDecoder will erase this leading UTF-8 BOM.
+          store.text = store.injectBomAfterClose ? String.fromCharCode(0xFEFF) + pending : pending;
+          store.writes++;
+        },
         async abort() { store.abortedWrites++; },
       };
     },
@@ -538,6 +544,50 @@ def main():
                 "window.__yadilabProjectStore.text") == original_disk,
                 "Recovery unexpectedly overwrote quarantined original project")
             failed_write.close()
+
+            # PROJECT-029: no native Save may claim verified success when
+            # physical disk bytes change to BOM + original JSON after close.
+            # Decoder-normalized text would look identical; byte truth must win.
+            readback_bom = context.new_page()
+            readback_bom.add_init_script(MOCK)
+            readback_bom.on("pageerror", lambda error: errors.append(str(error)))
+            readback_bom.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            rbc = readback_bom.locator('[data-project-file-controls="ready"]')
+            expect(rbc).to_be_visible(timeout=45000)
+            readback_bom.evaluate(
+                "window.__yadilabProjectStore.injectBomAfterClose = true")
+            readback_bom.locator('[data-project-action="save-as"]').click()
+            expect(readback_bom.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_READBACK_MISMATCH", timeout=20000)
+            expect(rbc).to_have_attribute("data-project-dirty", "true")
+            original_bom_disk = readback_bom.evaluate(
+                "window.__yadilabProjectStore.text")
+            require(original_bom_disk.startswith(chr(0xFEFF)),
+                    "PROJECT-029 fixture did not add physical UTF-8 BOM")
+            require(readback_bom.evaluate("window.__yadilabProjectStore.writes") == 1,
+                    "Readback rejection must preserve the attempted native disk write")
+            require(readback_bom.evaluate("""() => {
+                const event = new Event('beforeunload', {cancelable:true});
+                window.dispatchEvent(event);
+                return event.defaultPrevented;
+            }""") is True,
+                    "Mismatched final readback failed to protect unsaved Builder")
+            readback_bom.evaluate("""() => {
+                const store = window.__yadilabProjectStore;
+                store.injectBomAfterClose = false;
+                store.chooseAlternative = true;
+            }""")
+            readback_bom.locator('[data-project-action="save-as"]').click()
+            expect(readback_bom.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            expect(rbc).to_have_attribute("data-project-dirty", "false")
+            require(readback_bom.evaluate(
+                "window.__yadilabProjectStore.otherWrites") == 1,
+                "BOM-readback recovery did not explicitly save a different file")
+            require(readback_bom.evaluate(
+                "window.__yadilabProjectStore.text") == original_bom_disk,
+                "Recovery overwrote quarantined BOM-mismatched physical file")
+            readback_bom.close()
 
             # PROJECT-015: React may batch updates when two explicit
             # project actions fire in one JS task. New MUST publish its

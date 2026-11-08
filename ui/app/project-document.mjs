@@ -496,9 +496,15 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
   const bytes = await actual.arrayBuffer();
   if (!(bytes instanceof ArrayBuffer) || bytes.byteLength > PROJECT_MAX_BYTES)
     blocked("READBACK_INVALID");
-  let confirmed;
-  try { confirmed = decoder.decode(bytes); }
-  catch { blocked("READBACK_INVALID"); }
-  if (confirmed !== text) blocked("READBACK_MISMATCH");
+  // Compare exact native bytes. TextDecoder discards a leading UTF-8 BOM;
+  // comparing its decoded text could therefore report a verified Save even
+  // though another process changed the physical file after close().
+  const expectedBytes = encoder.encode(text);
+  const diskBytes = new Uint8Array(bytes);
+  if (diskBytes.byteLength !== expectedBytes.byteLength)
+    blocked("READBACK_MISMATCH");
+  for (let i = 0; i < expectedBytes.byteLength; i++) {
+    if (diskBytes[i] !== expectedBytes[i]) blocked("READBACK_MISMATCH");
+  }
   return true;
 }
