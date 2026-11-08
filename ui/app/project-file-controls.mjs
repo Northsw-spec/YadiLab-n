@@ -342,6 +342,11 @@ export function ProjectFileControls({
           getScenarioTransitionId() !== transition ||
           projectSnapshot(getWorkspace()) !== original)
         throw new Error("PROJECT_STALE_BEFORE_WRITE");
+      // Form inputs may change while a native picker, SHA-256 operation or
+      // file-identity check is awaiting. Canonical source equality alone
+      // cannot prove that a save still includes all visible user edits.
+      if (getPendingDraftChanges())
+        throw new Error("PROJECT_UNAPPLIED_DRAFT_DURING_SAVE");
     };
     // The filename displayed for New/imported/opened projects must be the
     // same name proposed to the native Save picker (no invented rename).
@@ -432,12 +437,24 @@ export function ProjectFileControls({
       // A verified write clears the synchronous warning only when no newer
       // Builder edits arrived while the file was being written.
       changedRef.current = projectHasUnsavedChanges(
-        lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
+        lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current)
+        || getPendingDraftChanges();
       setRevision(n => n + 1);
       if (projectSnapshot(getWorkspace()) !== original ||
           fileEpochRef.current !== epoch || getScenarioTransitionId() !== transition) {
         setMessage("File saved, but the workspace changed during writing: newer edits remain unsaved.");
         setDiagnostics([diag("PROJECT_SAVE_STALE", "The written file passed readback, but more recent edits were not in that file.", "warning")]);
+        return;
+      }
+      // A form may become dirty AFTER createWritable() started, when the
+      // bytes can no longer be safely cancelled. Associate only the verified
+      // canonical bytes, keep the live draft explicitly unsaved, and never
+      // announce that the operator's visible edits were all saved.
+      if (getPendingDraftChanges()) {
+        changedRef.current = true;
+        setMessage("PROJECT_UNAPPLIED_DRAFT_DURING_SAVE: disk source was verified, but newer unapplied form edits remain unsaved.");
+        setDiagnostics([diag("PROJECT_UNAPPLIED_DRAFT_DURING_SAVE",
+          "The .yadilab file was written and read back, but text entered during Save was not included. Apply or revert the pending form edits before saving again.", "warning")]);
         return;
       }
       const active = getWorkspace();
