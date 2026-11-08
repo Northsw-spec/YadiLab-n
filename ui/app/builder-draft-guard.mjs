@@ -11,6 +11,10 @@ export function createPendingBuilderDraftRegistry() {
       return pending.size;
     },
     hasPending() { return pending.size > 0; },
+    hasOtherPending(owner) {
+      for (const candidate of pending) if (candidate !== owner) return true;
+      return false;
+    },
     count() { return pending.size; },
   };
 }
