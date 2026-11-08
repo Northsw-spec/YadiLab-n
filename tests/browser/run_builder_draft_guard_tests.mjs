@@ -19,7 +19,12 @@ eq(registry.mark(inspector, true), 1, "Inspector edit is immediately registered"
 eq(registry.hasPending(), true, "Save/New sees live pending Inspector state");
 eq(registry.mark(inspector, true), 1, "retyping same form does not duplicate owner");
 eq(registry.mark(authoring, true), 2, "JSON text adds independent staged owner");
+eq(registry.hasOtherPending(inspector), true, "Inspector cannot overwrite a pending JSON editor");
+eq(registry.hasOtherPending(authoring), true, "JSON Apply cannot discard pending Inspector fields");
+eq(registry.hasOtherPending({}), true, "separate object cannot impersonate another editor");
 eq(registry.mark(inspector, false), 1, "Inspector Apply does not conceal staged JSON");
+eq(registry.hasOtherPending(authoring), false, "sole edited authoring panel can Apply");
+eq(registry.hasOtherPending(inspector), true, "unapplied JSON remains visible to Inspector commands");
 eq(registry.hasPending(), true, "other unapplied panels keep Save blocked");
 eq(registry.mark(authoring, false), 0, "last successful Apply clears staged status");
 eq(registry.hasPending(), false, "verified Save can proceed after all Apply");
@@ -37,6 +42,12 @@ for (const marker of [
   "BUILDER_AUTHORING_MULTIPLE_UNAPPLIED",
   "BUILDER_INSPECTOR_UNAPPLIED_DRAFT",
   "getPendingDraftChanges: hasPendingBuilderDrafts",
+  "BUILDER_OTHER_EDITOR_UNAPPLIED",
+  "BUILDER_CANVAS_UNAPPLIED_DRAFT",
+  "BUILDER_PREVIEW_UNAPPLIED_DRAFT",
+  "BUILDER_COMPILE_UNAPPLIED_DRAFT",
+  "BUILDER_EXPORT_UNAPPLIED_DRAFT",
+  "BUILDER_ASSET_UNAPPLIED_DRAFT",
 ]) {
   eq(ui.includes(marker), true, "mounted application wires live staged draft guard: " + marker);
 }
