@@ -453,4 +453,78 @@ async function expectCode(source, code, context = contextFor()) {
   await expectCode(s, "DUPLICATE_GLOBAL_ID");
 }
 
+// PROJECT-050: Compiler must reject Foundation test declarations which
+// previously compiled despite dangling selectors or invalid protocol/port
+// semantics that Runtime would default, ignore, or report UNKNOWN.
+const invalidFoundationCases = [
+  ["network.reachability", { from:"ghost",to:"rds01",protocol:"tcp",port:3389 },
+    "UNKNOWN_RESOURCE_REFERENCE","from"],
+  ["network.segmentation", { from:"attacker",to:"ghost",protocol:"tcp" },
+    "UNKNOWN_RESOURCE_REFERENCE","to"],
+  ["network.route_test", { from:"attacker",to:"rds01",protocol:"ftp" },
+    "TEST_PARAM_INVALID","protocol"],
+  ["network.reachability", { from:"attacker",to:"rds01" },
+    "TEST_PARAM_REQUIRED","protocol"],
+  ["network.segmentation", { from:"attacker",to:"rds01",protocol:"tcp",port:70000 },
+    "TEST_PARAM_INVALID","port"],
+  ["network.route_test", { from:"attacker",to:"rds01",protocol:"udp" },
+    "TEST_PARAM_REQUIRED","port"],
+  ["network.route_test", { from:"attacker",to:"rds01",protocol:"icmp",port:443 },
+    "TEST_PARAM_INVALID","port"],
+  ["identity.authentication_test", { subject:"ghost",target:"rds01" },
+    "UNKNOWN_RESOURCE_REFERENCE","subject"],
+  ["identity.authentication_test", { subject:"attacker",target:"ghost" },
+    "UNKNOWN_RESOURCE_REFERENCE","target"],
+  ["identity.privilege_path", { subject:"attacker",resource:"ghost",permission:"admin" },
+    "UNKNOWN_RESOURCE_REFERENCE","resource"],
+  ["identity.permission", { subject:"attacker",resource:"rds01" },
+    "TEST_PARAM_REQUIRED","permission"],
+  ["identity.permission", { subject:"ghost",resource:"rds01",permission:"read" },
+    "UNKNOWN_RESOURCE_REFERENCE","subject"],
+  ["identity.membership", { subject:"attacker",group:"ghost" },
+    "UNKNOWN_RESOURCE_REFERENCE","group"],
+  ["windows.hardening_check", { target:"ghost",path:"properties.nla",equals:true },
+    "UNKNOWN_RESOURCE_REFERENCE","target"],
+  ["windows.hardening_check", { target:"rds01",equals:true },
+    "TEST_PARAM_REQUIRED","path"],
+  ["linux.hardening_check", { target:"rds01",path:"properties.enabled" },
+    "TEST_PARAM_REQUIRED","equals"],
+  ["network.port_scan", { from:"attacker",to:"rds01",port:443,ports:[22] },
+    "TEST_PARAM_AMBIGUOUS","params"],
+  ["network.port_scan", { from:"attacker",to:"rds01",port:0,ports:[22] },
+    "TEST_PARAM_INVALID","port"],
+  ["network.port_scan", { from:"attacker",to:"rds01",port:443,ports:["ssh"] },
+    "TEST_PARAM_INVALID","ports"],
+];
+for (const [type,params,code,field] of invalidFoundationCases) {
+  const source = clone(base);
+  const index = source.tests.length;
+  source.tests.push({id:"project_050_test",type,params});
+  const result = await compileScenario(source,contextFor());
+  assert.equal(result.ok,false,
+    "Compiler incorrectly accepted malformed Foundation test " + type);
+  assert.ok(result.diagnostics.some(d => d.code === code &&
+    d.path === ("tests[" + index + "].params." + field)),
+    "Compiler must locate the original invalid param " + type + "." + field +
+    ", got " + JSON.stringify(result.diagnostics));
+  assertions += 2;
+}
+for (const [name,test] of [
+  ["default route protocol", { id:"project_050_route_default",
+    type:"network.route_test",params:{from:"attacker",to:"rds01"} }],
+  ["valid network TCP destination", { id:"project_050_tcp",
+    type:"network.reachability",
+    params:{from:"attacker",to:"rds01",protocol:"tcp",port:3389} }],
+  ["valid ICMP portless", { id:"project_050_icmp",
+    type:"network.reachability",
+    params:{from:"attacker",to:"rds01",protocol:"icmp"} }],
+]) {
+  const source=clone(base);
+  source.tests.push(test);
+  const result=await compileScenario(source,contextFor());
+  assert.equal(result.ok,true, name + ": " + JSON.stringify(result.diagnostics));
+  assertions++;
+}
+console.log("PASS PROJECT-050 compiler: all Foundation selectors, ports and defaults enforce source truth");
+
 console.log(`PASS compiler adversarial suite: ${assertions} assertions.`);
