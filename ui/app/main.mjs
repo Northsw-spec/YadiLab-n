@@ -10,6 +10,7 @@
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectFileControls } from "./project-file-controls.mjs";
+import { createPendingBuilderDraftRegistry } from "./builder-draft-guard.mjs";
 import { liveCanvasWorkspace, liveBuilderCanvasMutationWorkspace } from "./topology-workspace-guard.mjs";
 import { markApplicationReady, markApplicationStopped } from "../src/browser/runtime-readiness.mjs";
 import { createRoot } from "react-dom/client";
@@ -2257,7 +2258,7 @@ function ScenarioStudioToolbar({ workspace, getWorkspace, projectGeneration, get
   );
 }
 
-function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostics }) {
+function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange }) {
   const model = buildBuilderInspectorModel(workspace);
   const configuration = configurationSummary(workspace.source);
   const [form, setForm] = useState(() => ({ ...model }));
@@ -2265,9 +2266,17 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
   // same event turn as an input change must not commit the previous render's
   // form object and silently leave the project marked unchanged.
   const latestFormRef = useRef(form);
+  const initialFormRef = useRef({ ...form });
+  const draftOwnerRef = useRef({});
+  const hasPendingFormRef = useRef(false);
+  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false),
+    [onPendingDraftChange]);
   const editForm = (key, value) => {
     const next = { ...latestFormRef.current, [key]: value };
     latestFormRef.current = next;
+    hasPendingFormRef.current =
+      JSON.stringify(next) !== JSON.stringify(initialFormRef.current);
+    onPendingDraftChange(draftOwnerRef.current, hasPendingFormRef.current);
     setForm(next);
   };
   const [cascade, setCascade] = useState(false);
@@ -2281,7 +2290,14 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
   const [createFrom, setCreateFrom] = useState("");
   const [createTo, setCreateTo] = useState("");
 
-  const run = (result) => {
+  const run = (result, inspectorApply = false) => {
+    // A different Builder operation would remount this inspector and silently
+    // discard text the operator has not yet committed with Apply.
+    if (!inspectorApply && hasPendingFormRef.current) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_INSPECTOR_UNAPPLIED_DRAFT",
+        message: "Apply or revert the edited inspector fields before creating, deleting or duplicating objects." }]);
+      return;
+    }
     // A New/Open or an import can publish the next project synchronously.
     // Old React buttons remain clickable until repaint; never let them
     // resurrect the previous source or corrupt the new project's draft.
@@ -2291,7 +2307,11 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
       return;
     }
     setDiagnostics(result.diagnostics);
-    if (result.ok) setWorkspace(result.workspace);
+    if (result.ok) {
+      hasPendingFormRef.current = false;
+      onPendingDraftChange(draftOwnerRef.current, false);
+      setWorkspace(result.workspace);
+    }
   };
   const field = (label, key, extra = {}) => e("label", { className: "inspector-field" }, label,
     e("input", { value: form[key] ?? "", onChange: (event) => editForm(key, event.target.value), ...extra }));
@@ -2304,16 +2324,16 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
 
   const apply = () => {
     const draft = latestFormRef.current;
-    if (model.kind === "mission") return run(applyMissionInspector(workspace, draft));
-    if (model.kind === "zone") return run(applyZoneInspector(workspace, model.id, { label: draft.label, kind: draft.zoneKind, parent: draft.parent }));
+    if (model.kind === "mission") return run(applyMissionInspector(workspace, draft), true);
+    if (model.kind === "zone") return run(applyZoneInspector(workspace, model.id, { label: draft.label, kind: draft.zoneKind, parent: draft.parent }), true);
     if (model.kind === "resource") return run(applyResourceInspector(workspace, model.id, {
       label: draft.label, type: draft.resourceType, zone: draft.zone, profile: draft.profile, vendor: draft.vendor, product: draft.product,
       assetId: draft.assetId, assetVersion: draft.assetVersion, propertiesJson: draft.propertiesJson, interfacesJson: draft.interfacesJson,
-    }));
+    }), true);
     return run(applyConnectionInspector(workspace, model.id, {
       kind: draft.connectionKind, fromResource: draft.fromResource, fromPort: draft.fromPort,
       toResource: draft.toResource, toPort: draft.toPort, propertiesJson: draft.propertiesJson,
-    }));
+    }), true);
   };
 
   const create = () => {
@@ -2363,8 +2383,12 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
       e("div", { className: "configuration-summary-grid" },
         ...Object.entries(configuration).map(([key, count]) => e("span", { key, "data-configuration-domain": key }, `${key}: ${count}`))),
     ),
-    e("section", { className: "typed-inspector", "data-builder-inspector": model.kind },
-      e("h3", null, `Inspektör · ${model.kind}`), editFields,
+    e("section", { className: "typed-inspector", "data-builder-inspector": model.kind,
+      "data-builder-unapplied": String(JSON.stringify(form) !== JSON.stringify(initialFormRef.current)) },
+      e("h3", null, `Inspektör · ${model.kind}`),
+      JSON.stringify(form) !== JSON.stringify(initialFormRef.current)
+        ? e("p", { role: "status" }, "UNAPPLIED: Inspector fields have not been committed to the project. Apply or revert before Save/New.") : null,
+      editFields,
       e("button", { type: "button", onClick: apply }, "Verkställ inspektörsändringar"),
       selectionActions,
     ),
@@ -2465,7 +2489,7 @@ function ImportWorkbenchPanel({ state, setState, getImportState, importRequestEp
   );
 }
 
-function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiagnostics }) {
+function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange }) {
   const model = buildBuilderAuthoringModel(workspace);
   // The JSX/React render can lag behind a native input event. Maintain an
   // authoritative synchronous draft so Input -> Apply in one JS task commits
@@ -2481,9 +2505,16 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
     solutionJson: model.canonicalSolutionJson,
   }));
   const liveDraftsRef = useRef(drafts);
+  const originalDraftsRef = useRef({ ...drafts });
+  const draftOwnerRef = useRef({});
+  const dirtyKeys = () => Object.keys(originalDraftsRef.current).filter(
+    key => liveDraftsRef.current[key] !== originalDraftsRef.current[key]);
+  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false),
+    [onPendingDraftChange]);
   const editDraft = (key, value) => {
     const next = { ...liveDraftsRef.current, [key]: value };
     liveDraftsRef.current = next;
+    onPendingDraftChange(draftOwnerRef.current, dirtyKeys().length > 0);
     setDrafts(next);
   };
   const applyDraft = (key, apply) => {
@@ -2495,9 +2526,17 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
         message: "The Builder changed before JSON Apply. Review the current project's source again." }]);
       return;
     }
+    if (dirtyKeys().some(other => other !== key)) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_AUTHORING_MULTIPLE_UNAPPLIED",
+        message: "Apply or revert changes in the other JSON panels first. Applying one source revision would otherwise discard their unpublished text." }]);
+      return;
+    }
     const result = apply(workspace, liveDraftsRef.current[key]);
     setDiagnostics(result.diagnostics);
-    if (result.ok) setWorkspace(result.workspace);
+    if (result.ok) {
+      onPendingDraftChange(draftOwnerRef.current, false);
+      setWorkspace(result.workspace);
+    }
   };
   const panel = (title, key, apply, rows = 7) => e("details", { className: "authoring-panel" },
     e("summary", null, title),
@@ -2505,8 +2544,11 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
       onChange: (event) => editDraft(key, event.target.value), "aria-label": title }),
     e("button", { type: "button", onClick: () => applyDraft(key, apply) }, `Apply ${title}`),
   );
-  return e("section", { className: "builder-authoring", "data-builder-authoring": "ready" },
+  return e("section", { className: "builder-authoring", "data-builder-authoring": "ready",
+    "data-builder-unapplied": String(Object.keys(drafts).some(key => drafts[key] !== originalDraftsRef.current[key])) },
     e("h3", null, "Redigeringspaneler"),
+    Object.keys(drafts).some(key => drafts[key] !== originalDraftsRef.current[key])
+      ? e("p", { role: "status" }, "UNAPPLIED: JSON draft text is not part of the current project. Apply one panel at a time before Save/New.") : null,
     e("p", null, "Valideringsstatus: ", e("strong", null, model.compileStatus)),
     model.compileDiagnostics.length ? e("ul", { className: "validation-list" }, ...model.compileDiagnostics.map((d, i) => e("li", { key: `${d.code}-${i}` }, `${d.code}: ${d.message}`))) : null,
     panel("Test JSON", "testsJson", applyTestsAuthoring),
@@ -3358,7 +3400,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   );
 }
 
-function Sidebar({ workspace, getWorkspace, projectGeneration = 0, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false }) {
+function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraftChange, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false }) {
   const selected = workspace.selection.primary;
   const semantic = workspace.mode === "builder"
     ? [...workspace.source.zones, ...workspace.source.resources, ...workspace.source.connections].find((x) => x.id === selected)
@@ -3435,8 +3477,8 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, setWorkspace,
           // another project can therefore reuse the same React keys. Bind
           // ephemeral authoring forms to the explicit scenario generation.
           e(BuilderAssetLibrary, { key: `assets-${projectGeneration}-${selected ?? "none"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
-          e(BuilderInspector, { key: `inspector-${projectGeneration}-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
-          e(BuilderAuthoringPanels, { key: `authoring-${projectGeneration}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics }),
+          e(BuilderInspector, { key: `inspector-${projectGeneration}-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange }),
+          e(BuilderAuthoringPanels, { key: `authoring-${projectGeneration}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange }),
         )
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
@@ -4196,6 +4238,14 @@ function App() {
   const lastBuilderWorkspaceRef = useRef(workspace);
   if (workspace.mode === "builder") lastBuilderWorkspaceRef.current = workspace;
   const projectGuardRef = useRef(() => true);
+  const pendingBuilderDraftsRef = useRef(createPendingBuilderDraftRegistry());
+  const [pendingBuilderDraftCount, setPendingBuilderDraftCount] = useState(0);
+  const onPendingDraftChange = React.useCallback((owner, dirty) => {
+    const next = pendingBuilderDraftsRef.current.mark(owner, dirty);
+    setPendingBuilderDraftCount(current => current === next ? current : next);
+  }, []);
+  const hasPendingBuilderDrafts = React.useCallback(
+    () => pendingBuilderDraftsRef.current.hasPending(), []);
   const latestDrawioWorkspaceRef = useRef(workspace);
   latestDrawioWorkspaceRef.current = workspace;
   // The React state commit can be batched until after the current user event.
@@ -5355,6 +5405,8 @@ function App() {
         // draft. Compilation still uses the stricter runnable "source" schema.
         validateSource: source => validateContract("editableSource", source),
         setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
+        getPendingDraftChanges: hasPendingBuilderDrafts,
+        pendingDraftCount: pendingBuilderDraftCount,
         getScenarioTransitionId: () => scenarioTransitionRef.current,
       }),
     ),
@@ -6864,7 +6916,7 @@ function App() {
             setDiagnostics, compilerOptions, canReplaceProject: () => projectGuardRef.current() }),
         ),
         workspace.mode === "builder" ? e(ControlSection, { title: "Builder Inspector & Authoring", description: "Topology editing and canonical source controls.", searchTerms: "Inspector topology resources mission authoring assets" },
-          e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
+          e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
         ) : null,
       ),
       e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
@@ -6887,7 +6939,7 @@ function App() {
         onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
         onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
         onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
-        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
+        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,
         troubleshootingTimeline ? e("details", { className: "troubleshooting-timeline", "aria-label": "Troubleshooting timeline", "data-troubleshooting-timeline": "ready" }, e("summary", null, "Troubleshooting timeline"), e("small", null, `Session ${troubleshootingTimeline.sessionId}`), e("ol", null, ...troubleshootingTimeline.entries.slice(0, 24).map((entry) => e("li", { key: `${entry.sequence}-${entry.eventId ?? entry.action}` }, e("span", null, `${entry.sequence}. ${entry.category} · ${entry.action}`), e("small", null, entry.detail ?? entry.outcome ?? "Actual event"))))) : null,
