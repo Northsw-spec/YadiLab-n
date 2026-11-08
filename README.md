@@ -40,6 +40,15 @@ prefix, are validated before Builder activation. Invalid, competing,
 or orphan address/prefix declarations are blocked. IPv6 zone identifiers
 such as `%eth0` are not currently supported in imported addresses.
 
+Only `Metadata`, `Zones`, `Nodes`, `Interfaces`, `Links`, and
+`Layout` are projected by the quick canonical topology workbook mapping.
+The standard workbook may also name `Routes`, `VLANs`, `STP`, `Services`,
+`Firewall`, `NAT` and `Flows`, but **populated rows in those sheets cannot
+currently be imported into Builder**. Such declarations are rejected with a
+source-row diagnostic, rather than being counted as mapped or silently dropped.
+A populated unsupported field on an otherwise projected sheet is similarly
+blocked. Genuinely empty optional template rows and columns are permitted.
+
 An imported address, MAC or interface label is a declaration, **not**
 evidence of physical cabling, routing, reachability or successful Engine probes.
 Connections require explicit source endpoint IDs and do not gain physical port

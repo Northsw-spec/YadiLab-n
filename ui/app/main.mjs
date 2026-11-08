@@ -3687,7 +3687,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       e("h3", null, "Preview – ", preview.filename),
       e("p", null, `Found tables: ${preview.sheets.join(", ") || "none"} · Devices: ${preview.devices} · Explicit links: ${preview.links}`),
       e("p", { "data-network-import-sha": "true", "data-network-import-byte-size": preview.sourceByteSize }, `Original SHA-256: ${preview.sourceSha256} · Bytes: ${preview.sourceByteSize}`),
-      e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Unsupported fields are excluded from modeled resources, links and probes.`),
+      e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Unsupported Devices columns are disclosed but not modeled; nonempty unprojected canonical workbook sheets/columns block activation instead of silently disappearing.`),
       preview.linkSourceConflict ? e("div", { "data-network-import-link-review": preview.linkSourceChoice ? "REVIEWED" : "REVIEW_REQUIRED" },
         e("p", null, `Two competing declared link sources: Links table ${preview.linkSourceConflict.sheetDeclaredLinks} · Connected To ${preview.linkSourceConflict.inlineDeclaredLinks}. No source is automatically preferred or combined.`),
         preview.linkSourceChoice
@@ -3737,7 +3737,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
             onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
           "I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages.")
       ):null,
-      preview.diagnostics.length ? e("ul", { className: "validation-list" }, ...preview.diagnostics.slice(0, 30).map((d, i) => e("li", { key: i }, `${d.severity.toUpperCase()}: ${d.code} – ${d.message}`))) : e("p", null, "No import diagnostics."),
+      preview.diagnostics.length ? e("ul", { className: "validation-list" }, ...preview.diagnostics.slice(0, 30).map((d, i) => e("li", { key: i }, formatNetworkImportDiagnostic(d)))) : e("p", null, "No import diagnostics."),
       isCoreReimport(preview) ? e("section", {
         "data-network-reimport-review": reimportApproved ? "APPROVED" : reimportReview ? "REVIEWED" : "REVIEW_REQUIRED",
       },
@@ -3786,6 +3786,16 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     ) : null,
     ),
   );
+}
+
+// Import failures must identify the original sheet, physical row and field
+// without echoing potentially sensitive source cell values into the UI.
+function formatNetworkImportDiagnostic(d) {
+  const location = [d.table,
+    Number.isInteger(d.row) ? "row " + d.row : null,
+    d.field ? "field " + d.field : null].filter(Boolean).join(" / ");
+  return d.severity.toUpperCase() + ": " + d.code +
+    (location ? " (" + location + ")" : "") + " – " + d.message;
 }
 
 function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {

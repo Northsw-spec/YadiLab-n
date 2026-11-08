@@ -4,6 +4,19 @@ import type { ImportDiagnostic, ImportDocument, ImportRecord } from "./types.js"
 export const YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION = "1.0.0" as const;
 export const standardWorkbookSheets = ["Metadata", "Zones", "Nodes", "Interfaces", "Links", "Routes", "VLANs", "STP", "Services", "Firewall", "NAT", "Flows", "Layout"] as const;
 export type StandardWorkbookSheet = typeof standardWorkbookSheets[number];
+// Only these original workbook fields survive canonical Builder projection.
+// The other recognized standard sheets (Routes/VLANs/STP/Services/Firewall/
+// NAT/Flows) are not executable source imports in this mapping profile.
+// A nonblank declaration outside this contract cannot be called "mapped".
+const projectedWorkbookFields: Readonly<Record<string, ReadonlySet<string>>> = {
+  Metadata: new Set(["schemaVersion", "scenarioId", "title", "description"]),
+  Zones: new Set(["zoneId", "displayName", "kind"]),
+  Nodes: new Set(["nodeId", "displayName", "type", "zoneId", "gateway", "Default Gateway"]),
+  Interfaces: new Set(["nodeId", "interfaceId", "name", "IPv4", "prefix",
+    "IPv6", "IPv6Prefix", "MAC", "MTU"]),
+  Links: new Set(["linkId", "nodeA", "nodeB", "interfaceA", "interfaceB", "kind"]),
+  Layout: new Set(["nodeId", "rank"]),
+};
 
 export interface WorkbookImportResult { readonly ok: boolean; readonly source?: ScenarioSource; readonly diagnostics: readonly ImportDiagnostic[]; readonly preview: WorkbookPreview; }
 export interface WorkbookPreview { readonly mode: "PREVIEW"; readonly sheetsFound: readonly string[]; readonly sheetsRequired: readonly string[]; readonly sheetsOptional: readonly string[]; readonly rowsPerSheet: Readonly<Record<string, number>>; readonly mappedRows: Readonly<Record<string, number>>; readonly rejectedRows: Readonly<Record<string, number>>; readonly errors: number; readonly warnings: number; }
@@ -68,6 +81,29 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   const diagnostics: ImportDiagnostic[] = [];
   const tables = byTable(document);
   for (const table of document.tables) if (!standardWorkbookSheets.includes(table.tableId as StandardWorkbookSheet)) diagnostics.push({ code: "WORKBOOK_UNSUPPORTED_SHEET", severity: "warning", message: `Sheet '${table.tableId}' is not part of the Network Workbook Schema v${YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION}.`, table: table.tableId });
+  // A "READY" preview must never silently discard populated source facts.
+  // In particular Routes, VLANs, STP, Firewall, NAT, Services and Flows are
+  // recognized workbook sheets but NOT projected by this topology mapper.
+  // Inspect each actual row so the preview reports physical rejected rows,
+  // without treating empty optional template cells as declarations.
+  for (const table of document.tables) {
+    const projected = projectedWorkbookFields[table.tableId];
+    for (const record of table.records) {
+      if (!projected) {
+        if (Object.values(record.fields).some(cell => !blank(cell.value)))
+          diagnostics.push(diagnostic("WORKBOOK_SHEET_NOT_MAPPED",
+            "Populated rows in this sheet are not supported by the Builder topology projection. No source facts were silently accepted.",
+            table.tableId, record.recordIndex));
+        continue;
+      }
+      for (const [field, cell] of Object.entries(record.fields)) {
+        if (!projected.has(field) && !blank(cell.value))
+          diagnostics.push(diagnostic("WORKBOOK_FIELD_NOT_MAPPED",
+            "A nonblank source column is not represented in the canonical Builder projection. Remove or explicitly map it before import.",
+            table.tableId, record.recordIndex, field));
+      }
+    }
+  }
   for (const required of ["Metadata", "Nodes"] as const) if (!tables.has(required)) diagnostics.push({ code: "WORKBOOK_REQUIRED_SHEET_MISSING", severity: "error", message: `Required sheet '${required}' is missing.`, table: required });
   // The Metadata sheet is a single authoritative workbook identity.
   // Do not drop competing records or reinterpret an explicitly newer schema.
@@ -301,7 +337,11 @@ export function previewNetworkWorkbook(document: ImportDocument, diagnostics: re
     const rejected = table.records.filter((record) => invalidRowIds.has(record.recordIndex)).length;
     rowsPerSheet[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) + table.records.length;
     rejectedRows[table.tableId] = (rejectedRows[table.tableId] ?? 0) + rejected;
-    mappedRows[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) - (rejectedRows[table.tableId] ?? 0);
+    // A row in a review-only or unknown sheet is never projected, even when
+    // it contains only empty template cells. Do not inflate mappedRows.
+    mappedRows[table.tableId] = projectedWorkbookFields[table.tableId]
+      ? (rowsPerSheet[table.tableId] ?? 0) - (rejectedRows[table.tableId] ?? 0)
+      : 0;
   }
   return { mode: "PREVIEW", sheetsFound: document.tables.map((x) => x.tableId), sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
 }

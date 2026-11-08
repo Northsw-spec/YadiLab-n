@@ -204,6 +204,71 @@ def case_dual_stack_source_truth(browser,url):
             "malformedIPv6Rejected":True,"inventedPhysicalLinks":False,
             "externalRequests":0}
 
+def case_unprojected_workbook(browser,url):
+    """Actual compiled UI must not call silently dropped canonical facts READY."""
+    original={
+        "Metadata":[{"schemaVersion":"1.0.0","scenarioId":"original_workbook",
+                     "title":"Original Network Workbook"}],
+        "Nodes":[{"nodeId":"node01","displayName":"Router",
+                  "type":"network.router"}],
+    }
+    variants=[
+        ("declared_routes",
+         {**original,"Routes":[{"destination":"0.0.0.0/0",
+                               "nextHop":"192.0.2.1"}]},
+         "WORKBOOK_SHEET_NOT_MAPPED", "BLOCKED"),
+        ("unmapped_node_field",
+         {**original,"Nodes":[{**original["Nodes"][0],"rack":"Building C"}]},
+         "WORKBOOK_FIELD_NOT_MAPPED", "BLOCKED"),
+        ("blank_optional_template",
+         {**original,"Routes":[{"destination":"","nextHop":None}]},
+         None, "READY"),
+    ]
+    checks=[]
+    for name,document,code,expected in variants:
+        page,errors,outside=setup(browser,url)
+        try:
+            before=exported_source(page)
+            data=json.dumps(document,separators=(",",":")).encode("utf-8")
+            with page.expect_file_chooser(timeout=20000) as future:
+                page.locator('[data-network-import-primary="true"]').click()
+            future.value.set_files({
+                "name":name+".json","mimeType":"application/json","buffer":data,
+            })
+            preview=page.locator('[data-network-import-preview]')
+            expect(preview).to_have_attribute(
+                "data-network-import-preview",expected,timeout=30000)
+            require(hashlib.sha256(data).hexdigest() in
+                    page.locator('[data-network-import-sha]').inner_text(),
+                    "Original canonical workbook SHA missing: "+name)
+            if code:
+                require(code in preview.inner_text(),
+                        "Canonical source fact was discarded without error: "+name)
+                original_location=("Routes / row 1" if name=="declared_routes"
+                                   else "Nodes / row 1 / field rack")
+                require(original_location in preview.inner_text(),
+                        "The actual import UI did not locate the source row/field: "+name)
+                require(page.locator('[data-network-import-activate]').is_disabled(),
+                        "Unmapped canonical facts offered partial Builder activation")
+                require(page.locator('[data-network-import-runtime]').is_disabled(),
+                        "Unmapped canonical facts offered unsupported Runtime")
+            else:
+                require(page.locator('[data-network-import-activate]').is_enabled(),
+                        "Empty optional workbook template incorrectly blocked a valid source")
+            # The review dialog is modal. Close through the actual UI before
+            # exporting the original Builder to assert no implicit mutation.
+            page.get_by_role("button",name="Close network import").click()
+            expect(page.locator('[data-network-import-panel]')).to_have_count(0)
+            require(exported_source(page)==before,
+                    "Workbook preview mutated canonical Builder: "+name)
+            require(not errors,"Compiled workbook browser errors "+repr(errors))
+            require(not outside,"Unexpected external request "+repr(outside))
+            checks.append(name)
+        finally:page.close()
+    return {"case":"canonical_workbook_unprojected_source_fidelity",
+            "status":"PASS","cases":checks,"sourceMutated":False,
+            "inventedPhysicalLinks":False,"externalRequests":0}
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--url",required=True)
@@ -226,6 +291,7 @@ def main():
                 cases.append(case_runtime(browser,args.url,fmt))
                 cases.append(case_conflicts(browser,args.url,fmt))
             cases.append(case_dual_stack_source_truth(browser,args.url))
+            cases.append(case_unprojected_workbook(browser,args.url))
         finally:browser.close()
     report={"status":"PASS","kind":"Actual compiled Chromium five-format P2c5 source-bound modeled verdicts",
             "environment":"GitHub Actions Ubuntu; Parrot-native/physical network NOT_RUN",
