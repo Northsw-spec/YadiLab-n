@@ -46,6 +46,9 @@ export function ProjectFileControls({
   const nameRef = useRef(projectFilename(workspace.mode === "builder" ? workspace.source.scenarioId : "Untitled"));
   const [name, setName] = useState(nameRef.current);
   const [message, setMessage] = useState("No project file attached");
+  // UI-only busy marker. The synchronous busyRef remains the authority for
+  // locking, including same-event clicks before React can repaint.
+  const [fileOperation, setFileOperation] = useState(null);
   const [revision, setRevision] = useState(0);
   // A 10k-resource project is serialized only when editable source/layout
   // references actually change, not on every React render or Engine frame.
@@ -90,7 +93,10 @@ export function ProjectFileControls({
       window.clearTimeout(ticket.focusTimer);
       ticket.focusTimer = null;
     }
-    if (ticket.lockHeld) busyRef.current = false;
+    if (ticket.lockHeld) {
+      busyRef.current = false;
+      setFileOperation(null);
+    }
   };
   useEffect(() => {
     // File inputs fire cancel when the chooser is dismissed in browsers that
@@ -245,7 +251,10 @@ export function ProjectFileControls({
         fileSelected: false, focusTimer: null,
       };
       fallbackOpenRef.current = ticket;
-      if (ticket.lockHeld) busyRef.current = true;
+      if (ticket.lockHeld) {
+        busyRef.current = true;
+        setFileOperation("opening");
+      }
       try { input.click(); }
       catch (error) {
         finishFallbackOpen(ticket);
@@ -259,6 +268,7 @@ export function ProjectFileControls({
     // showing the native chooser. The picker and getFile() both await; neither
     // may overlap another explicit project operation.
     busyRef.current = true;
+    setFileOperation("opening");
     try {
       const handles = await window.showOpenFilePicker({
         multiple: false, types: pickerTypes, excludeAcceptAllOption: true,
@@ -273,7 +283,7 @@ export function ProjectFileControls({
       // The outer finally releases it only after Open has fully completed.
       await openFromFile(file, handle, true, true);
     } catch (error) { showError(error, "PROJECT_OPEN_BLOCKED"); }
-    finally { busyRef.current = false; }
+    finally { busyRef.current = false; setFileOperation(null); }
   };
 
   const newProject = () => {
@@ -312,6 +322,7 @@ export function ProjectFileControls({
       }
     }
     busyRef.current = true;
+    setFileOperation(forceSaveAs || !handleRef.current ? "saving-as" : "saving");
     try {
       const handle = picker ? await picker : forceSaveAs ? null : handleRef.current;
       // Native picker file-type filters are not a guarantee on every OS.
@@ -398,7 +409,7 @@ export function ProjectFileControls({
       setMessage("Saved and read back from " + nameRef.current);
       setDiagnostics([diag("PROJECT_SAVE_VERIFIED", "Project bytes were written and read back from the selected local file.", "warning")]);
     } catch (error) { showError(error, "PROJECT_SAVE_BLOCKED"); }
-    finally { busyRef.current = false; }
+    finally { busyRef.current = false; setFileOperation(null); }
   };
 
   useEffect(() => {
@@ -416,17 +427,20 @@ export function ProjectFileControls({
 
   return e("section", { className: "project-file-controls", "data-project-file-controls": "ready",
     "aria-label": "YadiLab project file controls", "data-project-dirty": String(changed),
-    "data-project-filename": name, "data-project-revision": String(revision) },
+    "data-project-filename": name, "data-project-revision": String(revision),
+    "data-project-operation": fileOperation ?? "idle" },
     e("div", { className: "project-file-buttons" },
       e("strong", null, "PROJECT"),
       e("button", { type: "button", "data-project-action": "new",
-        onClick: newProject, disabled: busy }, "New"),
+        onClick: newProject, disabled: busy || fileOperation !== null }, "New"),
       e("button", { type: "button", "data-project-action": "open",
-        onClick: () => void openNative(), disabled: busy }, "Open…"),
+        onClick: () => void openNative(), disabled: busy || fileOperation !== null }, "Open…"),
       e("button", { type: "button", "data-project-action": "save",
-        onClick: () => void saveProject(), disabled: busy || workspace.mode !== "builder" }, "Save · Ctrl+S"),
+        onClick: () => void saveProject(),
+        disabled: busy || fileOperation !== null || workspace.mode !== "builder" }, "Save · Ctrl+S"),
       e("button", { type: "button", "data-project-action": "save-as",
-        onClick: () => void saveProject(true), disabled: busy || workspace.mode !== "builder" }, "Save As…"),
+        onClick: () => void saveProject(true),
+        disabled: busy || fileOperation !== null || workspace.mode !== "builder" }, "Save As…"),
       e("input", { type: "file", accept: ".yadilab", ref: inputRef,
         "data-project-input": "true", style: { display: "none" },
         onChange: (event) => {
@@ -458,7 +472,10 @@ export function ProjectFileControls({
       e("span", { "data-project-status": changed ? "unsaved" : "unchanged" },
         name, changed ? " · UNSAVED" : " · unchanged"),
     ),
-    e("small", { "data-project-message": "true", role: "status", "aria-live": "polite" }, message),
+    e("small", { "data-project-message": "true", role: "status", "aria-live": "polite" },
+      fileOperation === "opening" ? "Opening project…" :
+      fileOperation === "saving-as" ? "Saving project as…" :
+      fileOperation === "saving" ? "Saving project…" : message),
     e("small", null, "Explicit file saving only. No project autosave. Imported files reopen as editable source, not verified Engine results."),
   );
 }
