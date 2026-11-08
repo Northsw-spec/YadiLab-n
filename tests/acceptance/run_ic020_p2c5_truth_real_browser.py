@@ -305,6 +305,107 @@ def case_unprojected_workbook(browser,url):
             "status":"PASS","cases":checks,"sourceMutated":False,
             "inventedPhysicalLinks":False,"externalRequests":0}
 
+def case_shorthand_supplemental_source_truth(browser,url):
+    """Real multitable JSON must never silently drop second-sheet declarations."""
+    devices=[
+        {"Asset ID":"edge01","Hostname":"Edge","Device Type":"Router",
+         "Connected To":"peer01"},
+        {"Asset ID":"peer01","Hostname":"Peer","Device Type":"Server"},
+    ]
+    blocked=[
+        ("route_assertion",
+         {"Devices":devices,"Routes":[{"destination":"0.0.0.0/0","nextHop":"192.0.2.1"}]},
+         "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED", "Routes / row 1"),
+        ("vlan_assertion",
+         {"Devices":devices,"VLANs":[{"vlanId":20,"name":"Guest"}]},
+         "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED", "VLANs / row 1"),
+        ("extra_interface",
+         {"Devices":devices,"Interfaces":[{"nodeId":"edge01",
+                                           "interfaceId":"eth1","IPv6":"2001:db8::1"}]},
+         "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED", "Interfaces / row 1"),
+        ("extra_metadata",
+         {"Devices":devices,"Metadata":[{"scenarioId":"customer_site",
+                                         "title":"Original customer project"}]},
+         "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED", "Metadata / row 1"),
+        ("link_ignored_bandwidth",
+         {"Devices":[{**devices[0],"Connected To":""},devices[1]],
+          "Links":[{"linkId":"edge01_peer01","nodeA":"edge01","nodeB":"peer01",
+                    "speedMbps":1000}]},
+         "NETWORK_IMPORT_LINK_FIELD_UNMAPPED", "Links / row 1 / field speedMbps"),
+    ]
+    page,errors,outside=setup(browser,url)
+    try:
+        baseline=exported_source(page)
+        for name,document,diagnostic,locator in blocked:
+            data=json.dumps(document,separators=(",",":")).encode("utf-8")
+            with page.expect_file_chooser(timeout=20000) as future:
+                page.locator('[data-network-import-primary="true"]').click()
+            future.value.set_files({
+                "name":name+".json","mimeType":"application/json","buffer":data,
+            })
+            review=page.locator('[data-network-import-preview]')
+            expect(review).to_have_attribute(
+                "data-network-import-preview","BLOCKED",timeout=30000)
+            text=review.inner_text()
+            require(diagnostic in text and locator in text,
+                    "Silent supplementary source loss or missing original row: "+name)
+            require(hashlib.sha256(data).hexdigest() in
+                    page.locator('[data-network-import-sha]').inner_text(),
+                    "Preview SHA was not original source file: "+name)
+            require(page.locator('[data-network-import-activate]').is_disabled(),
+                    "Partially projected source was offered as Builder")
+            require(page.locator('[data-network-import-runtime]').is_disabled(),
+                    "Discarded source facts were offered as modeled Runtime")
+            page.get_by_role("button",name="Close network import").click()
+            expect(page.locator('[data-network-import-panel]')).to_have_count(0)
+            require(exported_source(page)==baseline,
+                    "Rejected supplementary source mutated original Builder: "+name)
+        require(not errors,"Browser errors in supplemental sheet denial "+repr(errors))
+        require(not outside,"Unexpected external network traffic "+repr(outside))
+    finally:page.close()
+
+    # An empty optional Links/Routes template is NOT a link declaration.
+    # The real explicit Devices.Connected To link must remain the only edge.
+    allowed={
+        "Devices":devices,
+        "Links":[{"linkId":"","nodeA":None,"nodeB":" ","speedMbps":""}],
+        "Routes":[{"destination":" ","nextHop":None}],
+    }
+    valid,errors,outside=setup(browser,url)
+    try:
+        raw=json.dumps(allowed,separators=(",",":")).encode("utf-8")
+        with valid.expect_file_chooser(timeout=20000) as future:
+            valid.locator('[data-network-import-primary="true"]').click()
+        future.value.set_files({
+            "name":"empty-templates.json","mimeType":"application/json",
+            "buffer":raw,
+        })
+        review=valid.locator('[data-network-import-preview]')
+        expect(review).to_have_attribute(
+            "data-network-import-preview","READY",timeout=30000)
+        require("NETWORK_IMPORT_LINK_SOURCES_CONFLICT" not in review.inner_text(),
+                "An empty Links template incorrectly triggered link-source conflict")
+        require(valid.locator('[data-network-import-activate]').is_enabled(),
+                "Empty secondary templates wrongly blocked real Devices facts")
+        valid.locator('[data-network-import-activate]').click()
+        expect(valid.locator('[data-network-import-panel]')).to_have_count(0,timeout=45000)
+        source=exported_source(valid)
+        require({r["id"] for r in source["resources"]}=={"edge01","peer01"},
+                "Empty templates changed the source device inventory")
+        require(len(source["connections"])==1 and
+                source["connections"][0]["id"]=="link_row_1" and
+                source["connections"][0]["from"]=={"resource":"edge01"} and
+                source["connections"][0]["to"]=={"resource":"peer01"},
+                "An empty Links sheet fabricated or displaced a physical source link")
+        require(not errors,"Valid optional templates caused browser errors "+repr(errors))
+        require(not outside,"Unexpected external network traffic "+repr(outside))
+    finally:valid.close()
+    return {"case":"shorthand_multisheet_source_loss_denial",
+            "status":"PASS","blocked":[name for name,*_ in blocked],
+            "emptyTemplatesAccepted":True,"explicitConnections":1,
+            "originalBuilderUnchanged":True,"physicalProbes":False,
+            "externalRequests":0}
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--url",required=True)
@@ -328,6 +429,7 @@ def main():
                 cases.append(case_conflicts(browser,args.url,fmt))
             cases.append(case_dual_stack_source_truth(browser,args.url))
             cases.append(case_unprojected_workbook(browser,args.url))
+            cases.append(case_shorthand_supplemental_source_truth(browser,args.url))
         finally:browser.close()
     report={"status":"PASS","kind":"Actual compiled Chromium five-format P2c5 source-bound modeled verdicts",
             "environment":"GitHub Actions Ubuntu; Parrot-native/physical network NOT_RUN",
