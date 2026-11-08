@@ -900,8 +900,11 @@ def main():
             resource_inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(asset_controls).to_have_attribute("data-project-dirty", "true")
-            # Apply changes inspector key/sourceRevision; use the fresh
-            # resource editor to make an unrelated change.
+            # Apply changes inspector key/sourceRevision; ReactFlow may
+            # clear transient selection while nodes are re-projected. Select
+            # the same source-backed resource again before the second edit.
+            resource_node.click(force=True)
+            expect(resource_inspector).to_be_visible(timeout=20000)
             resource_inspector.locator(
                 'label.inspector-field', has_text="Label").locator(
                     "input").fill("RDS with retained asset")
