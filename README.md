@@ -46,6 +46,14 @@ or a silently truncated ACL. Explicitly invalid authentication fields such
 as a string-valued MFA requirement or malformed allowlists also yield UNKNOWN,
 without weakening a well-formed allow/deny and MFA evaluation.
 
+Direct Runtime operations also preserve the immutable scenario identity envelope:
+an operation cannot rewrite resource IDs, types, zones, labels, asset metadata
+or whole network interfaces, and cannot change an interface's ID. A misspelled
+operation kind or SET without a JSON value fails closed instead of implicitly
+executing REMOVE or clearing an evidence property. Explicit mutable
+`properties.*` edits and targeted interface state (including addresses,
+MAC and MTU) remain available; batched operations remain atomic.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the
