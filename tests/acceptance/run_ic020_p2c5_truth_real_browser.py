@@ -187,6 +187,11 @@ def case_dual_stack_source_truth(browser,url):
                 "Malformed IPv6 incorrectly offered Builder activation")
         require(invalid.locator('[data-network-import-runtime]').is_disabled(),
                 "Malformed IPv6 incorrectly offered Runtime activation")
+        # The import review is a modal and deliberately intercepts background
+        # controls. Dismiss it before exporting the unchanged Builder source.
+        # Never bypass the modal with a forced click or script-injected export.
+        invalid.get_by_role("button",name="Close network import").click()
+        expect(invalid.locator('[data-network-import-panel]')).to_have_count(0)
         require(exported_source(invalid)==baseline,
                 "Blocked IPv6 import mutated the existing Builder")
         require(not errors,"Invalid IPv6 browser errors "+repr(errors))
