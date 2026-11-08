@@ -47,7 +47,13 @@ The standard workbook may also name `Routes`, `VLANs`, `STP`, `Services`,
 currently be imported into Builder**. Such declarations are rejected with a
 source-row diagnostic, rather than being counted as mapped or silently dropped.
 A populated unsupported field on an otherwise projected sheet is similarly
-blocked. Genuinely empty optional template rows and columns are permitted.
+blocked. Even within supported sheets, populated text fields such as workbook
+title/description, zone or interface labels and gateway declarations must be
+representable; invalid JSON/XLSX types are rejected rather than silently
+falling back to generated labels. When both `Nodes.gateway` and
+`Nodes.Default Gateway` are present they must agree, otherwise import is
+blocked before Builder activation. Genuinely empty optional template rows and
+columns are permitted.
 
 An imported address, MAC or interface label is a declaration, **not**
 evidence of physical cabling, routing, reachability or successful Engine probes.
