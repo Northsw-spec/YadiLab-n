@@ -60,6 +60,12 @@ remains unchanged; explicitly update the dependent declarations before
 deleting their targets. An unreferenced resource or zone can still be
 deleted normally, and an explicit connection cascade still removes only
 the chosen topology edges, never unrelated test or evidence declarations.
+Delete Connection and resource/zone cascades also refuse to delete an edge
+that has a surviving note or fault-origin binding targeting that edge ID.
+This prevents Builder from accepting a deletion that a subsequent verified
+.yadilab Save/Open must reject as a dangling annotation. The operator must
+retarget or remove the authored dependency explicitly; unrelated notes remain
+intact on valid deletes.
 
 ReactFlow canvas selection and pane-click events act on the live, synchronously
 published Builder/Runtime workspace, not a source snapshot captured before a
