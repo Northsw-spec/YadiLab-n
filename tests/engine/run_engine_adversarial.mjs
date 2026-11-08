@@ -866,4 +866,109 @@ if (validSpecialEdit.ok) {
 }
 console.log("PASS ENGINE-057: own-resource identity, test evidence and legacy-state safety");
 
+// ENGINE-058: a definite group allow cannot prove permission while another
+// potentially applicable deny group has UNKNOWN membership. Previously the
+// known allow won, falsely yielding TRUE from incomplete security evidence.
+const policyScenario = structuredClone(scenario);
+policyScenario.resources.push(
+  { id: "policy_user", type: "identity.user", label: "Policy user", interfaces: [], properties: {} },
+  { id: "policy_allow_group", type: "identity.group", label: "Allow", interfaces: [],
+    properties: { members: ["policy_user"] } },
+  { id: "policy_deny_group", type: "identity.group", label: "Deny", interfaces: [],
+    properties: {} },
+  { id: "policy_server", type: "server.generic", label: "Policy server", interfaces: [],
+    properties: {
+      permissions: [
+        { subject: "policy_allow_group", permission: "read", effect: "allow" },
+        { subject: "policy_deny_group", permission: "read", effect: "deny" },
+      ],
+      authentication: { enabled: true, allowedSubjects: ["policy_user"], mfaRequired: false },
+    },
+  },
+);
+const policyState = createInitialEngineState(policyScenario);
+eq(queryMembership(policyState, "policy_user", "policy_allow_group").truth, "TRUE",
+  "reverse members declaration confirms allow-group membership");
+eq(queryMembership(policyState, "policy_user", "policy_deny_group").truth, "UNKNOWN",
+  "undeclared user membership cannot prove deny-group absence");
+eq(queryPermission(policyState, "policy_user", "policy_server", "read").truth, "UNKNOWN",
+  "known group allow with unresolved group deny is UNKNOWN, not TRUE");
+const knownAllow = applyOperation(policyState, {
+  op: "set", target: "policy_user", path: "properties.memberOf",
+  value: ["policy_allow_group"],
+});
+ok(knownAllow.ok, "complete membership evidence can be explicitly supplied");
+if (knownAllow.ok) {
+  eq(queryMembership(knownAllow.state, "policy_user", "policy_deny_group").truth, "FALSE",
+    "complete memberOf proves the competing deny group does not apply");
+  eq(queryPermission(knownAllow.state, "policy_user", "policy_server", "read").truth, "TRUE",
+    "genuine complete group allow remains TRUE");
+}
+const knownDeny = applyOperation(policyState, {
+  op: "set", target: "policy_user", path: "properties.memberOf",
+  value: ["policy_allow_group", "policy_deny_group"],
+});
+ok(knownDeny.ok, "denied group membership can be explicitly proven");
+if (knownDeny.ok)
+  eq(queryPermission(knownDeny.state, "policy_user", "policy_server", "read").truth,
+    "FALSE", "confirmed group deny wins over group allow");
+
+const policyWith = (patch) => {
+  const copy = structuredClone(policyScenario);
+  Object.assign(copy.resources.find(r => r.id === "policy_server").properties, patch);
+  return createInitialEngineState(copy);
+};
+const authPolicyWith = (authentication) =>
+  policyWith({ authentication });
+const declaredPermissions = [
+  { subject: "policy_user", permission: "read", effect: "allow" },
+];
+eq(queryPermission(policyWith({ permissions: declaredPermissions }),
+  "policy_user", "policy_server", "read").truth, "TRUE",
+  "explicit direct allow still grants access");
+eq(queryPermission(policyWith({ permissions: [{ subject: "policy_user", permission: "read", effect: "deny" }] }),
+  "policy_user", "policy_server", "read").truth, "FALSE",
+  "explicit direct deny still blocks access");
+for (const [label, entries] of [
+  ["missing effect defaults to allow", [{ subject: "policy_user", permission: "read" }]],
+  ["invalid effect skips a deny", [
+    ...declaredPermissions, { subject: "policy_user", permission: "read", effect: "block" },
+  ]],
+  ["malformed entry loses its subject", [
+    ...declaredPermissions, { permission: "read", effect: "deny" },
+  ]],
+  ["malformed entry loses its permission", [
+    ...declaredPermissions, { subject: "policy_user", effect: "deny" },
+  ]],
+]) {
+  eq(queryPermission(policyWith({ permissions: entries }),
+    "policy_user", "policy_server", "read").truth, "UNKNOWN",
+    "incomplete or malformed policy does not produce an authoritative allow: " + label);
+}
+
+eq(queryAuthentication(authPolicyWith({ enabled: true, allowedSubjects: ["policy_user"], mfaRequired: false }),
+  "policy_user", "policy_server").truth, "TRUE",
+  "valid explicit authentication authorization still returns TRUE");
+eq(queryAuthentication(authPolicyWith({ enabled: false, allowedSubjects: ["policy_user"] }),
+  "policy_user", "policy_server").truth, "FALSE",
+  "explicit disabled authentication still returns FALSE");
+for (const [label, policy] of [
+  ["invalid enabled flag", { enabled: "yes", allowedSubjects: ["policy_user"] }],
+  ["string MFA requirement", { enabled: true, allowedSubjects: ["policy_user"], mfaRequired: "true" }],
+  ["invalid subject selector", { enabled: true, allowedSubjects: "policy_user", allowedGroups: ["policy_allow_group"] }],
+  ["mixed-type group selector", { enabled: true, allowedSubjects: ["policy_user"], allowedGroups: ["policy_allow_group", 7] }],
+]) {
+  eq(queryAuthentication(authPolicyWith(policy), "policy_user", "policy_server").truth,
+    "UNKNOWN", "malformed explicitly declared authentication policy cannot return TRUE: " + label);
+}
+const policyMfa = structuredClone(policyScenario);
+policyMfa.resources.find(r => r.id === "policy_user").properties.mfaEnabled = true;
+policyMfa.resources.find(r => r.id === "policy_server").properties.authentication.mfaRequired = true;
+eq(queryAuthentication(createInitialEngineState(policyMfa), "policy_user", "policy_server").truth,
+  "TRUE", "valid explicit MFA declaration and evidence still authorize authentication");
+policyMfa.resources.find(r => r.id === "policy_user").properties.mfaEnabled = false;
+eq(queryAuthentication(createInitialEngineState(policyMfa), "policy_user", "policy_server").truth,
+  "FALSE", "explicit unavailable MFA remains an authoritative denial");
+console.log("PASS ENGINE-058: uncertain deny, malformed ACL, MFA and authentication selectors fail closed");
+
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);
