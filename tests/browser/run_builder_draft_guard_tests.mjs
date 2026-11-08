@@ -97,7 +97,7 @@ for (const [name, nextName] of [
     ui.indexOf("const " + nextName + " = async"));
   eq(code.includes("reserveGuardedScenarioLaunch()"), true,
     name + " starts a guarded launch without clearing the current drafts");
-  eq(code.includes("launch.isLive()"), true,
+  eq(code.includes("const isLiveLaunch = launch.isLive;") && code.includes("isLiveLaunch()"), true,
     name + " checks live draft owners after awaited work");
   eq(code.includes("launch.publish("), true,
     name + " advances generation only at the commit boundary");
