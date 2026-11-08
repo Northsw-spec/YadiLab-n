@@ -140,11 +140,13 @@ function deletionSourceDependency(
   source: ScenarioSource,
   removedResources: ReadonlySet<string>,
   removedZones: ReadonlySet<string>,
+  removedConnections: ReadonlySet<string> = new Set(),
 ): BrowserDiagnostic | undefined {
   const resourceRemoved = (id: unknown): id is string =>
     typeof id === "string" && removedResources.has(id);
   const entityRemoved = (id: unknown): id is string =>
-    typeof id === "string" && (removedResources.has(id) || removedZones.has(id));
+    typeof id === "string" &&
+    (removedResources.has(id) || removedZones.has(id) || removedConnections.has(id));
   const problem = (code: string, origin: string, target: string): BrowserDiagnostic =>
     diagnostic(code, `Cannot delete '${target}': retained ${origin} references it. Update that declaration first.`, target);
 
@@ -243,7 +245,10 @@ export function deleteResource(workspace: BuilderWorkspace, resourceId: string, 
   const troubleshootingReferences = (workspace.source.troubleshootingObjectives ?? []).flatMap((objective) => objective.requirements).filter((requirement) =>
     requirement.kind === "observation" ? requirement.targetId === resourceId : requirement.sourceId === resourceId || requirement.destinationId === resourceId);
   if (troubleshootingReferences.length > 0) return failure(workspace, diagnostic("BUILDER_RESOURCE_TROUBLESHOOTING_REFERENCED", `Resource '${resourceId}' is referenced by ${troubleshootingReferences.length} troubleshooting evidence requirement(s); edit those requirements before deleting the resource.`, resourceId));
-  const dependency = deletionSourceDependency(workspace.source, new Set([resourceId]), new Set());
+  // Explicit connection cascade is permission to delete edges, not notes
+  // (or provenance bindings) that still identify those edges.
+  const removedConnections = new Set(cascadeConnections ? references.map((x) => x.id) : []);
+  const dependency = deletionSourceDependency(workspace.source, new Set([resourceId]), new Set(), removedConnections);
   if (dependency) return failure(workspace, dependency);
   const source: ScenarioSource = {
     ...workspace.source,
@@ -270,6 +275,10 @@ export function upsertConnection(workspace: BuilderWorkspace, connection: Scenar
 
 export function deleteConnection(workspace: BuilderWorkspace, connectionId: string): BrowserCommandResult<BuilderWorkspace> {
   if (!workspace.source.connections.some((x) => x.id === connectionId)) return failure(workspace, diagnostic("BUILDER_CONNECTION_UNKNOWN", `Connection '${connectionId}' does not exist.`, connectionId));
+  // Notes can target connection IDs (Save/Open checks this). A successful
+  // topology deletion must not strand annotations or origin references.
+  const dependency = deletionSourceDependency(workspace.source, new Set(), new Set(), new Set([connectionId]));
+  if (dependency) return failure(workspace, dependency);
   const next = invalidate(workspace, { ...workspace.source, connections: workspace.source.connections.filter((x) => x.id !== connectionId) });
   return success(setBuilderSelection(next, next.selection.ids.filter((id) => id !== connectionId)));
 }
@@ -515,15 +524,18 @@ export function deleteZone(workspace: BuilderWorkspace, zoneId: string, cascade 
   if ((hasChildren || hasResources) && !cascade) {
     return failure(workspace, diagnostic("BUILDER_ZONE_NOT_EMPTY", `Zone '${zoneId}' contains child zones/resources; explicit cascade is required.`, zoneId));
   }
-  const dependency = deletionSourceDependency(workspace.source, resourcesToDelete, zonesToDelete);
+  const removedConnections = new Set(workspace.source.connections
+    .filter((x) => resourcesToDelete.has(x.from.resource) || resourcesToDelete.has(x.to.resource))
+    .map((x) => x.id));
+  const dependency = deletionSourceDependency(workspace.source, resourcesToDelete, zonesToDelete, removedConnections);
   if (dependency) return failure(workspace, dependency);
   const source: ScenarioSource = {
     ...workspace.source,
     zones: workspace.source.zones.filter((x) => !zonesToDelete.has(x.id)),
     resources: workspace.source.resources.filter((x) => !resourcesToDelete.has(x.id)),
-    connections: workspace.source.connections.filter((x) => !resourcesToDelete.has(x.from.resource) && !resourcesToDelete.has(x.to.resource)),
+    connections: workspace.source.connections.filter((x) => !removedConnections.has(x.id)),
   };
-  const removed = new Set([...zonesToDelete, ...resourcesToDelete]);
+  const removed = new Set([...zonesToDelete, ...resourcesToDelete, ...removedConnections]);
   const layoutOverrides = workspace.layoutOverrides.filter((x) => !removed.has(x.id));
   const layout = workspace.layout ? {
     ...workspace.layout,
