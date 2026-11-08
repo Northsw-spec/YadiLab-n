@@ -9,7 +9,8 @@ import {
   PROJECT_FORMAT, PROJECT_VERSION, PROJECT_MAX_BYTES,
   createProjectDocument, readProjectDocument, readProjectFile, writeProjectFile,
   assertProjectOpenDiskUnchanged,
-  projectFilename, projectSnapshot, projectHasUnsavedChanges, projectNeedsUnloadWarning,
+  projectFilename, projectSnapshot, projectHasUnsavedChanges, projectHasLiveUnsavedChanges,
+  projectNeedsUnloadWarning,
   projectFilePickerStillCurrent, sameEditableProjectRevision,
   sameProjectFileEntry,
   assertSafeRecoveryTarget,
@@ -1095,6 +1096,52 @@ assert.equal(projectFilePickerStillCurrent(pickerOrigin, -1, pickerOrigin, -1), 
   "Invalid epoch must not authorize file selection");
 assert.equal(projectFilePickerStillCurrent(pickerOrigin, 15.5, pickerOrigin, 15.5), false,
   "Nonintegral file epoch must be rejected");
+// PROJECT-046: a legitimate inspector Apply may publish its Builder source
+// before React has committed the next render. The project file boundary must
+// use that live workspace rather than a stale painted dirty flag or snapshot.
+const savedLiveWorkspace = {
+  mode: "builder", source: structuredClone(example), sourceRevision: 0,
+  dirty: false, layoutOverrides: [],
+};
+const liveBaseline = projectSnapshot(savedLiveWorkspace);
+const unsavedEdit = {
+  ...savedLiveWorkspace, sourceRevision: 1, dirty: true,
+  source: { ...savedLiveWorkspace.source,
+    metadata: { ...savedLiveWorkspace.source.metadata,
+      title: "PROJECT-046 pending source" } },
+};
+assert.equal(projectHasLiveUnsavedChanges(savedLiveWorkspace, liveBaseline,
+  liveBaseline, false), false, "Unmodified current Builder needs no warning");
+assert.equal(projectHasLiveUnsavedChanges(unsavedEdit, liveBaseline,
+  liveBaseline, false), true,
+  "An immediate unpainted Builder edit must require discard confirmation");
+assert.equal(projectHasLiveUnsavedChanges({
+  ...unsavedEdit, dirty: false,
+}, liveBaseline, liveBaseline, false), true,
+  "A stale/incorrect dirty boolean may not override changed canonical bytes");
+assert.equal(projectHasLiveUnsavedChanges({
+  ...savedLiveWorkspace, layoutOverrides: [
+    { id: "firewall01", x: 30, y: 60, width: 200 },
+  ], dirty: false,
+}, liveBaseline, liveBaseline, false), true,
+  "A published layout edit without a React repaint must also require confirmation");
+assert.equal(projectHasLiveUnsavedChanges({ mode: "runtime" },
+  projectSnapshot(unsavedEdit), liveBaseline, false), true,
+  "Entering Runtime must retain protection for the last edited Builder");
+assert.equal(projectHasLiveUnsavedChanges({ mode: "runtime" },
+  liveBaseline, liveBaseline, false), false,
+  "Clean Builder followed by Runtime should not warn merely for the mode change");
+assert.equal(projectHasLiveUnsavedChanges(savedLiveWorkspace, liveBaseline,
+  liveBaseline, true), true,
+  "An uncertain native write must force the warning even when source matches");
+assert.equal(projectNeedsUnloadWarning(projectHasLiveUnsavedChanges(
+  unsavedEdit, liveBaseline, liveBaseline, false), false), true,
+  "Tab closing must warn on a same-turn pending edit");
+assert.equal(projectHasLiveUnsavedChanges(unsavedEdit,
+  liveBaseline, projectSnapshot(unsavedEdit), false), false,
+  "A verified save of exactly the current source must clear the warning");
+console.log("PASS PROJECT-046: live Builder, layout, Runtime preview and failed write preserve unsaved guards");
+
 console.log("PASS PROJECT-018: native/fallback Open selection bound to initial workspace identity and file epoch");
 console.log("PASS PROJECT-002: all three async lab launches fail closed after stale ELK layout");
 console.log("PASS PROJECT-001: user-controlled format v1, SHA-256, exact source/link/layout roundtrip, corruption and write/readback negative tests");

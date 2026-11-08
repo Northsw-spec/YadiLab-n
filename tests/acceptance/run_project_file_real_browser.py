@@ -1739,6 +1739,100 @@ def main():
                         + scenario_button)
                 launch_race.close()
 
+            # PROJECT-046: In a single JavaScript turn, an Inspector Apply
+            # can queue React state while a direct New/Save click immediately
+            # observes the pre-render project. The live canonical source MUST
+            # win over any stale painted dirty flag or stale Save snapshot.
+            atomic = context.new_page()
+            atomic.add_init_script(MOCK)
+            atomic.on("pageerror", lambda error: errors.append(str(error)))
+            atomic.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            ac = atomic.locator('[data-project-file-controls="ready"]')
+            expect(ac).to_be_visible(timeout=45000)
+            section = atomic.locator("details.control-section").filter(
+                has_text="Builder Inspector & Authoring")
+            if section.get_attribute("open") is None:
+                section.locator("summary").first.click()
+            inspector = atomic.locator('[data-builder-inspector="mission"]')
+            expect(inspector).to_be_visible(timeout=15000)
+            title_field = inspector.locator(
+                "label.inspector-field", has_text="Title").locator("input")
+            title_field.fill("PROJECT-046 immediate unsaved change")
+            atomic.evaluate("""() => {
+                window.__project046ConfirmCalls = 0;
+                window.confirm = () => {
+                    window.__project046ConfirmCalls++;
+                    return false;
+                };
+                const apply = document.querySelector(
+                    '[data-builder-inspector="mission"] button');
+                const fresh = document.querySelector(
+                    '[data-project-action="new"]');
+                if (!apply || !fresh || fresh.disabled)
+                    throw new Error("PROJECT046_ATOMIC_CONTROLS_UNAVAILABLE");
+                apply.click();
+                const closing = new Event('beforeunload', { cancelable:true });
+                window.dispatchEvent(closing);
+                window.__project046UnloadPrevented = closing.defaultPrevented;
+                fresh.click();
+            }""")
+            expect(atomic.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance")
+            expect(atomic.locator(".mission-strip")).to_contain_text(
+                "PROJECT-046 immediate unsaved change")
+            expect(ac).to_have_attribute("data-project-dirty", "true")
+            require(atomic.evaluate("window.__project046ConfirmCalls") == 1,
+                    "An immediate New bypassed the unsaved project confirmation")
+            require(atomic.evaluate("window.__project046UnloadPrevented") is True,
+                    "An immediate tab close did not request unsaved-change protection")
+            require(atomic.evaluate("window.__yadilabProjectStore.writes") == 0,
+                    "Inspector Apply or rejected New wrote a native project file")
+            # Save As first attaches a real verified native handle. The next
+            # Apply + Save are again dispatched in ONE JS task, before React
+            # is guaranteed to repaint the changed source.
+            atomic.locator('[data-project-action="save-as"]').click()
+            expect(atomic.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            atomic.wait_for_function(
+                "window.__yadilabProjectStore.writes === 1", timeout=20000)
+            expect(ac).to_have_attribute("data-project-dirty", "false")
+            for index in range(3):
+                saved_title = "PROJECT-046 atomic Save " + str(index + 1)
+                title_field.fill(saved_title)
+                atomic.evaluate("""() => {
+                    const apply = document.querySelector(
+                        '[data-builder-inspector="mission"] button');
+                    const save = document.querySelector(
+                        '[data-project-action="save"]');
+                    if (!apply || !save || save.disabled)
+                        throw new Error("PROJECT046_ATOMIC_SAVE_CONTROLS_UNAVAILABLE");
+                    apply.click();
+                    save.click();
+                }""")
+                atomic.wait_for_function(
+                    "(expected) => window.__yadilabProjectStore.writes === expected",
+                    arg=index + 2, timeout=20000)
+                expect(atomic.locator('[data-project-message]')).to_contain_text(
+                    "Saved and read back", timeout=20000)
+                require(json.loads(atomic.evaluate(
+                    "window.__yadilabProjectStore.text"))["content"]["source"]
+                    ["metadata"]["title"] == saved_title,
+                    "A same-turn Save stored an obsolete pre-Apply project: "
+                    + saved_title)
+                expect(atomic.locator(".mission-strip")).to_contain_text(
+                    saved_title)
+                expect(ac).to_have_attribute("data-project-dirty", "false")
+            require(atomic.evaluate("window.__yadilabProjectStore.writes") == 4,
+                    "Only the four explicit verified Save operations may write")
+            # Even a no-op inspector Apply must not request unnecessary Save,
+            # and a second pending edit may never overwrite the verified file.
+            atomic.locator(
+                '[data-builder-inspector="mission"] button').click()
+            expect(ac).to_have_attribute("data-project-dirty", "false")
+            require(atomic.evaluate("window.__yadilabProjectStore.writes") == 4,
+                    "A no-op Apply triggered a hidden native save")
+            atomic.close()
+
             # A valid runtime progress file may take time to read. If the user
             # creates New while File.text() is unresolved, that old progress
             # must NOT resurrect the prior runtime after the read completes.

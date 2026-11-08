@@ -3,7 +3,8 @@ import {
   createProjectDocument, readProjectFile, writeProjectFile, digestProjectText,
   assertProjectOpenDiskUnchanged, sameProjectFileEntry, assertSafeRecoveryTarget,
   projectFilename, projectSnapshot, projectHasUnsavedChanges,
-  projectNeedsUnloadWarning, projectFilePickerStillCurrent, sameEditableProjectRevision,
+  projectHasLiveUnsavedChanges, projectNeedsUnloadWarning,
+  projectFilePickerStillCurrent, sameEditableProjectRevision,
 } from "./project-document.mjs";
 
 const e = React.createElement;
@@ -72,15 +73,18 @@ export function ProjectFileControls({
     setMessage("Operation failed: " + reason);
     setDiagnostics([diag(error?.code ?? code, reason)]);
   };
+  const liveUnsaved = () => projectHasLiveUnsavedChanges(getWorkspace(),
+    lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
   const canDiscard = () => {
     if (busyRef.current) {
       setMessage("A project file operation is still running.");
       return false;
     }
-    // A failed disk write may set unpersistedRef before React commits the
-    // next render. Check the durable-save marker directly at this discard
-    // boundary rather than trusting only the last painted dirty state.
-    return !(changedRef.current || unpersistedRef.current) ||
+    // React can batch an inspector Apply and an immediate New/Open into one
+    // event turn. The last painted changedRef is not authoritative yet: read
+    // the synchronously published Builder snapshot and the failed-write marker
+    // before authorizing any destructive workspace replacement.
+    return !(changedRef.current || liveUnsaved()) ||
       window.confirm("Projektet har osparade ändringar. Vill du fortsätta utan att spara dem?");
   };
   // This callback is used by other user-initiated scenario switches in App.
@@ -173,7 +177,7 @@ export function ProjectFileControls({
   useEffect(() => {
     const onBeforeUnload = (event) => {
       if (projectNeedsUnloadWarning(
-        changedRef.current || unpersistedRef.current, busyRef.current)) {
+        changedRef.current || liveUnsaved(), busyRef.current)) {
         event.preventDefault();
         event.returnValue = "";
       }
