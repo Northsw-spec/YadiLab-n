@@ -31,6 +31,33 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   const tables = byTable(document);
   for (const table of document.tables) if (!standardWorkbookSheets.includes(table.tableId as StandardWorkbookSheet)) diagnostics.push({ code: "WORKBOOK_UNSUPPORTED_SHEET", severity: "warning", message: `Sheet '${table.tableId}' is not part of the Network Workbook Schema v${YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION}.`, table: table.tableId });
   for (const required of ["Metadata", "Nodes"] as const) if (!tables.has(required)) diagnostics.push({ code: "WORKBOOK_REQUIRED_SHEET_MISSING", severity: "error", message: `Required sheet '${required}' is missing.`, table: required });
+  // The Metadata sheet is a single authoritative workbook identity.
+  // Do not drop competing records or reinterpret an explicitly newer schema.
+  if (tables.has("Metadata")) {
+    const metadataRows = rows(tables, "Metadata");
+    if (metadataRows.length === 0) diagnostics.push({
+      code: "WORKBOOK_METADATA_EMPTY", severity: "error",
+      message: "The required Metadata sheet must contain one record.",
+      table: "Metadata",
+    });
+    if (metadataRows.length > 1) diagnostics.push({
+      code: "WORKBOOK_METADATA_MULTIPLE", severity: "error",
+      message: "Multiple competing Metadata records cannot establish a single source identity.",
+      table: "Metadata",
+    });
+    for (const record of metadataRows) {
+      const declaredVersion = text(record, "schemaVersion");
+      if (declaredVersion && declaredVersion !== YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION)
+        diagnostics.push(diagnostic("WORKBOOK_SCHEMA_VERSION_UNSUPPORTED",
+          "Metadata.schemaVersion is not supported; the imported structure was not reinterpreted.",
+          "Metadata", record.recordIndex, "schemaVersion"));
+      const scenarioId = text(record, "scenarioId");
+      if (scenarioId && !ID.test(scenarioId))
+        diagnostics.push(diagnostic("WORKBOOK_SCENARIO_ID_INVALID",
+          "Metadata.scenarioId must be a stable canonical ID.",
+          "Metadata", record.recordIndex, "scenarioId"));
+    }
+  }
   const seen = new Map<string, number>();
   for (const table of document.tables) { const prior = seen.get(table.tableId) ?? 0; if (prior > 0) diagnostics.push({ code: "WORKBOOK_DUPLICATE_SHEET", severity: "error", message: `Duplicate sheet/table '${table.tableId}'.`, table: table.tableId }); seen.set(table.tableId, prior + 1); }
   for (const record of rows(tables, "Nodes")) {
@@ -151,14 +178,24 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
 
 export function previewNetworkWorkbook(document: ImportDocument, diagnostics: readonly ImportDiagnostic[] = validateNetworkWorkbook(document)): WorkbookPreview {
   const rowsPerSheet: Record<string, number> = {}; const mappedRows: Record<string, number> = {}; const rejectedRows: Record<string, number> = {};
-  for (const table of document.tables) { rowsPerSheet[table.tableId] = table.records.length; const errors = diagnostics.filter((x) => x.table === table.tableId && x.severity === "error").length; mappedRows[table.tableId] = Math.max(0, table.records.length - errors); rejectedRows[table.tableId] = errors; }
+  for (const table of document.tables) {
+    // A physical row can contain several bad fields: count it once in
+    // rejectedRows, while preview.errors still counts every diagnostic.
+    // Table-level errors without a row are not fictional rejected source rows.
+    const invalidRowIds = new Set(diagnostics
+      .filter((x) => x.table === table.tableId && x.severity === "error" && Number.isInteger(x.row))
+      .map((x) => x.row));
+    const rejected = table.records.filter((record) => invalidRowIds.has(record.recordIndex)).length;
+    rowsPerSheet[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) + table.records.length;
+    rejectedRows[table.tableId] = (rejectedRows[table.tableId] ?? 0) + rejected;
+    mappedRows[table.tableId] = rowsPerSheet[table.tableId] - rejectedRows[table.tableId];
+  }
   return { mode: "PREVIEW", sheetsFound: document.tables.map((x) => x.tableId), sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
 }
 
 export function mapNetworkWorkbookToScenario(document: ImportDocument): WorkbookImportResult {
   const diagnostics = [...validateNetworkWorkbook(document)]; const preview = previewNetworkWorkbook(document, diagnostics); if (diagnostics.some((x) => x.severity === "error")) return { ok: false, diagnostics, preview };
   const tables = byTable(document); const metadata = rows(tables, "Metadata")[0]; const scenarioId = text(metadata ?? { recordIndex: 1, fields: {} }, "scenarioId") ?? "workbook_scenario"; const title = text(metadata ?? { recordIndex: 1, fields: {} }, "title") ?? scenarioId; const description = text(metadata ?? { recordIndex: 1, fields: {} }, "description");
-  if (!ID.test(scenarioId)) return { ok: false, diagnostics: [...diagnostics, diagnostic("WORKBOOK_SCENARIO_ID_INVALID", "Metadata.scenarioId must be a stable canonical ID.", "Metadata", metadata?.recordIndex ?? 1, "scenarioId")], preview };
   const zones = rows(tables, "Zones").map((record) => ({ id: text(record, "zoneId")!, label: text(record, "displayName") ?? text(record, "zoneId")!, ...(text(record, "kind") ? { kind: text(record, "kind") as never } : {}) }));
   const resourceMap = new Map<string, Scenariosourceresource>();
   for (const record of rows(tables, "Nodes")) { const id = text(record, "nodeId")!; const zone = text(record, "zoneId"); resourceMap.set(id, { id, type: text(record, "type")!, label: text(record, "displayName")!, ...(zone ? { zone } : {}), properties: {} }); }
