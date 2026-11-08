@@ -54,6 +54,45 @@ ok(!r.ok, "arbitrary solution operations rejected");
 r = applyCanonicalSolutionAuthoring(ws, JSON.stringify({ operations: [{ op: "set", target: "x" }] }));
 ok(!r.ok, "canonical operation path required");
 
+// PROJECT-060: reject canonical solutions that Engine would refuse after
+// the operator has already edited/saved a supposedly runnable project.
+for (const unsafePath of [
+  "id", "type", "zone", "label", "interfaces", "interfaces.0.id",
+  "interfaces.0.name", "properties.__proto__.polluted",
+  "properties.constructor.prototype.access",
+]) {
+  const denied = applyCanonicalSolutionAuthoring(ws, JSON.stringify({
+    operations: [{ op: "set", target: "rds01", path: unsafePath, value: true }],
+  }));
+  ok(!denied.ok, "unsafe solution operation fails before source mutation: " + unsafePath);
+  ok(denied.diagnostics.some(d => d.code === "BUILDER_AUTHORING_SOLUTION_PATH_FORBIDDEN"),
+    "blocked solution path has stable diagnostic");
+  eq(denied.workspace, ws, "rejected canonical solution retains same workspace");
+  eq(JSON.stringify(denied.workspace.source), baseline,
+    "rejected canonical solution leaves source byte-for-byte intact");
+}
+for (const invalidOperation of [
+  { op: "set", target: "rds01", path: "properties.nla" },
+  { op: "remove", target: "rds01", path: "properties.nla", value: true },
+]) {
+  const denied = applyCanonicalSolutionAuthoring(ws, JSON.stringify({ operations: [invalidOperation] }));
+  ok(!denied.ok, "missing/extra operation values rejected");
+  ok(denied.diagnostics.some(d => d.code === "BUILDER_AUTHORING_SOLUTION_OPERATION_INVALID"),
+    "invalid operation shape reports precise diagnostic");
+  eq(denied.workspace, ws, "bad operation shape preserves Builder");
+}
+const validAuthoring = applyCanonicalSolutionAuthoring(ws, JSON.stringify({
+  operations: [
+    { op: "set", target: "rds01", path: "properties.nla", value: true },
+    { op: "set", target: "rds01", path: "interfaces.0.addresses", value: ["192.0.2.44"] },
+  ],
+}));
+ok(validAuthoring.ok, "mutable property and selected interface state remain authorable");
+eq(validAuthoring.workspace.source.canonicalSolution.operations.length, 2,
+  "both accepted solution operations retain their authored order");
+eq(JSON.stringify(ws.source), baseline,
+  "positive authoring still leaves originating workspace immutable");
+
 const main = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(!main.includes("new Function("), "authoring UI does not execute arbitrary code");
 
