@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { queryReachability } from "./network-engine.js";
 import { withUdpIcmpFailureDiagnostic } from "./udp-icmp-engine.js";
@@ -65,7 +66,7 @@ export function sourceDefaultGatewayVerdict(
   const intermediateIds = path.slice(1, -1);
   let hasUnknownIntermediateAddress = false;
   for (const id of intermediateIds) {
-    const resource = state.resources[id];
+    const resource = ownResource(state, id);
     if (!resource) { hasUnknownIntermediateAddress = true; continue; }
     const addresses = addressesForResource(resource);
     if (!addresses.length) { hasUnknownIntermediateAddress = true; continue; }
