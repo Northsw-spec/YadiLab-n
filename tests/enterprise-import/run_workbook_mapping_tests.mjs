@@ -991,8 +991,14 @@ for (const { sheet, fields, expectedRow } of [
     d.code === "NETWORK_IMPORT_ADDITIONAL_SHEET_UNMAPPED" &&
     d.table === sheet && d.row === expectedRow && d.severity === "error"),
     "Original sheet and physical row must survive: " + sheet);
-  assert.equal(result.normalized.document.tables.some(t => t.tableId === sheet), false,
-    "Shorthand projection must not invent unimplemented modeled " + sheet);
+  // Canonical Metadata and Interfaces are *always* created by Devices
+  // normalization. They must not be confused with accepted original sheets.
+  assert.deepEqual(result.normalized.document.tables.map(t => t.tableId),
+    ["Metadata", "Nodes", "Interfaces", "Links"],
+    "Only supported canonical destination sheets may be generated");
+  if (sheet === "Interfaces") assert.equal(
+    result.normalized.document.tables.find(t => t.tableId === "Interfaces").records.length,
+    0, "An original extra port is NOT silently promoted to a canonical interface");
   assert.deepEqual(result.mapped.source?.connections.map(x =>
     [x.from.resource, x.to.resource]), [["device_1", "device_2"]],
     "A blocked supplementary sheet cannot be treated as a physical link source");
