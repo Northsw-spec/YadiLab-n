@@ -13,6 +13,8 @@ import {
   createResourceFromInspector,
   createZoneFromInspector,
   deleteSelectedBuilderObject,
+  deleteResource,
+  deleteZone,
   duplicateSelectedBuilderResource,
   setBuilderSelection,
 } from "../../dist-browser-test/ui/src/browser/index.js";
@@ -170,6 +172,48 @@ ok(result.ok, "create resource accepts an explicit asset pair");
 eq(result.workspace.source.resources.find((item) => item.id === "owned_asset")?.asset,
   { id: "server.generic", version: "1.0.0" },
   "resource creation includes both visibly entered asset fields");
+
+// BUILDER-053: legitimate unreferenced deletions remain available and are
+// atomic. Only source-backed references, not a generic Delete ban, are new.
+const deleteReady = structuredClone(source);
+deleteReady.connections = [];
+deleteReady.tests = [];
+deleteReady.findings = [];
+deleteReady.objectives = [{
+  id: "retain_admin", title: "Keep retained resource", category: "validation",
+  required: false,
+  condition: { op: "equals", target: "admin01", path: "properties.safe", value: true },
+}];
+deleteReady.completion = {
+  op: "equals", target: "admin01", path: "properties.safe", value: true,
+};
+deleteReady.canonicalSolution = { operations: [] };
+deleteReady.layoutHints = [];
+deleteReady.notes = [];
+deleteReady.troubleshootingObjectives = [];
+let deletionWorkspace = createBuilderWorkspace(deleteReady);
+const initialResourceCount = deletionWorkspace.source.resources.length;
+const deletion = deleteResource(deletionWorkspace, "rds01", false);
+ok(deletion.ok, "Delete Resource succeeds when no canonical dependency retains its ID");
+eq(deletion.workspace.source.resources.length, initialResourceCount - 1,
+  "positive Delete removes exactly one unreferenced resource");
+ok(!deletion.workspace.source.resources.some((item) => item.id === "rds01"),
+  "positive Delete removed intended resource ID");
+eq(deletion.workspace.source.objectives, deleteReady.objectives,
+  "positive Delete retains unchanged authored objectives");
+deletionWorkspace = createBuilderWorkspace(deleteReady);
+const cascade = deleteZone(deletionWorkspace, "server", true);
+ok(cascade.ok, "Delete Zone cascade works when descendants have no retained references");
+ok(!cascade.workspace.source.zones.some((item) => item.id === "server"),
+  "positive cascade removes selected zone");
+ok(!cascade.workspace.source.resources.some((item) => item.id === "rds01"),
+  "positive cascade removes only unreferenced child resources");
+eq(cascade.workspace.source.resources.length, initialResourceCount - 1,
+  "positive zone cascade retains all unrelated resources");
+eq(cascade.workspace.source.completion, deleteReady.completion,
+  "positive cascade preserves unrelated completion truth");
+ok(cascade.workspace.sourceRevision > deletionWorkspace.sourceRevision,
+  "valid deletions still invalidate stale Compiler previews");
 
 const mainSource = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(mainSource.includes("BuilderInspector"), "browser UI contains typed BuilderInspector component");
