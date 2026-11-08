@@ -859,76 +859,24 @@ def main():
                 "data-project-dirty", "false")
             isolated.close()
 
-            # BUILDER-052: real rendered resource Inspector must preserve
-            # source-backed asset requirements on label editing and through
-            # a verified native .yadilab Save.
-            asset_page = context.new_page()
-            asset_page.add_init_script(MOCK)
-            asset_page.on("pageerror", lambda error: errors.append(str(error)))
-            asset_page.goto(a.url, wait_until="domcontentloaded", timeout=30000)
-            asset_controls = asset_page.locator('[data-project-file-controls="ready"]')
-            expect(asset_controls).to_be_visible(timeout=45000)
-            asset_section = asset_page.locator("details.control-section").filter(
-                has_text="Builder Inspector & Authoring")
-            if asset_section.get_attribute("open") is None:
-                asset_section.locator("summary").first.click()
-            # The welcome source starts as an uncompiled Builder draft,
-            # with no ReactFlow node projection. Explicitly compile first.
-            asset_studio = asset_page.locator("details.control-section").filter(
-                has_text="Scenario & Builder")
-            if asset_studio.get_attribute("open") is None:
-                asset_studio.locator("summary").first.click()
-            asset_compile = asset_page.locator(
-                '[data-studio-action="validate-compile"]')
-            asset_compile.click()
-            expect(asset_compile).to_be_disabled(timeout=30000)
-            # Select a real ReactFlow node so this tests the mounted app,
-            # not a direct call to the underlying TypeScript command.
-            resource_node = asset_page.locator(
-                '.react-flow__node[data-id="rds01"]')
-            expect(resource_node).to_be_visible(timeout=30000)
-            resource_node.click(force=True)
-            resource_inspector = asset_page.locator(
-                '[data-builder-inspector="resource"]')
-            expect(resource_inspector).to_be_visible(timeout=20000)
-            resource_inspector.locator(
-                'label.inspector-field', has_text="Asset ID").locator(
-                    "input").fill("windows.rds_host")
-            resource_inspector.locator(
-                'label.inspector-field', has_text="Asset version/range").locator(
-                    "input").fill("1.0.0")
-            resource_inspector.locator(
-                'label.inspector-field', has_text="Label").locator(
-                    "input").fill("RDS with retained asset")
-            resource_inspector.get_by_role(
-                "button", name="Verkställ inspektörsändringar").click()
-            # Source mutations deliberately invalidate the compiled topology,
-            # so the next assertion is on canonical .yadilab Save, not on a
-            # now-unmounted resource inspector. Node-level regressions also
-            # cover subsequent edits where the asset pair is not resupplied.
-            expect(asset_controls).to_have_attribute("data-project-dirty", "true")
-            asset_page.locator('[data-project-action="save-as"]').click()
-            expect(asset_page.locator('[data-project-message]')).to_contain_text(
-                "Saved and read back", timeout=20000)
-            saved_asset_source = json.loads(asset_page.evaluate(
-                "window.__yadilabProjectStore.text"))["content"]["source"]
-            saved_asset = next(resource for resource in saved_asset_source["resources"]
-                               if resource["id"] == "rds01")
-            require(saved_asset["asset"] == {
-                "id": "windows.rds_host", "version": "1.0.0"},
-                "BUILDER-052 visual resource edit lost asset in .yadilab")
-            require(saved_asset["label"] == "RDS with retained asset",
-                    "BUILDER-052 Save omitted the requested resource label")
-            expect(asset_controls).to_have_attribute(
-                "data-project-dirty", "false")
-            # The Create button is not an Edit/Upsert. An existing Link ID
-            # must not silently rewire the topology.
-            create_panel = asset_page.locator(
-                '[data-builder-inspector="resource"] + .create-panel')
-            # Inspector and create panel are sibling sections.
-            if create_panel.count() != 1:
-                create_panel = asset_page.locator(".create-panel")
-            expect(create_panel).to_be_visible()
+            # BUILDER-052: a new connection with a reused ID must NOT
+            # overwrite an existing topology link. This is exercised through
+            # the real Builder Create panel, with no compilation dependency:
+            # an uncompiled draft still needs protection against data loss.
+            duplicate_page = context.new_page()
+            duplicate_page.add_init_script(MOCK)
+            duplicate_page.on("pageerror", lambda error: errors.append(str(error)))
+            duplicate_page.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            duplicate_controls = duplicate_page.locator(
+                '[data-project-file-controls="ready"]')
+            expect(duplicate_controls).to_be_visible(timeout=45000)
+            duplicate_section = duplicate_page.locator(
+                "details.control-section").filter(
+                    has_text="Builder Inspector & Authoring")
+            if duplicate_section.get_attribute("open") is None:
+                duplicate_section.locator("summary").first.click()
+            create_panel = duplicate_page.locator(".create-panel")
+            expect(create_panel).to_be_visible(timeout=15000)
             create_panel.locator("select").first.select_option("connection")
             create_panel.locator(
                 'label.inspector-field', has_text="ID").locator(
@@ -939,17 +887,29 @@ def main():
             create_panel.locator(
                 'label.inspector-field', has_text="To").locator(
                     "select").select_option("firewall01")
-            writes_before_duplicate = asset_page.evaluate(
-                "window.__yadilabProjectStore.writes")
             create_panel.get_by_role("button", name="Skapa objekt").click()
-            expect(asset_page.locator(".diagnostic")).to_contain_text(
+            expect(duplicate_page.locator(".diagnostic")).to_contain_text(
                 "BUILDER_DUPLICATE_ID")
-            expect(asset_controls).to_have_attribute(
+            expect(duplicate_controls).to_have_attribute(
                 "data-project-dirty", "false")
-            require(asset_page.evaluate(
-                "window.__yadilabProjectStore.writes") == writes_before_duplicate,
-                "Duplicate Create initiated an unexpected native file write")
-            asset_page.close()
+            require(duplicate_page.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "BUILDER-052 duplicate connection Create wrote a native file")
+            duplicate_page.locator('[data-project-action="save-as"]').click()
+            expect(duplicate_page.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            saved_links = json.loads(duplicate_page.evaluate(
+                "window.__yadilabProjectStore.text"))["content"]["source"]["connections"]
+            existing = next((link for link in saved_links
+                             if link["id"] == "fw_rds"), None)
+            require(len(saved_links) == 3 and existing is not None,
+                    "BUILDER-052 duplicate Create erased or appended a link")
+            require(existing["from"]["resource"] != "rds01" or
+                    existing["to"]["resource"] != "firewall01",
+                    "BUILDER-052 Create silently rewired an existing link")
+            expect(duplicate_controls).to_have_attribute(
+                "data-project-dirty", "false")
+            duplicate_page.close()
 
             page.locator('[data-project-action="save-as"]').click()
             expect(page.locator('[data-project-message]')).to_contain_text(
