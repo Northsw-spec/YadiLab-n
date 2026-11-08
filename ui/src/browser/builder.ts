@@ -166,7 +166,7 @@ function deletionSourceDependency(
   while (pending.length) {
     const rule = pending.pop()!;
     if (rule.op === "all" || rule.op === "any") {
-      pending.push(...rule.rules);
+      for (const child of rule.rules) pending.push(child);
       continue;
     }
     if (rule.op === "not") {
