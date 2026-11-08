@@ -94,10 +94,15 @@ function readPermissions(state: EngineState, resourceId: string): readonly Permi
   if (!Array.isArray(raw)) return undefined;
   const out: PermissionEntry[] = [];
   for (const item of raw) {
-    if (!isRecord(item) || typeof item.subject !== "string" || typeof item.permission !== "string") continue;
-    const effect = item.effect === "deny" ? "deny" : item.effect === "allow" || item.effect === undefined ? "allow" : undefined;
-    if (!effect) continue;
-    out.push({ subject: item.subject, permission: item.permission, effect });
+    // An incomplete/malformed ACL is not authoritative evidence. In
+    // particular, a missing effect must NOT silently default to allow.
+    // Skipping invalid entries can also erase a deny before evaluating
+    // another allow row. Fail closed for the whole malformed declaration.
+    if (!isRecord(item) ||
+        typeof item.subject !== "string" || item.subject.length === 0 ||
+        typeof item.permission !== "string" || item.permission.length === 0 ||
+        (item.effect !== "allow" && item.effect !== "deny")) return undefined;
+    out.push({ subject: item.subject, permission: item.permission, effect: item.effect });
   }
   return out;
 }
@@ -111,7 +116,7 @@ export function queryPermission(state: EngineState, subject: string, resourceId:
     return { truth: "UNKNOWN", explanation: [`Permission endpoint is absent from runtime state: '${subject}' -> '${resourceId}'.`] };
   }
   const permissions = readPermissions(state, resourceId);
-  if (!permissions) return { truth: "UNKNOWN", explanation: [`Resource '${resourceId}' has no declared authoritative permissions list.`] };
+  if (!permissions) return { truth: "UNKNOWN", explanation: [`Resource '${resourceId}' has no complete and valid authoritative permissions list; missing or malformed entries cannot prove an allow or deny.`] };
 
   const direct = permissions.filter((entry) => entry.subject === subject && permissionMatches(entry, permission));
   const directDeny = direct.find((entry) => entry.effect === "deny");
@@ -120,10 +125,14 @@ export function queryPermission(state: EngineState, subject: string, resourceId:
   if (directAllow) return { truth: "TRUE", value: { subject, resource: resourceId, permission, via: subject, effect: "allow" }, explanation: [`Direct allow on '${resourceId}' grants '${permission}' to '${subject}'.`] };
 
   let sawUnknownMembership = false;
+  let sawUnknownDenyMembership = false;
   let allowVia: string | undefined;
   for (const entry of permissions.filter((item) => item.subject !== subject && permissionMatches(item, permission))) {
     const membership = queryMembership(state, subject, entry.subject);
-    if (membership.truth === "UNKNOWN") sawUnknownMembership = true;
+    if (membership.truth === "UNKNOWN") {
+      sawUnknownMembership = true;
+      if (entry.effect === "deny") sawUnknownDenyMembership = true;
+    }
     if (membership.truth !== "TRUE") continue;
     if (entry.effect === "deny") {
       return {
@@ -135,6 +144,12 @@ export function queryPermission(state: EngineState, subject: string, resourceId:
     allowVia ??= entry.subject;
   }
 
+  // A confirmed group allow cannot prove access if another possibly
+  // applicable deny group has unresolved membership. Once that membership
+  // is proven FALSE, the known allow becomes decisive; TRUE is a deny.
+  if (allowVia && sawUnknownDenyMembership)
+    return { truth: "UNKNOWN", value: { subject, resource: resourceId, permission },
+      explanation: [`Group allow via '${allowVia}' exists, but membership in another matching deny group is unresolved.`] };
   if (allowVia) return { truth: "TRUE", value: { subject, resource: resourceId, permission, via: allowVia, effect: "allow" }, explanation: [`Effective permission '${permission}' is granted via membership in '${allowVia}'.`] };
   if (sawUnknownMembership) return { truth: "UNKNOWN", value: { subject, resource: resourceId, permission }, explanation: [`A relevant permission entry exists, but group membership evidence is incomplete.`] };
   return { truth: "FALSE", value: { subject, resource: resourceId, permission }, explanation: [`Authoritative permissions on '${resourceId}' contain no applicable allow for '${subject}'.`] };
@@ -146,6 +161,15 @@ export function queryAuthentication(state: EngineState, subject: string, target:
   if (!subjectResource || !targetResource) return { truth: "UNKNOWN", explanation: [`Authentication endpoint is absent from runtime state: '${subject}' -> '${target}'.`] };
   const raw = targetResource.properties.authentication;
   if (!isRecord(raw)) return { truth: "UNKNOWN", explanation: [`Target '${target}' has no declared authentication policy.`] };
+  // An explicitly malformed optional selector must not disappear into the
+  // omitted-field default. "mfaRequired": "true" used to disable the MFA
+  // requirement and could fabricate a successful authentication verdict.
+  if ((raw.enabled !== undefined && typeof raw.enabled !== "boolean") ||
+      (raw.mfaRequired !== undefined && typeof raw.mfaRequired !== "boolean") ||
+      (raw.allowedSubjects !== undefined && !asStringArray(raw.allowedSubjects)) ||
+      (raw.allowedGroups !== undefined && !asStringArray(raw.allowedGroups)))
+    return { truth: "UNKNOWN", value: { subject, target },
+      explanation: [`Target '${target}' declares malformed authentication policy fields; no authorization can be inferred.`] };
   if (raw.enabled === false) return { truth: "FALSE", value: { subject, target }, explanation: [`Authentication is explicitly disabled on '${target}'.`] };
 
   const allowedSubjects = asStringArray(raw.allowedSubjects);
