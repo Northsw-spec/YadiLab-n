@@ -41,6 +41,10 @@ jobs:
           npm run test:import-helper
           # Canonical Builder edits must not lose asset identity or overwrite links.
           npm run test:builder-inspector
+          # Canonical solutions must be safe to Apply, compile, save and execute.
+          # Builder Inspector already compiled the actual browser commands.
+          node tests/browser/run_builder_authoring_tests.mjs
+          node tests/browser/run_builder_authoring_adversarial.mjs
           # ReactFlow events must not restore an old source after Inspector Apply.
           node tests/browser/run_topology_workspace_guard_tests.mjs
           npm run test:release-identity
