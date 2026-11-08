@@ -2269,7 +2269,7 @@ function ScenarioStudioToolbar({ workspace, getWorkspace, projectGeneration, get
   );
 }
 
-function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts }) {
+function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts, projectGeneration }) {
   const model = buildBuilderInspectorModel(workspace);
   const configuration = configurationSummary(workspace.source);
   const [form, setForm] = useState(() => ({ ...model }));
@@ -2280,14 +2280,14 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
   const initialFormRef = useRef({ ...form });
   const draftOwnerRef = useRef({});
   const hasPendingFormRef = useRef(false);
-  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false),
+  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false, projectGeneration),
     [onPendingDraftChange]);
   const editForm = (key, value) => {
     const next = { ...latestFormRef.current, [key]: value };
     latestFormRef.current = next;
     hasPendingFormRef.current =
       JSON.stringify(next) !== JSON.stringify(initialFormRef.current);
-    onPendingDraftChange(draftOwnerRef.current, hasPendingFormRef.current);
+    onPendingDraftChange(draftOwnerRef.current, hasPendingFormRef.current, projectGeneration);
     setForm(next);
   };
   const [cascade, setCascade] = useState(false);
@@ -2325,7 +2325,7 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
     setDiagnostics(result.diagnostics);
     if (result.ok) {
       hasPendingFormRef.current = false;
-      onPendingDraftChange(draftOwnerRef.current, false);
+      onPendingDraftChange(draftOwnerRef.current, false, projectGeneration);
       setWorkspace(result.workspace);
     }
   };
@@ -2505,7 +2505,7 @@ function ImportWorkbenchPanel({ state, setState, getImportState, importRequestEp
   );
 }
 
-function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts }) {
+function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts, projectGeneration }) {
   const model = buildBuilderAuthoringModel(workspace);
   // The JSX/React render can lag behind a native input event. Maintain an
   // authoritative synchronous draft so Input -> Apply in one JS task commits
@@ -2525,12 +2525,12 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
   const draftOwnerRef = useRef({});
   const dirtyKeys = () => Object.keys(originalDraftsRef.current).filter(
     key => liveDraftsRef.current[key] !== originalDraftsRef.current[key]);
-  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false),
+  useEffect(() => () => onPendingDraftChange(draftOwnerRef.current, false, projectGeneration),
     [onPendingDraftChange]);
   const editDraft = (key, value) => {
     const next = { ...liveDraftsRef.current, [key]: value };
     liveDraftsRef.current = next;
-    onPendingDraftChange(draftOwnerRef.current, dirtyKeys().length > 0);
+    onPendingDraftChange(draftOwnerRef.current, dirtyKeys().length > 0, projectGeneration);
     setDrafts(next);
   };
   const applyDraft = (key, apply) => {
@@ -2555,7 +2555,7 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
     const result = apply(workspace, liveDraftsRef.current[key]);
     setDiagnostics(result.diagnostics);
     if (result.ok) {
-      onPendingDraftChange(draftOwnerRef.current, false);
+      onPendingDraftChange(draftOwnerRef.current, false, projectGeneration);
       setWorkspace(result.workspace);
     }
   };
@@ -3498,8 +3498,8 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
           // another project can therefore reuse the same React keys. Bind
           // ephemeral authoring forms to the explicit scenario generation.
           e(BuilderAssetLibrary, { key: `assets-${projectGeneration}-${selected ?? "none"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, getPendingDraftChanges }),
-          e(BuilderInspector, { key: `inspector-${projectGeneration}-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts }),
-          e(BuilderAuthoringPanels, { key: `authoring-${projectGeneration}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts }),
+          e(BuilderInspector, { key: `inspector-${projectGeneration}-${selected ?? "mission"}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts, projectGeneration }),
+          e(BuilderAuthoringPanels, { key: `authoring-${projectGeneration}-${workspace.sourceRevision}`, workspace, getWorkspace, setWorkspace, setDiagnostics, onPendingDraftChange, getOtherPendingDrafts, projectGeneration }),
         )
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
@@ -4261,8 +4261,8 @@ function App() {
   const projectGuardRef = useRef(() => true);
   const pendingBuilderDraftsRef = useRef(createPendingBuilderDraftRegistry());
   const [pendingBuilderDraftCount, setPendingBuilderDraftCount] = useState(0);
-  const onPendingDraftChange = React.useCallback((owner, dirty) => {
-    const next = pendingBuilderDraftsRef.current.mark(owner, dirty);
+  const onPendingDraftChange = React.useCallback((owner, dirty, generation) => {
+    const next = pendingBuilderDraftsRef.current.mark(owner, dirty, generation);
     setPendingBuilderDraftCount(current => current === next ? current : next);
   }, []);
   const hasPendingBuilderDrafts = React.useCallback(
@@ -4714,6 +4714,11 @@ function App() {
   const beginScenarioTransition = () => {
     const transitionId = scenarioTransitionRef.current + 1;
     scenarioTransitionRef.current = transitionId;
+    // A New/Open/import commits a new document synchronously, before old
+    // Inspector/JSON React cleanup effects run. Late input from the old
+    // generation cannot make the new project appear to hold its drafts.
+    pendingBuilderDraftsRef.current.beginGeneration(transitionId);
+    setPendingBuilderDraftCount(0);
     // All new scenario transitions invalidate the previous 5k Office session;
     // ordinary edits do not pass through this transition and remain guarded.
     setScaledOfficeFiveThousandSessionActive(false);
