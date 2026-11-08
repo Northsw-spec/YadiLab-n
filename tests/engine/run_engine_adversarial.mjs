@@ -798,4 +798,72 @@ ok(!project050ValidRoute.explanation.some(line =>
   "Missing route-test protocol is the documented default any, unlike invalid input");
 console.log("PASS PROJECT-050 Engine: malformed user-supplied test fields are UNKNOWN, not a different silently defaulted query");
 
+// ENGINE-057: scenario IDs may legally be "constructor". An absent
+// resource must never resolve Object.prototype.constructor and become
+// synthetic identity/permission/authentication evidence or an Engine target.
+eq(Object.getPrototypeOf(initial.resources), null,
+  "initial Engine resource dictionary has no inherited identities");
+for (const missingId of ["constructor", "toString", "__proto__"]) {
+  eq(queryMembership(initial, missingId, missingId).truth, "UNKNOWN",
+    "self-membership of absent special ID must be UNKNOWN: " + missingId);
+  eq(queryPermission(initial, missingId, "rds01", "read").truth, "UNKNOWN",
+    "absent special permission subject cannot be inferred: " + missingId);
+  eq(queryPermission(initial, "attacker", missingId, "read").truth, "UNKNOWN",
+    "absent special permission resource cannot be inferred: " + missingId);
+  eq(queryAuthentication(initial, missingId, "rds01").truth, "UNKNOWN",
+    "absent special authentication subject is unknown: " + missingId);
+  eq(queryAuthentication(initial, "attacker", missingId).truth, "UNKNOWN",
+    "absent special authentication target is unknown: " + missingId);
+  const rejected = applyOperation(initial, {
+    op: "set", target: missingId, path: "properties.present", value: true,
+  });
+  ok(!rejected.ok, "absent special ID cannot be an Engine mutation target");
+  eq(rejected.diagnostic?.code, "ENGINE_UNKNOWN_TARGET",
+    "missing special resource fails with real missing-target diagnostic");
+  eq(rejected.state, initial, "rejected special-ID mutation preserves original Engine state");
+}
+const legacyPlainResources = { ...initial, resources: { ...initial.resources } };
+eq(queryMembership(legacyPlainResources, "constructor", "constructor").truth,
+  "UNKNOWN", "rehydrated plain-object state cannot inherit constructor identity");
+eq(queryPermission(legacyPlainResources, "attacker", "constructor", "read").truth,
+  "UNKNOWN", "rehydrated plain-object permission lookup fails closed");
+eq(queryAuthentication(legacyPlainResources, "attacker", "constructor").truth,
+  "UNKNOWN", "rehydrated plain-object authentication lookup fails closed");
+eq(evaluateRule({ op: "test_result", test: "constructor", expected: "TRUE" }, {
+  scenario, state: initial, testResults: {},
+}).truth, "UNKNOWN", "inherited Object constructor is not a recorded test outcome");
+eq(evaluateRule({ op: "test_result", test: "constructor", expected: "TRUE" }, {
+  scenario, state: initial, testResults: { constructor: "TRUE" },
+}).truth, "TRUE", "genuine own test evidence with a valid special ID is accepted");
+const engine057Evaluation = evaluateEngine(scenario, initial);
+eq(Object.getPrototypeOf(engine057Evaluation.testResults), null,
+  "Engine test-result registry cannot inherit fake test outcomes");
+
+// Positive: do NOT prohibit legitimate schema-valid canonical IDs; use an
+// own property to resolve them and keep null-prototype maps after edits.
+const specialIdentitySource = structuredClone(scenario);
+specialIdentitySource.resources.push({
+  ...structuredClone(scenario.resources[0]),
+  id: "constructor", label: "Constructor named identity",
+  type: "identity.group", properties: { memberOf: [] },
+});
+const validSpecialState = createInitialEngineState(specialIdentitySource);
+ok(Object.hasOwn(validSpecialState.resources, "constructor"),
+  "legitimate canonical resource named constructor is stored as own property");
+eq(queryMembership(validSpecialState, "constructor", "constructor").truth,
+  "TRUE", "genuinely present identity can self-match");
+const validSpecialEdit = applyOperation(validSpecialState, {
+  op: "set", target: "constructor", path: "properties.memberOf", value: ["attacker"],
+});
+ok(validSpecialEdit.ok, "explicit operation can update real special-name resource");
+if (validSpecialEdit.ok) {
+  eq(Object.getPrototypeOf(validSpecialEdit.state.resources), null,
+    "Engine state revision preserves null-prototype resource namespace");
+  eq(validSpecialEdit.state.resources.constructor.properties.memberOf,
+    ["attacker"], "operation updated only the genuinely present identity");
+  eq(queryMembership(validSpecialEdit.state, "constructor", "constructor").truth,
+    "TRUE", "real special-name resource remains resolvable after revision");
+}
+console.log("PASS ENGINE-057: own-resource identity, test evidence and legacy-state safety");
+
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);
