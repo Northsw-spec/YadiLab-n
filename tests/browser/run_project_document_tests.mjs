@@ -231,6 +231,19 @@ await assert.rejects(writeProjectFile(samePhysicalFile,text,
 assert.equal(stored,conflictContent,
   "Second JS handle must not overwrite externally modified physical file");
 stored=firstWrite;
+// PROJECT-030: direct native write calls must validate bytes before touching
+// an existing file. A bypassed serializer must never truncate a real project.
+let preflightWriteCount = 0;
+const preflightHandle = {
+  async getFile() { return file("network.yadilab", firstWrite); },
+  async createWritable() { preflightWriteCount++; throw Error("must not truncate"); },
+};
+await assert.rejects(writeProjectFile(preflightHandle, null), /PROJECT_FILE_INVALID/);
+await assert.rejects(writeProjectFile(preflightHandle, ""), /PROJECT_FILE_TOO_LARGE/);
+await assert.rejects(writeProjectFile(preflightHandle, "x".repeat(PROJECT_MAX_BYTES + 1)),
+  /PROJECT_FILE_TOO_LARGE/);
+assert.equal(preflightWriteCount, 0, "Invalid payload must never open a writable stream");
+console.log("PASS PROJECT-030: native write rejects invalid and oversized bytes before disk access");
 // Save As must never overwrite an unrelated project just because the file picker
 // returned a writable handle to that existing, non-empty destination.
 let destinationDisk = "IRREPLACEABLE OTHER PROJECT";
