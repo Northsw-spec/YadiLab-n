@@ -2352,7 +2352,7 @@ def main():
                 const create = panel.querySelector('[data-studio-action="create"]');
                 if (!id || !title || !create || create.disabled)
                     throw new Error("UX064_STUDIO_FIELDS_MISSING");
-                nativeSetter.call(id, 'ux064_immediate_scenario');
+                nativeSetter.call(id, 'ux064.immediate.scenario');
                 id.dispatchEvent(new Event('input', {bubbles:true}));
                 nativeSetter.call(title, 'UX-064 latest typed mission');
                 title.dispatchEvent(new Event('input', {bubbles:true}));
