@@ -18,6 +18,42 @@ assert.equal(noConnections.result.ok, true, JSON.stringify(noConnections.diagnos
 assert.equal(noConnections.result.source.connections.length, 0, "Never infer links from addresses or gateways");
 assert.equal(noConnections.result.source.notes.length, 1, "Explicit gateway value is recorded as source metadata, not a link");
 assert.ok(noConnections.diagnostics.some((d) => d.code === "NETWORK_IMPORT_NO_EXPLICIT_LINKS"));
+// PROJECT-032: Source-declared MAC-only inventory entries must not disappear
+// simply because an IPv4 address is unknown. Never fabricate an address,
+// cable, physical switch port or tested reachability for that resource.
+const macOnly = map(await csv(`Asset ID,Hostname,Device Type,MAC Address
+swmac,MAC-only Switch,Switch,AA:BB:CC:DD:EE:01
+bare,No MAC or IP,Server,
+`));
+assert.equal(macOnly.ok, true, JSON.stringify(macOnly.diagnostics));
+const macSwitch = macOnly.result.source.resources.find(x => x.id === "swmac");
+assert.equal(macSwitch?.interfaces?.length, 1,
+  "Explicit MAC without IPv4 must produce one documented interface");
+assert.equal(macSwitch.interfaces[0].mac, "AA:BB:CC:DD:EE:01",
+  "Do not alter the original documented MAC address");
+assert.equal(macSwitch.interfaces[0].addresses, undefined,
+  "MAC-only row must never invent an IPv4 address");
+assert.equal(macOnly.result.source.resources.find(x => x.id === "bare")?.interfaces,
+  undefined, "An empty MAC/IP row must not invent an interface");
+assert.equal(macOnly.result.source.connections.length, 0,
+  "A MAC address is not proof of a physical link");
+assert.ok(!macOnly.diagnostics.some(d => d.code === "NETWORK_IMPORT_IP_INVALID"));
+const invalidMac = map(await csv(`Asset ID,Hostname,Device Type,MAC Address
+badmac,Unparseable,Server,AA:BB:CC:DD:EE:GG
+`));
+assert.equal(invalidMac.ok, false, "Malformed MAC must not be treated as valid imported topology");
+assert.ok(invalidMac.diagnostics.some(d => d.code === "NETWORK_IMPORT_MAC_INVALID"),
+  "Invalid explicit MAC must generate a clear fail-closed diagnostic");
+const ipAndMac = map(await csv(`Asset ID,Hostname,Device Type,IP Address,MAC Address
+hostmac,Documented Host,Server,10.12.0.11,0a:0b:0c:0d:0e:0f
+`));
+assert.equal(ipAndMac.ok, true, JSON.stringify(ipAndMac.diagnostics));
+assert.deepEqual(ipAndMac.result.source.resources[0].interfaces[0].addresses,
+  ["10.12.0.11"], "Existing IPv4+MAC source must retain documented address");
+assert.equal(ipAndMac.result.source.resources[0].interfaces[0].mac,
+  "0a:0b:0c:0d:0e:0f");
+console.log("PASS PROJECT-032: MAC-only source retained, blank rows unchanged, invalid MAC rejected, no inferred links");
+
 const ghost = map(await csv(`Asset ID,Hostname,Device Type,Connected To\nnode01,PC,Windows,ghost\n`));
 assert.equal(ghost.result.ok, false);
 assert.ok(ghost.diagnostics.some((d) => d.code === "WORKBOOK_LINK_ENDPOINT_UNKNOWN"));
@@ -36,4 +72,4 @@ const sampleParsed = await xlsxImportAdapter.parse({ bytes: sample, mediaType: "
 const sampleMapped = map(sampleParsed.document);
 assert.equal(sampleMapped.result.ok, true, JSON.stringify(sampleMapped.diagnostics));
 assert.ok(sampleMapped.result.source.resources.length > 0);
-console.log("PASS IMPORT-001 19 assertions: CSV devices, explicit links, no inferred topology, switch/router, fail-closed unknown link/IP/duplicate, real XLSX.");
+console.log("PASS IMPORT-001: CSV devices, explicit links, MAC preservation, no inferred topology, switch/router, fail-closed invalid source fields, real XLSX.");
