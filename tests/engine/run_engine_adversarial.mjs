@@ -733,4 +733,69 @@ eq(queryHostStackView(createInitialEngineState(udpTcpStateScenario), "svc-host",
 
 eq(queryTcpStateMachine(createInitialEngineState(tcpAdversarialScenario), "ghost-client", "svc-host", 22).value?.disposition, "RESOURCE_ABSENT", "TCP state-machine query fails closed when source resource is absent");
 
+// PROJECT-050: a direct Engine consumer must never interpret an explicitly
+// malformed test declaration as an omitted/default TCP port or protocol.
+// These assertions run in the real required Engine job, not a UI mock.
+for (const [name,type,params,explanation] of [
+  ["invalid reachability port","network.reachability",
+   {from:"attacker",to:"rds01",protocol:"tcp",port:70000},
+   "invalid declared destination port"],
+  ["invalid route protocol","network.route_test",
+   {from:"attacker",to:"rds01",protocol:"bad"},
+   "invalid declared protocol"],
+  ["explicitly invalid UDP port","network.reachability",
+   {from:"attacker",to:"rds01",protocol:"udp",port:"443"},
+   "invalid declared destination port"],
+  ["portless UDP","network.reachability",
+   {from:"attacker",to:"rds01",protocol:"udp"},
+   "requires a declared UDP destination port"],
+  ["ICMP and port disagreement","network.segmentation",
+   {from:"attacker",to:"rds01",protocol:"icmp",port:80},
+   "cannot bind a port to ICMP"],
+  ["invalid scan protocol cannot default TCP","network.port_scan",
+   {from:"attacker",to:"rds01",protocol:"bad",port:3389},
+   "conflicting or invalid explicit"],
+  ["invalid scan port cannot fall back to list","network.port_scan",
+   {from:"attacker",to:"rds01",port:0,ports:[3389]},
+   "conflicting or invalid explicit"],
+  ["scan port and ports are competing declarations","network.port_scan",
+   {from:"attacker",to:"rds01",port:3389,ports:[22]},
+   "conflicting or invalid explicit"],
+  ["malformed declared scan ports cannot be ignored","network.port_scan",
+   {from:"attacker",to:"rds01",port:3389,ports:["ssh"]},
+   "conflicting or invalid explicit"],
+  ["invalid management protocol cannot default TCP","virtualization.management_exposure",
+   {from:"attacker",to:"rds01",protocol:false,port:3389},
+   "invalid management protocol"],
+  ["invalid password policy path cannot default","identity.password_audit",
+   {target:"rds01",path:false},
+   "invalid declared params.path"],
+  ["empty logging path cannot default","logging.visibility_test",
+   {target:"rds01",path:""},
+   "invalid declared params.path"],
+]) {
+  const result=evaluateTest(scenario,initial,{
+    id:"project_050",type,label:name,params,
+  });
+  eq(result.outcome,"UNKNOWN",
+    "Engine must never claim TRUE or FALSE from a changed selector: "+name);
+  ok(result.explanation.some(line => line.includes(explanation)),
+    "Engine must identify the actual source error: "+name);
+}
+const project050ValidScan=evaluateTest(scenario,initial,{
+  id:"project_050_valid_scan",type:"network.port_scan",
+  params:{from:"attacker",to:"rds01",protocol:"tcp",ports:[3389]},
+});
+eq(project050ValidScan.outcome,
+  queryReachability(scenario,initial,"attacker","rds01","tcp",3389).truth,
+  "Valid scan with a single explicit ports-list value remains Engine-authored");
+const project050ValidRoute=evaluateTest(scenario,initial,{
+  id:"project_050_valid_route",type:"network.route_test",
+  params:{from:"attacker",to:"rds01"},
+});
+ok(!project050ValidRoute.explanation.some(line =>
+  line.includes("invalid declared protocol")),
+  "Missing route-test protocol is the documented default any, unlike invalid input");
+console.log("PASS PROJECT-050 Engine: malformed user-supplied test fields are UNKNOWN, not a different silently defaulted query");
+
 console.log(`PASS engine adversarial suite: ${checks} assertions.`);
