@@ -1,5 +1,5 @@
 import type { NormalizedScenario, SaveState } from "../../core-model/src/generated/contracts.js";
-import { deepCloneJson, isRecord } from "./json.js";
+import { deepCloneJson, isRecord, jsonEqual } from "./json.js";
 import type { EngineEvaluation, EngineState, RuntimeResourceState } from "./types.js";
 import { ENGINE_VERSION } from "./version.js";
 
@@ -21,7 +21,9 @@ export function createSaveState(
   state: EngineState,
   evaluation: EngineEvaluation,
 ): SaveState {
-  const resourceState: Record<string, Readonly<Record<string, unknown>>> = {};
+  // Canonical resource IDs can equal inherited JavaScript names. Never
+  // serialize a prototype-backed namespace of runtime identities.
+  const resourceState: Record<string, Readonly<Record<string, unknown>>> = Object.create(null);
   for (const [id, resource] of Object.entries(state.resources)) {
     resourceState[id] = deepCloneJson(resource) as unknown as Readonly<Record<string, unknown>>;
   }
@@ -61,11 +63,41 @@ export function restoreSaveState(scenario: NormalizedScenario, input: SaveState)
     return fail("SAVE_RESOURCE_SET_MISMATCH", "Save resource set does not exactly match the scenario resource set.");
   }
 
-  const resources: Record<string, RuntimeResourceState> = {};
+  // The save may change modeled properties and mutable interface state,
+  // but it cannot alter the static topology/identity envelope. Hash-matching
+  // a scenario is not evidence that its stored runtime objects are faithful.
+  const resources: Record<string, RuntimeResourceState> = Object.create(null);
+  const scenarioResources = new Map(scenario.resources.map(resource => [resource.id, resource]));
+  const fixedInterfaceKeys = ["id", "name", "label", "type"] as const;
   for (const id of expectedIds) {
     const raw = input.resourceState[id];
     if (!isRecord(raw)) return fail("SAVE_RESOURCE_INVALID", `Save resource '${id}' is not an object.`);
     if (raw.id !== id) return fail("SAVE_RESOURCE_ID_MISMATCH", `Save resource key '${id}' does not match embedded id '${String(raw.id)}'.`);
+    const reference = scenarioResources.get(id)!;
+    if (!isRecord(raw.properties) || !Array.isArray(raw.interfaces))
+      return fail("SAVE_RESOURCE_SHAPE_INVALID", `Save resource '${id}' has invalid properties or interface structure.`);
+
+    // Compare every field outside the allowed mutable subtrees, including
+    // zone, type, label, asset, vendor and any future immutable metadata.
+    const { properties: _savedProperties, interfaces: _savedInterfaces, ...savedEnvelope } = raw;
+    const { properties: _referenceProperties, interfaces: _referenceInterfaces, ...referenceEnvelope } = reference;
+    if (!jsonEqual(savedEnvelope, referenceEnvelope))
+      return fail("SAVE_RESOURCE_ENVELOPE_MISMATCH", `Save resource '${id}' changes canonical resource identity or metadata.`);
+
+    const declaredInterfaces = reference.interfaces;
+    if (raw.interfaces.length !== declaredInterfaces.length)
+      return fail("SAVE_INTERFACE_SET_MISMATCH", `Save resource '${id}' changes the number of declared interfaces.`);
+    for (let index = 0; index < declaredInterfaces.length; index += 1) {
+      const candidate = raw.interfaces[index];
+      const expected = declaredInterfaces[index];
+      if (!isRecord(candidate) || !isRecord(expected))
+        return fail("SAVE_INTERFACE_INVALID", `Save interface '${id}[${index}]' is malformed.`);
+      for (const key of fixedInterfaceKeys) {
+        if (Object.prototype.hasOwnProperty.call(candidate, key) !== Object.prototype.hasOwnProperty.call(expected, key) ||
+            !jsonEqual(candidate[key], expected[key]))
+          return fail("SAVE_INTERFACE_IDENTITY_MISMATCH", `Save interface '${id}[${index}]' changes canonical '${key}'.`);
+      }
+    }
     resources[id] = deepCloneJson(raw) as unknown as RuntimeResourceState;
   }
 
