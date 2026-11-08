@@ -102,7 +102,11 @@ input synchronously for same-event Apply before React repaints; only an
 explicit valid Apply changes canonical source, and verified Save still uses
 that canonical source. Scenario Studio Create likewise uses the latest
 entered scenario ID/title within the same event turn and rejects callbacks
-from a superseded project generation. Native Scenario JSON import has
+from a superseded project generation. It displays the canonical scenario ID
+before Create; punctuation outside the source ID grammar (including dots)
+is normalized, and IDs are capped at the source schema's 64-character limit
+so the newly authored draft can be saved and compiled.
+Native Scenario JSON import has
 explicit READING and COMPILING states, shares one request epoch between the
 main menu and Import Workbench, and ignores obsolete File.text() or
 Compiler results. A newly selected file immediately disables activation
