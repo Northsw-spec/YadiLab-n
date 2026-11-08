@@ -118,6 +118,32 @@ its contents without first choosing an unrelated file.
 These safeguards do not constitute autosave of unapplied form text or
 proof of Engine execution.
 
+Unapplied Builder Inspector fields and JSON authoring text are tracked as
+pending form drafts distinct from canonical project changes. While such
+drafts exist, the project controls explicitly display UNAPPLIED FORM EDITS:
+Save/Save As fail without opening a picker or writing an incomplete file,
+New/Open and other source replacements require discard confirmation, and
+closing warns that visible text is at risk. Applying or reverting staged
+fields clears this warning; only an explicit successful Apply modifies the
+canonical source, and native Save then verifies the resulting bytes.
+Inspector Create/Delete/Duplicate and catalog asset operations cannot
+silently discard a pending form. An Inspector Apply cannot discard
+uncommitted JSON text (or vice versa), and editing two JSON panels
+simultaneously cannot accidentally discard one when only the other is
+applied: commit one editor at a time or revert other staged text first.
+Topology selection, canvas edits, Compile, Runtime Preview and canonical
+JSON Export are blocked while staged Builder form text remains; the
+operator must explicitly Apply or revert it. Each Inspector/JSON editor
+has a confirmed **Förkasta utkast** action that restores only that editor's
+original form text without changing the canonical project; other staged
+editors keep their pending state. A blocked action preserves the visible
+draft instead of silently saving or compiling older source.
+A confirmed project transition clears old pending drafts synchronously;
+late editor callbacks and React unmounts from the superseded project
+cannot mark the newly opened document dirty or erase its fresh edits.
+Real compiled Chromium tests cover the Save/New, cross-editor and canvas
+boundaries; neither form tracking nor a discarded draft constitutes autosave.
+
 Resource Inspector preserves an existing catalog asset when editing unrelated
 fields, writes explicitly supplied asset ID/version pairs, and removes an asset
 only when both visible fields are cleared. Incomplete asset pairs are rejected

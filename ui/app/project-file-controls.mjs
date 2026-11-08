@@ -31,6 +31,7 @@ function downloadUnverified(text, filename) {
 export function ProjectFileControls({
   workspace, getWorkspace, onReplace, setWorkspace,
   validateSource, setDiagnostics, beforeSwitchRef, busy, getScenarioTransitionId,
+  getPendingDraftChanges = () => false, pendingDraftCount = 0,
 }) {
   const inputRef = useRef(null);
   const busyRef = useRef(false);
@@ -59,8 +60,11 @@ export function ProjectFileControls({
       workspace.mode === "builder" ? workspace.layoutOverrides : null]);
   if (workspace.mode === "builder") lastBuilderSnapshotRef.current = currentSnapshot;
   // Runtime preview is not a project save: pending Builder edits stay pending.
+  // Typed-but-unapplied form drafts are user edits, but are NOT in the
+  // canonical source and cannot be persisted through Save.
+  const hasUnappliedDrafts = pendingDraftCount > 0;
   const changed = projectHasUnsavedChanges(lastBuilderSnapshotRef.current,
-    baselineRef.current, unpersistedRef.current);
+    baselineRef.current, unpersistedRef.current) || hasUnappliedDrafts;
   const changedRef = useRef(changed);
   changedRef.current = changed;
   const nameState = (value) => { nameRef.current = value; setName(value); };
@@ -75,7 +79,8 @@ export function ProjectFileControls({
     setDiagnostics([diag(error?.code ?? code, reason)]);
   };
   const liveUnsaved = () => projectHasLiveUnsavedChanges(getWorkspace(),
-    lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current);
+    lastBuilderSnapshotRef.current, baselineRef.current, unpersistedRef.current)
+    || getPendingDraftChanges();
   const canDiscard = () => {
     if (busyRef.current) {
       setMessage("A project file operation is still running.");
@@ -308,6 +313,14 @@ export function ProjectFileControls({
       setMessage("Save requires editable Builder mode and an idle workspace.");
       return;
     }
+    // The visible inputs may contain edits absent from projectSnapshot().
+    // Saving now and reporting success would silently omit what was typed.
+    if (getPendingDraftChanges()) {
+      setMessage("PROJECT_UNAPPLIED_DRAFT: Apply or revert the edited Inspector/JSON fields before saving.");
+      setDiagnostics([diag("PROJECT_UNAPPLIED_DRAFT",
+        "Unapplied form text cannot be saved. Apply or revert the edited Builder fields first; no .yadilab file was written.")]);
+      return;
+    }
     // An external Scenario Studio/import action can publish a new Builder
     // immediately. Its old .yadilab association is not detached until the
     // next React effect. Reject Save/Save As *before* choosing a file or
@@ -451,7 +464,8 @@ export function ProjectFileControls({
   return e("section", { className: "project-file-controls", "data-project-file-controls": "ready",
     "aria-label": "YadiLab project file controls", "data-project-dirty": String(changed),
     "data-project-filename": name, "data-project-revision": String(revision),
-    "data-project-operation": fileOperation ?? "idle" },
+    "data-project-operation": fileOperation ?? "idle",
+    "data-project-pending-drafts": String(hasUnappliedDrafts) },
     e("div", { className: "project-file-buttons" },
       e("strong", null, "PROJECT"),
       e("button", { type: "button", "data-project-action": "new",
@@ -492,13 +506,15 @@ export function ProjectFileControls({
           void openFromFile(file, null, true, ticket.lockHeld)
             .finally(() => finishFallbackOpen(ticket));
         } }),
-      e("span", { "data-project-status": changed ? "unsaved" : "unchanged" },
-        name, changed ? " · UNSAVED" : " · unchanged"),
+      e("span", { "data-project-status": hasUnappliedDrafts ? "unapplied" : changed ? "unsaved" : "unchanged" },
+        name, hasUnappliedDrafts ? " · UNAPPLIED FORM EDITS" : changed ? " · UNSAVED" : " · unchanged"),
     ),
     e("small", { "data-project-message": "true", role: "status", "aria-live": "polite" },
       fileOperation === "opening" ? "Opening project…" :
       fileOperation === "saving-as" ? "Saving project as…" :
       fileOperation === "saving" ? "Saving project…" : message),
-    e("small", null, "Explicit file saving only. No project autosave. Imported files reopen as editable source, not verified Engine results."),
+    e("small", null, hasUnappliedDrafts
+      ? "Apply or revert the pending Inspector/JSON inputs before Save. New/Open will ask before discarding them."
+      : "Explicit file saving only. No project autosave. Imported files reopen as editable source, not verified Engine results."),
   );
 }

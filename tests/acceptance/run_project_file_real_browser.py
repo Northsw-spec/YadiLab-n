@@ -810,6 +810,8 @@ def main():
                 "data-runtime-scenario-id", "new_project")
             expect(isolated_controls).to_have_attribute(
                 "data-project-dirty", "true")
+            expect(isolated_controls).to_have_attribute(
+                "data-project-pending-drafts", "false")
             expect(old_title).to_have_value("New YadiLab project")
             require(json.loads(tests_editor.input_value()) == [],
                     "BUILDER-051 leaked old project tests into new editor")
@@ -838,16 +840,28 @@ def main():
                 editor.dispatchEvent(new Event('input', {bubbles: true}));
                 apply.click();
             }""", new_note)
-            isolated.wait_for_function("""() => {
-                const editor = document.querySelector(
-                    '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
-                if (!editor) return false;
-                try {
-                    const notes = JSON.parse(editor.value);
-                    return notes.length === 1 &&
-                        notes[0].id === "builder051_fast_note";
-                } catch { return false; }
-            }""", timeout=15000)
+            try:
+                isolated.wait_for_function("""() => {
+                    const editor = document.querySelector(
+                        '[data-builder-authoring="ready"] textarea[aria-label="Anteckningar JSON"]');
+                    if (!editor) return false;
+                    try {
+                        const notes = JSON.parse(editor.value);
+                        return notes.length === 1 &&
+                            notes[0].id === "builder051_fast_note";
+                    } catch { return false; }
+                }""", timeout=15000)
+            except Exception as cause:
+                details = isolated.evaluate("""() => ({
+                  draftStatus: document.querySelector('[data-studio-draft-revision]')?.textContent,
+                  pending: document.querySelector('[data-project-file-controls]')?.getAttribute(
+                    'data-project-pending-drafts'),
+                  notes: document.querySelector(
+                    '[data-builder-authoring] textarea[aria-label="Anteckningar JSON"]')?.value,
+                  diagnostics: [...document.querySelectorAll('.diagnostic')].map(x => x.textContent),
+                })""")
+                raise AssertionError("BUILDER051_POST_NEW_APPLY_FAILED: " +
+                    repr(details) + " | pageErrors=" + repr(errors[-12:])) from cause
             isolated.locator('[data-project-action="save-as"]').click()
             expect(isolated.locator('[data-project-message]')).to_contain_text(
                 "Saved and read back", timeout=20000)
@@ -2099,7 +2113,8 @@ def main():
             # Even a no-op inspector Apply must not request unnecessary Save,
             # and a second pending edit may never overwrite the verified file.
             atomic.locator(
-                '[data-builder-inspector="mission"] button').click()
+                '[data-builder-inspector="mission"]').get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
             expect(ac).to_have_attribute("data-project-dirty", "false")
             require(atomic.evaluate("window.__yadilabProjectStore.writes") == 4,
                     "A no-op Apply triggered a hidden native save")
@@ -2536,6 +2551,202 @@ def main():
             require(import_race.evaluate('window.__yadilabProjectStore.writes') == 0,
                     'UX-064 import Workbench implicitly wrote a .yadilab file')
             import_race.close()
+
+            # PROJECT-065: A typed but unapplied Inspector/JSON form is user
+            # data absent from canonical source. Save must not claim those
+            # visible edits reached native disk; New must warn even though the
+            # underlying Builder source is still byte-for-byte unchanged.
+            pending = context.new_page()
+            pending.add_init_script(MOCK)
+            pending.on("pageerror", lambda error: errors.append(str(error)))
+            pending.goto(a.url, wait_until="domcontentloaded", timeout=30000)
+            pc = pending.locator('[data-project-file-controls="ready"]')
+            expect(pc).to_be_visible(timeout=45000)
+            require(pc.get_attribute("data-project-dirty") == "false",
+                    "PROJECT-065 initial project unexpectedly dirty")
+            pending.evaluate("""() => {
+              const inspector = document.querySelector(
+                '[data-builder-inspector="mission"]');
+              if (!inspector) throw new Error('PROJECT065_MISSION_INSPECTOR_MISSING');
+              let ancestor = inspector.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            inspector = pending.locator('[data-builder-inspector="mission"]')
+            expect(inspector).to_be_visible(timeout=15000)
+            title_field = inspector.locator('label.inspector-field',
+                has_text="Title").locator("input")
+            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            expect(inspector).to_have_attribute("data-builder-unapplied", "true")
+            expect(pc.locator("[data-project-status]")).to_contain_text(
+                "UNAPPLIED FORM EDITS")
+            # A deliberate Revert is the operator's explicit escape hatch
+            # when a form draft is abandoned; it must not modify source.
+            pending.once("dialog", lambda dialog: dialog.accept())
+            inspector.get_by_role(
+                "button", name="Förkasta inspektörsutkast").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            require("PROJECT-065 staged" not in title_field.input_value(),
+                    "Inspector Revert kept the discarded staged value")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+
+            # A separate editor may not commit a newer source revision
+            # while Inspector holds typed but unapplied mission metadata.
+            # That remount would silently destroy the Inspector draft.
+            pending.evaluate("""() => {
+              const notes = document.querySelector(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]');
+              if (!notes) throw new Error('PROJECT065_CROSS_EDITOR_NOT_MOUNTED');
+              let ancestor = notes.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            cross_notes = pending.locator(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]')
+            original_note_text = cross_notes.input_value()
+            cross_notes.fill(original_note_text + " ")
+            pending.locator('.builder-authoring').get_by_role(
+                'button', name='Apply Anteckningar JSON').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_OTHER_EDITOR_UNAPPLIED", timeout=15000)
+            require("PROJECT-065 staged" not in pending.locator(
+                ".mission-strip").inner_text(),
+                "Cross-editor Apply replaced canonical source despite Inspector draft")
+            expect(inspector).to_have_attribute("data-builder-unapplied", "true")
+            cross_notes.fill(original_note_text)
+
+            # A pane click can clear the selection and unmount Inspector.
+            # Test the actual ReactFlow pane: the initial welcome Builder
+            # is not required to have compiled/laid-out DOM nodes yet.
+            canvas_pane = pending.locator(".react-flow__pane").first
+            expect(canvas_pane).to_be_visible(timeout=15000)
+            canvas_pane.click(force=True, timeout=15000)
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_CANVAS_UNAPPLIED_DRAFT", timeout=15000)
+            expect(inspector).to_have_attribute("data-builder-inspector", "mission")
+            expect(title_field).to_have_value(
+                "PROJECT-065 staged mission never auto-saved")
+
+            # Compiling or exporting before Apply can misleadingly validate
+            # or deliver a canonical source which excludes visible edits.
+            # Scenario Studio is inside a separately collapsed Control
+            # Center details section; open it without altering source.
+            pending.evaluate("""() => {
+              const studio = document.querySelector('[data-scenario-studio]');
+              if (!studio) throw new Error('PROJECT065_STUDIO_MISSING');
+              let ancestor = studio.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            pending.locator('[data-studio-action="validate-compile"]').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_COMPILE_UNAPPLIED_DRAFT", timeout=15000)
+            pending.locator('[data-studio-action="export"]').click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_EXPORT_UNAPPLIED_DRAFT", timeout=15000)
+            pc.locator('[data-project-action="save-as"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_UNAPPLIED_DRAFT", timeout=15000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 0,
+                "PROJECT-065 Save As falsely wrote an unapplied Inspector edit")
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.suggestedName") is None,
+                "PROJECT-065 Save As opened native picker despite pending draft")
+            pending.once("dialog", lambda dialog: dialog.dismiss())
+            pc.locator('[data-project-action="new"]').click()
+            expect(pending.locator(".app-frame")).to_have_attribute(
+                "data-runtime-scenario-id", "foundation_acceptance")
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            require("PROJECT-065 staged" not in
+                    pending.locator(".mission-strip").inner_text(),
+                    "PROJECT-065 pending title had already mutated canonical source")
+            inspector.get_by_role(
+                "button", name="Verkställ inspektörsändringar").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            expect(pending.locator(".mission-strip")).to_contain_text(
+                "PROJECT-065 staged mission never auto-saved")
+            pc.locator('[data-project-action="save-as"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 1,
+                "PROJECT-065 explicit post-Apply Save did not persist title")
+            require(json.loads(pending.evaluate(
+                "window.__yadilabProjectStore.text"))["content"]["source"]["metadata"]["title"]
+                == "PROJECT-065 staged mission never auto-saved",
+                "PROJECT-065 verified file contains stale mission title")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+
+            pending.evaluate("""() => {
+              const notes = document.querySelector(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]');
+              if (!notes) throw new Error('PROJECT065_NOTES_EDITOR_MISSING');
+              let ancestor = notes.closest('details');
+              while (ancestor) {
+                ancestor.open = true;
+                ancestor = ancestor.parentElement?.closest('details') ?? null;
+              }
+            }""")
+            note_field = pending.locator(
+                '.builder-authoring textarea[aria-label="Anteckningar JSON"]')
+            tests_field = pending.locator(
+                '.builder-authoring textarea[aria-label="Test JSON"]')
+            original_tests_json = tests_field.input_value()
+            note_field.fill('[{"id":"project065_note","text":"Staged evidence"}]')
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            pc.locator('[data-project-action="save"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "PROJECT_UNAPPLIED_DRAFT", timeout=15000)
+            require(pending.evaluate(
+                "window.__yadilabProjectStore.writes") == 1,
+                "PROJECT-065 un-applied JSON note triggered a native write")
+            # If two independent JSON panels have staged edits, applying
+            # one would remount the editor and discard the other. Refuse
+            # this multi-panel source mutation until one draft is reverted.
+            pending.evaluate("""() => {
+              const tests = document.querySelector(
+                '.builder-authoring textarea[aria-label="Test JSON"]');
+              tests.closest('details').open = true;
+            }""")
+            tests_field.fill(original_tests_json + " ")
+            note_panel = note_field.locator("xpath=ancestor::details")
+            note_panel.get_by_role(
+                "button", name="Apply Anteckningar JSON").click()
+            expect(pending.locator(".diagnostic")).to_contain_text(
+                "BUILDER_AUTHORING_MULTIPLE_UNAPPLIED", timeout=15000)
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            tests_panel = tests_field.locator("xpath=ancestor::details")
+            pending.once("dialog", lambda dialog: dialog.accept())
+            tests_panel.get_by_role(
+                "button", name="Förkasta utkast: Test JSON").click()
+            expect(tests_field).to_have_value(original_tests_json)
+            expect(pc).to_have_attribute("data-project-pending-drafts", "true")
+            note_panel.get_by_role(
+                "button", name="Apply Anteckningar JSON").click()
+            expect(pc).to_have_attribute("data-project-pending-drafts", "false")
+            expect(pc).to_have_attribute("data-project-dirty", "true")
+            pc.locator('[data-project-action="save"]').click()
+            expect(pc.locator('[data-project-message]')).to_contain_text(
+                "Saved and read back", timeout=20000)
+            verified = json.loads(pending.evaluate(
+                "window.__yadilabProjectStore.text"))
+            require(any(note.get("id") == "project065_note" for note in
+                        verified["content"]["source"].get("notes", [])),
+                    "PROJECT-065 Apply+verified Save did not include note")
+            expect(pc).to_have_attribute("data-project-dirty", "false")
+            pending.close()
             require(not errors, "Real browser JS exceptions: " + repr(errors))
             report = {
                 "status": "PASS", "format": "yadilab.project", "version": 1,
@@ -2565,6 +2776,16 @@ def main():
                 "crossEntryImportStaleActivationDenied": True,
                 "obsoleteCompileCannotOverwriteNewImport": True,
                 "sameFilenameCanBeReimported": True,
+                "unappliedInspectorSaveBlocked": True,
+                "explicitInspectorDraftRevertNoWrite": True,
+                "explicitJsonDraftRevertPreservesOtherDraft": True,
+                "crossEditorUnappliedApplyBlocked": True,
+                "canvasSelectionPreservesUnappliedFields": True,
+                "unappliedCompileExportDenied": True,
+                "unappliedDraftNewRequiresConfirmation": True,
+                "unappliedJsonSaveBlocked": True,
+                "multiPanelDraftLossBlocked": True,
+                "postApplyNativeSaveIncludesDraft": True,
                 "nodeCount": 4, "connectionCount": 3,
             }
             (a.evidence_dir / "project-file-real-chromium.json").write_text(
