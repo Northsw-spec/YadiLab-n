@@ -2329,6 +2329,17 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
       setWorkspace(result.workspace);
     }
   };
+  const revertForm = () => {
+    if (!hasPendingFormRef.current ||
+        !window.confirm("Förkasta inspektörens ej verkställda ändringar?")) return;
+    const restored = { ...initialFormRef.current };
+    latestFormRef.current = restored;
+    hasPendingFormRef.current = false;
+    onPendingDraftChange(draftOwnerRef.current, false, projectGeneration);
+    setForm(restored);
+    setDiagnostics([{ severity: "warning", code: "BUILDER_INSPECTOR_DRAFT_REVERTED",
+      message: "Inspektörsutkastet har återställts. Kanonisk projektdata ändrades inte." }]);
+  };
   const field = (label, key, extra = {}) => e("label", { className: "inspector-field" }, label,
     e("input", { value: form[key] ?? "", onChange: (event) => editForm(key, event.target.value), ...extra }));
   const textArea = (label, key) => e("label", { className: "inspector-field" }, label,
@@ -2406,6 +2417,9 @@ function BuilderInspector({ workspace, getWorkspace, setWorkspace, setDiagnostic
         ? e("p", { role: "status" }, "UNAPPLIED: Inspector fields have not been committed to the project. Apply or revert before Save/New.") : null,
       editFields,
       e("button", { type: "button", onClick: apply }, "Verkställ inspektörsändringar"),
+      e("button", { type: "button", onClick: revertForm,
+        disabled: JSON.stringify(form) === JSON.stringify(initialFormRef.current) },
+        "Förkasta inspektörsutkast"),
       selectionActions,
     ),
     e("section", { className: "create-panel" },
@@ -2559,11 +2573,24 @@ function BuilderAuthoringPanels({ workspace, getWorkspace, setWorkspace, setDiag
       setWorkspace(result.workspace);
     }
   };
+  const revertDraft = (key, title) => {
+    if (liveDraftsRef.current[key] === originalDraftsRef.current[key] ||
+        !window.confirm("Förkasta ej verkställda ändringar i " + title + "?")) return;
+    const next = { ...liveDraftsRef.current, [key]: originalDraftsRef.current[key] };
+    liveDraftsRef.current = next;
+    onPendingDraftChange(draftOwnerRef.current, dirtyKeys().length > 0, projectGeneration);
+    setDrafts(next);
+    setDiagnostics([{ severity: "warning", code: "BUILDER_AUTHORING_DRAFT_REVERTED",
+      message: "JSON-utkastet har återställts. Kanonisk projektdata ändrades inte." }]);
+  };
   const panel = (title, key, apply, rows = 7) => e("details", { className: "authoring-panel" },
     e("summary", null, title),
     e("textarea", { rows, value: drafts[key],
       onChange: (event) => editDraft(key, event.target.value), "aria-label": title }),
     e("button", { type: "button", onClick: () => applyDraft(key, apply) }, `Apply ${title}`),
+    e("button", { type: "button", onClick: () => revertDraft(key, title),
+      disabled: drafts[key] === originalDraftsRef.current[key] },
+      `Förkasta utkast: ${title}`),
   );
   return e("section", { className: "builder-authoring", "data-builder-authoring": "ready",
     "data-builder-unapplied": String(Object.keys(drafts).some(key => drafts[key] !== originalDraftsRef.current[key])) },
