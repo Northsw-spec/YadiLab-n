@@ -1,3 +1,4 @@
+import { ownResource } from "./resource-lookup.js";
 import type { NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { isRecord } from "./json.js";
 import { queryHostStackView, queryListeningPort } from "./service-engine.js";
@@ -58,7 +59,7 @@ interface PolicyVerdict {
 
 
 function targetAddresses(state: EngineState, resourceId: string): readonly string[] {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return [];
   return resource.interfaces.flatMap((iface) => {
     const addresses = iface.addresses;
@@ -68,10 +69,10 @@ function targetAddresses(state: EngineState, resourceId: string): readonly strin
 
 function routeMatchScore(destination: string, state: EngineState, query: FlowQuery): number | undefined {
   if (destination === query.to) return 10000;
-  const zone = state.resources[query.to]?.zone;
+  const zone = ownResource(state, query.to)?.zone;
   if (zone !== undefined && destination === zone) return 9000;
   if (destination === "default" || destination === "any" || destination === "*") return 1;
-  if (state.resources[destination]) return -1;
+  if (ownResource(state, destination)) return -1;
   if (Object.values(state.resources).some((resource) => resource.zone === destination)) return -1;
   const cidr = parseCidr(destination);
   if (!cidr) return undefined;
@@ -89,7 +90,7 @@ function evaluateRoute(
   nextHop: string,
   query: FlowQuery,
 ): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`Route evaluator cannot find '${resourceId}'.`] };
   const rawRoutes = resource.properties.routes;
   if (rawRoutes === undefined) return undefined;
@@ -229,7 +230,7 @@ function evaluateNeighbor(
   query: FlowQuery,
   routeDecision?: RouteDecisionTrace,
 ): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`Neighbor evaluator cannot find '${resourceId}'.`] };
   const rawNeighbors = resource.properties.neighbors;
   if (rawNeighbors === undefined) return undefined;
@@ -290,7 +291,7 @@ function evaluateNeighbor(
       ...(interfaceId ? { interfaceId } : {}),
       ...(stateValue ? { state: stateValue } : {}),
     };
-    const targetKnown = targetResourceId === undefined || state.resources[targetResourceId] !== undefined;
+    const targetKnown = targetResourceId === undefined || ownResource(state, targetResourceId) !== undefined;
     const targetConsistent = targetResourceId === undefined || targetResourceId === nextHopResourceId || !address || !nextHopAddresses.has(hostAddress(address));
     const addressConsistent = targetResourceId !== nextHopResourceId || nextHopAddresses.size === 0 || (address !== undefined && nextHopAddresses.has(address));
     const interfaceKnown = interfaceId === undefined || resource.interfaces.some((iface) => iface.id === interfaceId);
@@ -356,7 +357,7 @@ function endpointPortForResource(
   resourceId: string,
   peerId: string,
 ): MacPortResolution {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { ok: false, explanation: [`MAC evaluator cannot find '${resourceId}'.`] };
   const links = matchingConnections(scenario, resourceId, peerId);
   if (links.length !== 1) {
@@ -379,7 +380,7 @@ function peerMacForConnection(
   peerId: string,
   resourceId: string,
 ): { readonly mac?: string; readonly explanation?: readonly string[] } {
-  const peer = state.resources[peerId];
+  const peer = ownResource(state, peerId);
   if (!peer) return { explanation: [`MAC evaluator cannot find peer '${peerId}'.`] };
   if (peer.properties.macTable !== undefined) {
     return { explanation: [`Peer '${peerId}' is itself a modeled switching boundary; frame endpoint MAC is not inferred across multiple switches.`] };
@@ -518,7 +519,7 @@ function evaluateVlanSwitching(
   query: FlowQuery,
   incomingFrame?: VlanFrameContext,
 ): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`VLAN evaluator cannot find '${resourceId}'.`] };
   if (!hasExplicitSwitchportModel(resource)) return undefined;
 
@@ -759,7 +760,7 @@ function evaluateStpSwitching(
   nextHopResourceId: string,
   query: FlowQuery,
 ): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`STP evaluator cannot find '${resourceId}'.`] };
   const model = parseStpModel(resource);
   if (!model.explicit) return undefined;
@@ -824,7 +825,7 @@ function floodInterfacesForSwitch(
   ingressInterface: string,
   vlan: number | undefined,
 ): readonly string[] | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return undefined;
   const ports = new Set<string>();
   const explicitSwitchports = hasExplicitSwitchportModel(resource);
@@ -876,7 +877,7 @@ function evaluateMacSwitching(
   query: FlowQuery,
   effectiveVlan?: number,
 ): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`MAC evaluator cannot find '${resourceId}'.`] };
   const rawTable = resource.properties.macTable;
   if (rawTable === undefined) return undefined;
@@ -1064,8 +1065,8 @@ function evaluateVlanSegment(scenario: NormalizedScenario, state: EngineState, f
       explanations.push(`Connection '${link.id}' has invalid VLAN '${String(raw)}'.`);
       continue;
     }
-    const fromMembership = declaredVlans(state.resources[from]!);
-    const toMembership = declaredVlans(state.resources[to]!);
+    const fromMembership = declaredVlans(ownResource(state, from)!);
+    const toMembership = declaredVlans(ownResource(state, to)!);
     if (fromMembership === null || toMembership === null) {
       sawUnknown = true;
       explanations.push(`VLAN membership on '${from}' or '${to}' is malformed.`);
@@ -1100,7 +1101,7 @@ function uniqueIpv4Source(state: EngineState, resourceId: string): string | unde
 // Resource/zone selectors preserve their original semantic identity through NAT.
 // Only explicit IP/CIDR source predicates inspect the observed source address.
 function matchSourceSelector(value: unknown, query: FlowQuery, state: EngineState, observedSource: string | undefined): TruthValue {
-  const zone = state.resources[query.from]?.zone;
+  const zone = ownResource(state, query.from)?.zone;
   if (ruleEndpointMatches(value, query.from, zone)) return "TRUE";
   if (typeof value !== "string") return "UNKNOWN";
   const cidr = parseCidr(value);
@@ -1141,7 +1142,7 @@ function unevaluatedPolicyRules(
 }
 
 function evaluateAcl(state: EngineState, resourceId: string, query: FlowQuery, observedSource?: string): PolicyVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`ACL evaluator cannot find '${resourceId}'.`] };
   const rawRules = resource.properties.acls;
   const defaultAction = resource.properties.aclDefaultAction;
@@ -1169,7 +1170,7 @@ function evaluateAcl(state: EngineState, resourceId: string, query: FlowQuery, o
     return { truth: "UNKNOWN", explanation, policyDecision: decision("UNKNOWN", [], explanation) };
   }
   const rules = rawRules ?? [];
-  const toZone = state.resources[query.to]?.zone;
+  const toZone = ownResource(state, query.to)?.zone;
   let malformed = false;
   const traces: PolicyRuleTrace[] = [];
   for (let index = 0; index < rules.length; index += 1) {
@@ -1287,7 +1288,7 @@ function evaluateDnat(
   currentSource: string | undefined,
   currentPort: number | undefined,
 ): NatVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`NAT evaluator cannot find '${resourceId}'.`] };
   const rawRules = resource.properties.natRules;
   const policy = resource.properties.natPolicy;
@@ -1333,8 +1334,8 @@ function evaluateDnat(
   }
   const hasDnatDeclaration = policy !== undefined || rawRules.some((raw) => isRecord(raw) && (raw.type ?? "dnat") !== "snat");
   if (!hasDnatDeclaration) return undefined;
-  const fromZone = state.resources[query.from]?.zone;
-  const toZone = state.resources[query.to]?.zone;
+  const fromZone = ownResource(state, query.from)?.zone;
+  const toZone = ownResource(state, query.to)?.zone;
   let malformed = false;
   const traces: NatRuleTrace[] = [];
   for (let index = 0; index < rawRules.length; index += 1) {
@@ -1445,7 +1446,7 @@ function evaluateSnat(
   currentSource: string | undefined,
   currentPort: number | undefined,
 ): SnatVerdict | undefined {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return { truth: "UNKNOWN", explanation: [`SNAT evaluator cannot find '${resourceId}'.`] };
   const policy = resource.properties.snatPolicy;
   const rawRules = resource.properties.natRules;
@@ -1539,7 +1540,7 @@ function evaluateSnat(
     const explanation = [`SNAT rules on '${resourceId}' contain malformed/unsupported declarations; no source rewrite is selected.`];
     return { truth: "UNKNOWN", explanation, natDecision: makeDecision("UNKNOWN", "UNKNOWN", traces, explanation) };
   }
-  const toZone = state.resources[query.to]?.zone;
+  const toZone = ownResource(state, query.to)?.zone;
   const evaluated = traces.map((trace) => ({ ...trace }));
   for (let index = 0; index < rawRules.length; index += 1) {
     const raw = rawRules[index];
@@ -1610,7 +1611,7 @@ function evaluateConntrack(
   query: FlowQuery,
   observedSource?: string,
 ): ConntrackVerdict | undefined {
-  const firewall = state.resources[firewallId];
+  const firewall = ownResource(state, firewallId);
   if (!firewall) return undefined;
   const rawTable = firewall.properties.conntrack;
   if (rawTable === undefined) return undefined;
@@ -1680,7 +1681,7 @@ function evaluateConntrack(
     const source = typeof raw.source === "string" ? raw.source : undefined;
     const sourceIp = source === undefined ? undefined : parseIpAddress(source);
     const sourceValid = source !== undefined && sourceIp?.family === 4 && !source.includes("/");
-    const destinationValid = typeof raw.destination === "string" && state.resources[raw.destination] !== undefined;
+    const destinationValid = typeof raw.destination === "string" && ownResource(state, raw.destination) !== undefined;
     const protocolValid = raw.protocol === "tcp" || raw.protocol === "udp" || raw.protocol === "icmp";
     const stateValid = raw.state === "NEW" || raw.state === "ESTABLISHED" || raw.state === "RELATED" || raw.state === "INVALID" || raw.state === "UNKNOWN";
     const enabledValid = raw.enabled === undefined || typeof raw.enabled === "boolean";
@@ -1769,7 +1770,7 @@ function evaluateFirewall(
   observedSource?: string,
   conntrack?: ConntrackDecisionTrace,
 ): PolicyVerdict {
-  const firewall = state.resources[firewallId];
+  const firewall = ownResource(state, firewallId);
   if (!firewall) return { truth: "UNKNOWN", explanation: [`Firewall '${firewallId}' is absent from runtime state.`] };
   const rawRules = firewall.properties.rules;
   const defaultAction = firewall.properties.defaultAction;
@@ -1796,7 +1797,7 @@ function evaluateFirewall(
     const explanation = [`Firewall '${firewallId}' has no declared ordered ruleset.`];
     return { truth: "UNKNOWN", explanation, policyDecision: decision("UNKNOWN", [], explanation) };
   }
-  const toZone = state.resources[query.to]?.zone;
+  const toZone = ownResource(state, query.to)?.zone;
   let malformedRelevant = false;
   const traces: PolicyRuleTrace[] = [];
 
@@ -1912,7 +1913,7 @@ interface FirewallClassification {
 }
 
 function classifyFirewall(state: EngineState, resourceId: string): FirewallClassification {
-  const resource = state.resources[resourceId];
+  const resource = ownResource(state, resourceId);
   if (!resource) return {};
   if (resource.type === "network.firewall") return { scope: "NETWORK" };
   const marker = resource.properties.isFirewall;
@@ -2200,7 +2201,7 @@ function queryReachabilityOneWay(
   port?: number,
   options: PathEvaluationOptions = {},
 ): EngineQueryResult<ReachabilityDetails> {
-  if (!state.resources[from] || !state.resources[to]) {
+  if (!ownResource(state, from) || !ownResource(state, to)) {
     return { truth: "UNKNOWN", explanation: [`Reachability endpoint is absent from runtime state: '${from}' -> '${to}'.`] };
   }
   if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535)) {
@@ -2310,7 +2311,7 @@ function evaluateLayer2BroadcastPath(
   for (let index = 0; index < path.length - 1; index += 1) {
     const current = path[index]!;
     const next = path[index + 1]!;
-    if (index > 0 && index < path.length - 1 && !layer2Transit(state.resources[current])) {
+    if (index > 0 && index < path.length - 1 && !layer2Transit(ownResource(state, current))) {
       return { truth: "FALSE", path, blockingPoint: current, explanation: [...explanation, `Resource '${current}' is an L3/non-switch transit boundary; DHCP relay is not modeled in Phase 94.`], vlanDecisions, stpDecisions };
     }
 
@@ -2349,7 +2350,7 @@ export function queryLayer2BroadcastReachability(
   from: string,
   to: string,
 ): EngineQueryResult<ReachabilityDetails> {
-  if (!state.resources[from] || !state.resources[to]) return { truth: "UNKNOWN", explanation: [`L2 broadcast endpoint '${!state.resources[from] ? from : to}' is absent from Engine state.`] };
+  if (!ownResource(state, from) || !ownResource(state, to)) return { truth: "UNKNOWN", explanation: [`L2 broadcast endpoint '${!ownResource(state, from) ? from : to}' is absent from Engine state.`] };
   const enumerated = enumeratePaths(scenario, from, to);
   if (enumerated.paths.length === 0) return { truth: "FALSE", value: { from, to, protocol: "udp", port: 67 }, explanation: [`No enabled modeled topology path exists from '${from}' to '${to}' for local DHCP broadcast.`] };
   const verdicts = enumerated.paths.map((path) => evaluateLayer2BroadcastPath(scenario, state, path));
@@ -2464,7 +2465,7 @@ export function queryReachability(
       explanation: ["UDP diagnostic requires a destination port; ICMP is portless. Invalid protocol/port binding."] });
   }
   const forward = queryReachabilityOneWay(scenario, state, from, to, protocol, port);
-  if (!forward.value || !state.resources[from] || !state.resources[to]) return forward;
+  if (!forward.value || !ownResource(state, from) || !ownResource(state, to)) return forward;
 
   // A TCP/UDP response targets a client ephemeral port that Foundation does not currently model.
   // Never mirror the service destination port onto the return packet. Portless modeled flows can
