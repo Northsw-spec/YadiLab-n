@@ -1,3 +1,4 @@
+import { isMutableRuntimeOperationPath } from "../../../core-model/src/operation-policy.js";
 import type {
   Scenariosourcefinding,
   Scenariosourcehint,
@@ -177,6 +178,13 @@ export function applyCanonicalSolutionAuthoring(workspace: BuilderWorkspace, tex
     if (!isObject(operation) || (operation.op !== "set" && operation.op !== "remove") || typeof operation.target !== "string" || typeof operation.path !== "string") {
       return fail(workspace, "BUILDER_AUTHORING_SOLUTION_JSON", "Every canonical operation must be a set/remove operation with target and path.");
     }
+    if ((operation.op === "set" && !Object.prototype.hasOwnProperty.call(operation, "value")) ||
+        (operation.op === "remove" && Object.prototype.hasOwnProperty.call(operation, "value")))
+      return fail(workspace, "BUILDER_AUTHORING_SOLUTION_OPERATION_INVALID",
+        "Every set operation must declare its value; remove must not carry a value.");
+    if (!isMutableRuntimeOperationPath(operation.path))
+      return fail(workspace, "BUILDER_AUTHORING_SOLUTION_PATH_FORBIDDEN",
+        "Solution edits must stay inside properties.* or mutable interface state, never canonical resource or interface identities.");
   }
   return setCanonicalSolution(workspace, parsed as unknown as Scenariosourcesolution);
 }
