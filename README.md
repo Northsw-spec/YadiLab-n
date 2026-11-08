@@ -74,6 +74,15 @@ Both serialized and restored resource-ID maps are prototype-free, including
 when a real resource is legitimately named `constructor`. A scenario hash
 alone does not attest the saved Runtime state as trustworthy evidence.
 
+Engine's direct network, TCP, DHCP, DNS, service, MTU, route, L2 and rule
+queries resolve only **own** Runtime resource IDs, including when an external
+caller supplies a plain JSON-reconstructed EngineState with a JavaScript
+prototype. Missing IDs matching inherited names (`constructor`,
+`toString`, `__proto__`) must produce UNKNOWN rather than false
+reachability evidence or an exception. Explicitly declared resources with
+those names remain usable. This guards Engine query boundaries, not physical
+network connectivity.
+
 Implementation and regression evidence live in [`ui/app/project-document.mjs`](ui/app/project-document.mjs), [`ui/app/project-file-controls.mjs`](ui/app/project-file-controls.mjs), [Node project-file regressions](tests/browser/run_project_document_tests.mjs) and [compiled-Chromium file acceptance](tests/acceptance/run_project_file_real_browser.py).
 
 Builder Inspector, resource assets and JSON authoring editors are scoped to the
