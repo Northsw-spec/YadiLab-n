@@ -42,6 +42,11 @@ function evaluateBooleanAudit(
   const target = paramString(test.params, "target");
   const path = paramString(test.params, "path") ?? defaultPath;
   const expected = test.params.equals === undefined ? true : test.params.equals;
+  // An explicitly invalid path is not equivalent to *omitting* the optional
+  // default-path selector. Never evaluate a different property as TRUE.
+  if (test.params.path !== undefined &&
+      (typeof test.params.path !== "string" || test.params.path.length === 0))
+    return make(test, "UNKNOWN", [`Test '${test.id}' has an invalid declared params.path.`]);
   if (!target) return make(test, "UNKNOWN", [`Test '${test.id}' requires params.target.`]);
   if (typeof expected !== "boolean") return make(test, "UNKNOWN", [`Test '${test.id}' params.equals must be boolean when supplied.`]);
   const resource = state.resources[target];
@@ -58,6 +63,18 @@ function evaluatePortScan(scenario: NormalizedScenario, test: ScenarioTest, stat
   const to = paramString(test.params, "to");
   const protocol = paramProtocol(test.params) ?? "tcp";
   const ports = paramPorts(test.params);
+  // A provided invalid protocol previously fell back to TCP, and an invalid
+  // port could be silently superseded by a valid ports list. Both can claim
+  // TRUE on different network evidence than the user actually declared.
+  if ((test.params.protocol !== undefined && paramProtocol(test.params) === undefined) ||
+      (test.params.port !== undefined && paramPort(test.params) === undefined) ||
+      (test.params.ports !== undefined &&
+        (!Array.isArray(test.params.ports) || test.params.ports.length === 0 ||
+         !test.params.ports.every(value =>
+           typeof value === "number" && Number.isInteger(value) &&
+           value >= 1 && value <= 65535))) ||
+      (test.params.port !== undefined && test.params.ports !== undefined))
+    return make(test, "UNKNOWN", [`Test '${test.id}' has conflicting or invalid explicit port/protocol declarations.`]);
   if (!from || !to || !ports || ports.length === 0 || (protocol !== "tcp" && protocol !== "udp")) {
     return make(test, "UNKNOWN", [`Test '${test.id}' requires params.from, params.to, and params.port or non-empty params.ports; protocol must be tcp or udp when supplied.`]);
   }
@@ -75,6 +92,8 @@ function evaluateManagementExposure(scenario: NormalizedScenario, test: Scenario
   const to = paramString(test.params, "to");
   const protocol = paramProtocol(test.params) ?? "tcp";
   const port = paramPort(test.params);
+  if (test.params.protocol !== undefined && paramProtocol(test.params) === undefined)
+    return make(test, "UNKNOWN", [`Test '${test.id}' has an invalid management protocol, not an omitted TCP default.`]);
   if (!from || !to || port === undefined || (protocol !== "tcp" && protocol !== "udp")) {
     return make(test, "UNKNOWN", [`Test '${test.id}' requires params.from, params.to, params.port, and optional protocol tcp/udp.`]);
   }
@@ -124,7 +143,15 @@ export function evaluateTest(scenario: NormalizedScenario, state: EngineState, t
     const to = paramString(params, "to");
     if (!from || !to) return make(test, "UNKNOWN", [`Test '${test.id}' requires string params.from and params.to.`]);
     const protocol = paramProtocol(params) ?? (test.type === "network.route_test" ? "any" : undefined);
+    if (params.protocol !== undefined && paramProtocol(params) === undefined)
+      return make(test, "UNKNOWN", [`Test '${test.id}' has an invalid declared protocol, not a missing optional default.`]);
     if (!protocol) return make(test, "UNKNOWN", [`Test '${test.id}' requires protocol tcp, udp, icmp, or any.`]);
+    if (params.port !== undefined && paramPort(params) === undefined)
+      return make(test, "UNKNOWN", [`Test '${test.id}' has an invalid declared destination port.`]);
+    if (protocol === "udp" && paramPort(params) === undefined)
+      return make(test, "UNKNOWN", [`Test '${test.id}' requires a declared UDP destination port.`]);
+    if (protocol === "icmp" && params.port !== undefined)
+      return make(test, "UNKNOWN", [`Test '${test.id}' cannot bind a port to ICMP.`]);
     const result = queryReachability(scenario, state, from, to, protocol, paramPort(params));
     return make(test, test.type === "network.segmentation" ? truthNot(result.truth) : result.truth, result.explanation);
   }
