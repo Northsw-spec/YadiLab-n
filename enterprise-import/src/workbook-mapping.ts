@@ -10,6 +10,11 @@ export interface WorkbookPreview { readonly mode: "PREVIEW"; readonly sheetsFoun
 
 const ID = /^[a-z][a-z0-9_-]{0,63}$/;
 const KINDS = new Set(["internet", "wan", "dmz", "lan", "server", "management", "security", "backup", "guest", "custom"]);
+// Mirror schema/scenario-source.schema.json constraints on fields that the
+// workbook mapping emits, so preview does not accept a source Save will reject.
+const RESOURCE_TYPE = /^[a-z][a-z0-9_.-]{0,127}$/;
+const MAC_ADDRESS = /^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}$/;
+const LINK_KINDS = new Set(["network", "management", "trust", "authentication", "dependency", "data_flow"]);
 const byTable = (document: ImportDocument) => new Map(document.tables.map((table) => [table.tableId, table] as const));
 const value = (record: ImportRecord, field: string): unknown => record.fields[field]?.value;
 const text = (record: ImportRecord, field: string): string | undefined => { const v = value(record, field); return typeof v === "string" && v.trim() !== "" ? v.trim() : typeof v === "number" ? String(v) : undefined; };
@@ -25,7 +30,23 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   for (const required of ["Metadata", "Nodes"] as const) if (!tables.has(required)) diagnostics.push({ code: "WORKBOOK_REQUIRED_SHEET_MISSING", severity: "error", message: `Required sheet '${required}' is missing.`, table: required });
   const seen = new Map<string, number>();
   for (const table of document.tables) { const prior = seen.get(table.tableId) ?? 0; if (prior > 0) diagnostics.push({ code: "WORKBOOK_DUPLICATE_SHEET", severity: "error", message: `Duplicate sheet/table '${table.tableId}'.`, table: table.tableId }); seen.set(table.tableId, prior + 1); }
-  for (const record of rows(tables, "Nodes")) { const id = text(record, "nodeId"); if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_NODE_ID_INVALID", "Nodes.nodeId must be a stable canonical ID.", "Nodes", record.recordIndex, "nodeId")); if (!text(record, "displayName")) diagnostics.push(diagnostic("WORKBOOK_NODE_LABEL_MISSING", "Nodes.displayName is required.", "Nodes", record.recordIndex, "displayName")); if (!text(record, "type")) diagnostics.push(diagnostic("WORKBOOK_NODE_TYPE_MISSING", "Nodes.type is required.", "Nodes", record.recordIndex, "type")); }
+  for (const record of rows(tables, "Nodes")) {
+    const id = text(record, "nodeId");
+    const type = text(record, "type");
+    if (!id || !ID.test(id))
+      diagnostics.push(diagnostic("WORKBOOK_NODE_ID_INVALID",
+        "Nodes.nodeId must be a stable canonical ID.", "Nodes", record.recordIndex, "nodeId"));
+    if (!text(record, "displayName"))
+      diagnostics.push(diagnostic("WORKBOOK_NODE_LABEL_MISSING",
+        "Nodes.displayName is required.", "Nodes", record.recordIndex, "displayName"));
+    if (!type)
+      diagnostics.push(diagnostic("WORKBOOK_NODE_TYPE_MISSING",
+        "Nodes.type is required.", "Nodes", record.recordIndex, "type"));
+    else if (!RESOURCE_TYPE.test(type))
+      diagnostics.push(diagnostic("WORKBOOK_NODE_TYPE_INVALID",
+        "Nodes.type must be a canonical lowercase resource type identifier.",
+        "Nodes", record.recordIndex, "type"));
+  }
   const nodeNames = rows(tables, "Nodes").map((record) => text(record, "nodeId")).filter((id): id is string => Boolean(id));
   if (nodeNames.length !== new Set(nodeNames).size) diagnostics.push({ code: "WORKBOOK_DUPLICATE_NODE_ID", severity: "error", message: "Nodes.nodeId values must be unique.", table: "Nodes" });
   if (rows(tables, "Nodes").length === 0) diagnostics.push({ code: "WORKBOOK_NO_NODES", severity: "error", message: "At least one network node is required.", table: "Nodes" });
@@ -48,7 +69,14 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
       interfacesByNode.set(nodeId, declared);
     }
     const mtu = integer(record, "MTU");
-    if (value(record, "MTU") !== undefined && mtu === undefined) diagnostics.push(diagnostic("WORKBOOK_MTU_INVALID", "Interfaces.MTU must be an integer.", "Interfaces", record.recordIndex, "MTU"));
+    if (value(record, "MTU") !== undefined && (mtu === undefined || mtu < 1))
+      diagnostics.push(diagnostic("WORKBOOK_MTU_INVALID",
+        "Interfaces.MTU must be a positive integer.", "Interfaces", record.recordIndex, "MTU"));
+    const mac = text(record, "MAC");
+    if (mac && !MAC_ADDRESS.test(mac))
+      diagnostics.push(diagnostic("WORKBOOK_MAC_INVALID",
+        "Interfaces.MAC must contain six colon-separated hexadecimal octets.",
+        "Interfaces", record.recordIndex, "MAC"));
   }
   // Zone references belong to the same canonical namespace as nodes. A
   // valid-looking workbook must not promise an importable Builder source that
@@ -92,6 +120,11 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   for (const record of rows(tables, "Links")) {
     const id = text(record, "linkId"), a = text(record, "nodeA"), b = text(record, "nodeB");
     const portA = text(record, "interfaceA"), portB = text(record, "interfaceB");
+    const kind = text(record, "kind");
+    if (kind && !LINK_KINDS.has(kind))
+      diagnostics.push(diagnostic("WORKBOOK_LINK_KIND_INVALID",
+        "Links.kind is not a canonical scenario connection kind.",
+        "Links", record.recordIndex, "kind"));
     if (!id || !ID.test(id)) diagnostics.push(diagnostic("WORKBOOK_LINK_ID_INVALID", "Links.linkId must be a stable canonical ID.", "Links", record.recordIndex, "linkId"));
     if (!a || !nodeIds.has(a)) diagnostics.push(diagnostic("WORKBOOK_LINK_ENDPOINT_UNKNOWN", `Links.nodeA references unknown node '${a ?? ""}'.`, "Links", record.recordIndex, "nodeA"));
     if (!b || !nodeIds.has(b)) diagnostics.push(diagnostic("WORKBOOK_LINK_ENDPOINT_UNKNOWN", `Links.nodeB references unknown node '${b ?? ""}'.`, "Links", record.recordIndex, "nodeB"));
