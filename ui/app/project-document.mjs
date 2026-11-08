@@ -435,6 +435,13 @@ export async function assertSafeRecoveryTarget(quarantinedHandles, selected) {
 export async function writeProjectFile(handle, text, { expectedFileSha256, requireEmptyTarget = false } = {}) {
   if (!handle || typeof handle.createWritable !== "function" ||
       typeof handle.getFile !== "function") blocked("WRITE_UNSUPPORTED");
+  // Validate the final serialized bytes BEFORE opening a writable stream.
+  // This exported boundary must not truncate a real file for an oversized or
+  // malformed payload, even if a caller bypasses createProjectDocument().
+  if (typeof text !== "string") blocked("FILE_INVALID");
+  const encoded = encoder.encode(text);
+  if (encoded.byteLength < 1 || encoded.byteLength > PROJECT_MAX_BYTES)
+    blocked("FILE_TOO_LARGE");
   // An unrelated Save As target may already contain a different project.
   // File-picker selection is NOT permission to silently destroy those bytes.
   // Opening the existing document is the explicit way to associate it for Save.
@@ -499,7 +506,7 @@ export async function writeProjectFile(handle, text, { expectedFileSha256, requi
   // Compare exact native bytes. TextDecoder discards a leading UTF-8 BOM;
   // comparing its decoded text could therefore report a verified Save even
   // though another process changed the physical file after close().
-  const expectedBytes = encoder.encode(text);
+  const expectedBytes = encoded;
   const diskBytes = new Uint8Array(bytes);
   if (diskBytes.byteLength !== expectedBytes.byteLength)
     blocked("READBACK_MISMATCH");
