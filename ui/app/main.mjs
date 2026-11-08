@@ -4758,6 +4758,11 @@ function App() {
 
   const compileAndLayout = async () => {
     if (workspace.mode !== "builder") return;
+    if (hasPendingBuilderDrafts()) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_COMPILE_UNAPPLIED_DRAFT",
+        message: "Apply or revert the pending Inspector/JSON inputs before compiling the committed source." }]);
+      return;
+    }
     const startedWorkspace = workspace;
     const startedTransition = scenarioTransitionRef.current;
     const isLiveCompile = () => scenarioTransitionRef.current === startedTransition
@@ -4816,6 +4821,11 @@ function App() {
   };
 
   const preview = () => {
+    if (hasPendingBuilderDrafts()) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_PREVIEW_UNAPPLIED_DRAFT",
+        message: "Apply or revert pending Builder form edits before opening Runtime. Unapplied text cannot become Engine evidence." }]);
+      return;
+    }
     // Inspector Apply and Runtime Preview can fire in the same JS event.
     // The rendered callback then still refers to the pre-Apply compiled
     // source while the live Builder is already dirty. Do not activate a
@@ -4907,6 +4917,11 @@ function App() {
   };
 
   const exportSource = () => {
+    if (hasPendingBuilderDrafts()) {
+      setDiagnostics([{ severity: "error", code: "BUILDER_EXPORT_UNAPPLIED_DRAFT",
+        message: "Apply or revert pending form edits before exporting source JSON; the current canonical source does not contain those edits." }]);
+      return;
+    }
     // Export must reflect the latest committed source even if React has not
     // painted an Inspector Apply yet. Never silently download older JSON.
     const active = latestDrawioWorkspaceRef.current;
