@@ -309,6 +309,30 @@ assert.equal(raceDisk, firstWrite + " EXTERNAL_MODIFICATION_DURING_OPEN",
 await assert.rejects(writeProjectFile({ ...handle, async getFile() {
   return file("network.yadilab",stored+"CORRUPT");
 }}, text),/PROJECT_READBACK_MISMATCH/);
+// PROJECT-029: UTF-8 TextDecoder silently removes a leading BOM. After the
+// native write has closed, an external process can change the physical bytes
+// without changing the decoded JSON text. Save must fail the exact-byte
+// readback; an apparent equivalent decoded document is not verified disk I/O.
+const writtenWithBom = new Uint8Array(3 + new TextEncoder().encode(text).length);
+writtenWithBom.set([0xef, 0xbb, 0xbf]);
+writtenWithBom.set(new TextEncoder().encode(text), 3);
+assert.equal(new TextDecoder("utf-8", {fatal:true}).decode(writtenWithBom), text,
+  "BOM readback fixture must prove that decoded text alone hides disk change");
+let bomReadbackWrites = 0;
+await assert.rejects(writeProjectFile({
+  async createWritable() { return {
+    async write() { bomReadbackWrites++; },
+    async close() {},
+  }; },
+  async getFile() { return {
+    name: "network.yadilab", size: writtenWithBom.byteLength,
+    async arrayBuffer() { return writtenWithBom.buffer.slice(0); },
+  }; },
+}, text), /PROJECT_READBACK_MISMATCH/,
+"Save must refuse post-write BOM insertion even when decoded JSON is unchanged");
+assert.equal(bomReadbackWrites, 1,
+  "Post-write readback must check the single explicit completed write");
+console.log("PASS PROJECT-029: native Save readback verifies byte-for-byte equality, not decoder-normalized JSON");
 await assert.rejects(writeProjectFile({ ...handle,async createWritable() {
   return {async write(){throw Error("DISK_FULL");},async abort(){},async close(){}};
 }},text),/DISK_FULL/);
