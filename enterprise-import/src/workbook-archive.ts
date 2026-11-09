@@ -1,4 +1,4 @@
-import type { ArchiveBackend, ArchiveEntryDescriptor, ArchiveReadSession } from "../../package-io/src/types.js";
+import { ArchiveReadLimitError, type ArchiveBackend, type ArchiveEntryDescriptor, type ArchiveReadSession } from "../../package-io/src/types.js";
 import { ZipJsArchiveBackend } from "../../package-io/src/zipjs-backend.js";
 import { EnterpriseImportError } from "./types.js";
 
@@ -27,6 +27,13 @@ export interface SafeWorkbookArchive {
 
 function fail(code: string, message: string): never { throw new EnterpriseImportError(code, message); }
 
+function validateLimits(limits: WorkbookArchiveLimits): void {
+  const integerLimits: readonly [string, number][] = [["maxFiles", limits.maxFiles], ["maxCompressedBytes", limits.maxCompressedBytes], ["maxDecompressedBytes", limits.maxDecompressedBytes], ["maxSingleFileBytes", limits.maxSingleFileBytes]];
+  if (integerLimits.some(([, value]) => !Number.isSafeInteger(value) || value < 0) || !Number.isFinite(limits.maxCompressionRatio) || limits.maxCompressionRatio < 0) {
+    fail("IMPORT_ARCHIVE_LIMIT_INVALID", "Workbook archive limits must be finite, non-negative values.");
+  }
+}
+
 function validatePath(path: string): void {
   if (!path || path.includes("\\") || path.startsWith("/") || /^[A-Za-z]:/.test(path)) fail("IMPORT_ARCHIVE_PATH_INVALID", `Unsafe workbook archive path: ${path}`);
   const parts = path.split("/");
@@ -43,7 +50,20 @@ function ratio(entry: ArchiveEntryDescriptor): number | undefined {
 class SafeArchive implements SafeWorkbookArchive {
   readonly paths: readonly string[];
   private readonly byPath = new Map<string, ArchiveEntryDescriptor>();
+  /*
+   * ZIP metadata is useful for rejecting an archive before any member is
+   * inflated, but it is not a trustworthy substitute for the bytes returned
+   * by an ArchiveBackend.  In particular, the backend interface permits an
+   * entry without an advertised uncompressed size.  Cache each member so a
+   * repeated read neither re-inflates it nor double-counts the same bytes.
+   */
+  private readonly readCache = new Map<string, Promise<Uint8Array>>();
+  private actualDecompressedBytes = 0;
+  private pendingRead: Promise<void> = Promise.resolve();
+  private closed = false;
+  private closePromise: Promise<void> | undefined;
   constructor(private readonly session: ArchiveReadSession, private readonly limits: WorkbookArchiveLimits) {
+    validateLimits(limits);
     const files = session.entries.filter((x) => !x.directory);
     if (files.length > limits.maxFiles) fail("IMPORT_ARCHIVE_TOO_MANY_FILES", `Workbook archive contains ${files.length} files; limit is ${limits.maxFiles}.`);
     let compressed = 0, decompressed = 0;
@@ -51,10 +71,14 @@ class SafeArchive implements SafeWorkbookArchive {
       validatePath(entry.path);
       if (this.byPath.has(entry.path)) fail("IMPORT_ARCHIVE_DUPLICATE_PATH", `Workbook archive contains duplicate path ${entry.path}.`);
       if (entry.uncompressedSize !== undefined) {
+        if (!Number.isSafeInteger(entry.uncompressedSize) || entry.uncompressedSize < 0) fail("IMPORT_ARCHIVE_SIZE_METADATA_INVALID", `Workbook member ${entry.path} has invalid uncompressed size metadata.`);
         if (entry.uncompressedSize > limits.maxSingleFileBytes) fail("IMPORT_ARCHIVE_FILE_TOO_LARGE", `Workbook member ${entry.path} exceeds the per-file limit.`);
         decompressed += entry.uncompressedSize;
       }
-      if (entry.compressedSize !== undefined) compressed += entry.compressedSize;
+      if (entry.compressedSize !== undefined) {
+        if (!Number.isSafeInteger(entry.compressedSize) || entry.compressedSize < 0) fail("IMPORT_ARCHIVE_SIZE_METADATA_INVALID", `Workbook member ${entry.path} has invalid compressed size metadata.`);
+        compressed += entry.compressedSize;
+      }
       const r = ratio(entry);
       if (r !== undefined && r > limits.maxCompressionRatio) fail("IMPORT_ARCHIVE_COMPRESSION_RATIO", `Workbook member ${entry.path} exceeds the compression-ratio limit.`);
       this.byPath.set(entry.path, entry);
@@ -65,14 +89,48 @@ class SafeArchive implements SafeWorkbookArchive {
   }
   has(path: string): boolean { return this.byPath.has(path); }
   async read(path: string): Promise<Uint8Array> {
+    if (this.closed) fail("IMPORT_ARCHIVE_CLOSED", "Workbook archive is closed.");
     const entry = this.byPath.get(path);
     if (!entry) fail("IMPORT_ARCHIVE_MEMBER_MISSING", `Workbook archive member ${path} is missing.`);
-    const bytes = await entry.read();
+    const cached = this.readCache.get(path);
+    if (cached) return Uint8Array.from(await cached);
+    const read = this.queueRead(path, entry);
+    this.readCache.set(path, read);
+    return Uint8Array.from(await read);
+  }
+  private queueRead(path: string, entry: ArchiveEntryDescriptor): Promise<Uint8Array> {
+    const read = this.pendingRead.catch(() => {}).then(() => this.readEntry(path, entry));
+    this.pendingRead = read.then(() => {}, () => {});
+    return read;
+  }
+  private async readEntry(path: string, entry: ArchiveEntryDescriptor): Promise<Uint8Array> {
+    const remaining = this.limits.maxDecompressedBytes - this.actualDecompressedBytes;
+    const maximumBytes = Math.min(this.limits.maxSingleFileBytes, remaining);
+    let bytes: Uint8Array;
+    try { bytes = await entry.read(maximumBytes); }
+    catch (error) {
+      if (error instanceof ArchiveReadLimitError) {
+        fail(maximumBytes === remaining ? "IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE" : "IMPORT_ARCHIVE_FILE_TOO_LARGE", `Workbook member ${path} exceeds the decompression limit.`);
+      }
+      throw error;
+    }
     if (bytes.byteLength > this.limits.maxSingleFileBytes) fail("IMPORT_ARCHIVE_FILE_TOO_LARGE", `Workbook member ${path} exceeds the per-file limit after decompression.`);
     if (entry.uncompressedSize !== undefined && bytes.byteLength !== entry.uncompressedSize) fail("IMPORT_ARCHIVE_SIZE_MISMATCH", `Workbook member ${path} size does not match archive metadata.`);
+    this.actualDecompressedBytes += bytes.byteLength;
+    if (this.actualDecompressedBytes > this.limits.maxDecompressedBytes) {
+      fail("IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE", "Workbook archive exceeds the decompressed-size limit after decompression.");
+    }
     return bytes;
   }
-  close(): Promise<void> { return this.session.close(); }
+  close(): Promise<void> {
+    if (!this.closePromise) {
+      this.closed = true;
+      // Let reads already admitted to the serialized queue finish before the
+      // backend is closed; concurrent close callers share the same lifecycle.
+      this.closePromise = this.pendingRead.then(() => this.session.close());
+    }
+    return this.closePromise;
+  }
 }
 
 export async function openSafeWorkbookArchive(bytes: Uint8Array, backend: ArchiveBackend, limits: WorkbookArchiveLimits = DEFAULT_WORKBOOK_LIMITS): Promise<SafeWorkbookArchive> {

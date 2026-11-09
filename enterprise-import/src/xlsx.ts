@@ -6,6 +6,7 @@ import type { AdapterParseResult, EnterpriseImportAdapter, EnterpriseImportAdapt
 import { EnterpriseImportError } from "./types.js";
 
 const XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MAX_XLSX_COLUMN = 16_384;
 
 function fail(code: string, message: string): never { throw new EnterpriseImportError(code, message); }
 function cellRefParts(ref: string): { col: string; row: number } {
@@ -13,6 +14,9 @@ function cellRefParts(ref: string): { col: string; row: number } {
   if (!m) fail("IMPORT_XLSX_CELL_REFERENCE_INVALID", `Invalid XLSX cell reference ${ref}.`);
   const row = Number(m[2]);
   if (row > 1_048_576) fail("IMPORT_XLSX_CELL_REFERENCE_INVALID", `XLSX row exceeds spreadsheet limit: ${ref}.`);
+  let column = 0;
+  for (const letter of m[1]!) column = column * 26 + letter.charCodeAt(0) - 64;
+  if (column > MAX_XLSX_COLUMN) fail("IMPORT_XLSX_CELL_REFERENCE_INVALID", `XLSX column exceeds spreadsheet limit: ${ref}.`);
   return { col: m[1]!, row };
 }
 function textOfRichString(node: XmlNode): string { return descendants(node, "t").map(xmlText).join(""); }
