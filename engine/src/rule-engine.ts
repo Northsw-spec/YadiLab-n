@@ -9,16 +9,24 @@ import { truthAll, truthAny, truthNot } from "./truth.js";
 import type { EngineQueryResult, RuleEvaluationContext } from "./types.js";
 
 export function evaluateRule(rule: Normalizedscenariorule, context: RuleEvaluationContext): EngineQueryResult<undefined> {
+  if (!rule || typeof rule !== "object" || !("op" in rule))
+    return { truth: "UNKNOWN", explanation: ["Rule is missing a valid operation."] };
   switch (rule.op) {
     case "all": {
+      if (!Array.isArray(rule.rules) || rule.rules.length === 0)
+        return { truth: "UNKNOWN", explanation: ["ALL rule has no child rules; empty logic is not valid scenario evidence."] };
       const children = rule.rules.map((child) => evaluateRule(child, context));
       return { truth: truthAll(children.map((item) => item.truth)), explanation: children.flatMap((item) => item.explanation) };
     }
     case "any": {
+      if (!Array.isArray(rule.rules) || rule.rules.length === 0)
+        return { truth: "UNKNOWN", explanation: ["ANY rule has no child rules; empty logic is not valid scenario evidence."] };
       const children = rule.rules.map((child) => evaluateRule(child, context));
       return { truth: truthAny(children.map((item) => item.truth)), explanation: children.flatMap((item) => item.explanation) };
     }
     case "not": {
+      if (!rule.rule || typeof rule.rule !== "object")
+        return { truth: "UNKNOWN", explanation: ["NOT rule has no child rule."] };
       const child = evaluateRule(rule.rule, context);
       return { truth: truthNot(child.truth), explanation: child.explanation };
     }
@@ -51,6 +59,8 @@ export function evaluateRule(rule: Normalizedscenariorule, context: RuleEvaluati
       if (actual === undefined) return { truth: "UNKNOWN", explanation: [`Test '${rule.test}' has not been evaluated in this snapshot.`] };
       return { truth: actual === rule.expected ? "TRUE" : "FALSE", explanation: [`Test '${rule.test}' outcome is ${actual}; rule expects ${rule.expected}.`] };
     }
+    default:
+      return { truth: "UNKNOWN", explanation: ["Rule has an unsupported operation."] };
   }
 }
 
