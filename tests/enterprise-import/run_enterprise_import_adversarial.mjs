@@ -6,6 +6,7 @@ import { csvImportAdapter, jsonImportAdapter, createXlsxImportAdapter, createOds
 import { nodeZipArchiveBackend } from "./node_zip_backend.mjs";
 import { ZipJsArchiveBackend } from "../../dist-enterprise-import-test/package-io/src/zipjs-backend.js";
 import { ArchiveReadLimitError } from "../../dist-enterprise-import-test/package-io/src/types.js";
+import { parseSafeXml } from "../../dist-enterprise-import-test/enterprise-import/src/xml-lite.js";
 const here=path.dirname(fileURLToPath(import.meta.url)); const root=path.resolve(here,"../..");
 const profile=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/enterprise-mapping-profile.json"),"utf8"));
 const enc=(s)=>new TextEncoder().encode(s); const workbookBytes=(name)=>new Uint8Array(fs.readFileSync(path.join(root,"tests/fixtures/workbooks",name))); const workbookProfile=structuredClone(profile); workbookProfile.tables[0].sourceTable="Devices"; const xlsx=createXlsxImportAdapter(nodeZipArchiveBackend); const ods=createOdsImportAdapter(nodeZipArchiveBackend); let pass=0;
@@ -91,4 +92,10 @@ await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",director
 })();
 await (async()=>{ const backend={open:async()=>({entries:[],close:async()=>{}})}; await assert.rejects(()=>openSafeWorkbookArchive(enc("x"),backend,{maxFiles:NaN,maxCompressedBytes:100,maxDecompressedBytes:100,maxSingleFileBytes:100,maxCompressionRatio:10}),e=>e?.code==="IMPORT_ARCHIVE_LIMIT_INVALID"); pass++; console.log("PASS invalid archive limits fail closed"); })();
 
-console.log(`PASS enterprise import adversarial: ${pass}/36 assertions`);
+await (async()=>{ const valid=parseSafeXml(enc('<root label="safe">text</root>'),"positive XML"); assert.equal(valid.attributes.label,"safe"); assert.equal(valid.text,"text"); pass++; console.log("PASS bounded XML attributes and text remain readable"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc(`<root value="${"a".repeat(64*1024+1)}"/>`),"oversized attribute"),e=>e?.code==="IMPORT_XML_ATTRIBUTE_TOO_LARGE"); pass++; console.log("PASS oversized XML attributes are blocked"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc(`<root>${"a".repeat(1024*1024+1)}</root>`),"oversized text"),e=>e?.code==="IMPORT_XML_TEXT_TOO_LARGE"); pass++; console.log("PASS oversized XML text is blocked"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc("<root>unescaped & value</root>"),"bad entity"),e=>e?.code==="IMPORT_XML_INVALID_ENTITY"); pass++; console.log("PASS unescaped XML entities are blocked"); })();
+await (async()=>{ const parsed=parseSafeXml(enc('<root __proto__="safe"/>'),"prototype attribute"); assert.ok(Object.hasOwn(parsed.attributes,"__proto__")); assert.equal(parsed.attributes["__proto__"],"safe"); pass++; console.log("PASS XML prototype-named attributes remain ordinary data"); })();
+
+console.log(`PASS enterprise import adversarial: ${pass}/41 assertions`);
