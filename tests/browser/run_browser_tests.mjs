@@ -254,22 +254,15 @@ let zoneWs = createBuilderWorkspace(source);
 let zoneBlocked = deleteZone(zoneWs, "server");
 ok(!zoneBlocked.ok, "non-empty zone deletion is blocked without explicit cascade");
 let zoneCascade = deleteZone(zoneWs, "server", true);
-ok(zoneCascade.ok, "explicit zone cascade succeeds");
-if (zoneCascade.ok) {
-  ok(!zoneCascade.workspace.source.zones.some((x) => x.id === "server"), "zone cascade removes zone");
-  ok(!zoneCascade.workspace.source.resources.some((x) => x.id === "rds01"), "zone cascade removes contained resource");
-  ok(!zoneCascade.workspace.source.connections.some((x) => x.from.resource === "rds01" || x.to.resource === "rds01"), "zone cascade removes affected connections");
-}
+ok(!zoneCascade.ok && zoneCascade.diagnostics.some((item) => item.code === "BUILDER_DELETE_TEST_REFERENCED"),
+  "explicit zone cascade refuses to orphan a retained Foundation test reference");
 
 let deleteWs = createBuilderWorkspace(source);
 let blockedDelete = deleteResource(deleteWs, "rds01");
 ok(!blockedDelete.ok, "referenced resource deletion is blocked without explicit cascade");
 eq(blockedDelete.workspace.source.resources.length, deleteWs.source.resources.length, "failed delete is atomic");
 let cascadeDelete = deleteResource(deleteWs, "rds01", true);
-ok(cascadeDelete.ok, "explicit cascade allows resource deletion");
-if (cascadeDelete.ok) {
-  ok(!cascadeDelete.workspace.source.resources.some((x) => x.id === "rds01"), "cascade deletes resource");
-  ok(!cascadeDelete.workspace.source.connections.some((x) => x.from.resource === "rds01" || x.to.resource === "rds01"), "cascade deletes only referencing connections");
-}
+ok(!cascadeDelete.ok && cascadeDelete.diagnostics.some((item) => item.code === "BUILDER_DELETE_TEST_REFERENCED"),
+  "explicit resource cascade refuses to orphan a retained Foundation test reference");
 
 console.log(`PASS browser foundation suite: ${checks} assertions.`);

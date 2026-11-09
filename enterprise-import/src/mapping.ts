@@ -114,6 +114,9 @@ export async function mapImportDocumentToBaseline(args: {
   }
 
   const addProvenance = async (table: string, row: number, field: string, cell: ImportCell, mappingId: string, mappingClass: MappingClass): Promise<string> => {
+    // Generic enterprise mappings are source-to-source. A normalized default
+    // has no original locator and must never enter this provenance format.
+    if (cell.locator.kind === "system-generated") throw new Error("IMPORT_SYNTHETIC_LOCATOR_FORBIDDEN");
     const provenanceId = await stableId("prov", `${args.source.sourceId}|${table}|${row}|${field}|${mappingId}|${canonicalEnterpriseJson(cell.value)}`, args.hashProvider);
     provenance.push({ provenanceId, sourceRef: args.source.sourceId, locator: cell.locator, field, rawValueHash: await computeRawValueHash(cell.value, args.hashProvider), mapping: { mappingId, class: mappingClass } });
     return provenanceId;

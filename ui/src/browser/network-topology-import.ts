@@ -1,6 +1,6 @@
 import type { ScenarioSource } from "../../../core-model/src/generated/contracts.js";
 import { mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, selectEnterpriseImportAdapter } from "../../../enterprise-import/src/index.js";
-import type { ImportDiagnostic, ImportDocument, ImportLocator } from "../../../enterprise-import/src/types.js";
+import type { ImportDiagnostic, ImportDocument } from "../../../enterprise-import/src/types.js";
 import type { NetworkLinkSourceDecision, NetworkLinkSourceConflict } from "../../../enterprise-import/src/network-inventory.js";
 import { webCryptoImportHashProvider } from "../../../enterprise-import/src/hash.js";
 import { readEnterpriseImportFile, type BinaryReadableFile } from "./import-helper.js";
@@ -50,10 +50,15 @@ function bindNetworkImportProvenance(source: ScenarioSource, document: ImportDoc
         (targetKind === "resource" && !resourceIds.has(targetId)))) continue;
     for (const [field, cell] of Object.entries(record.fields)) {
       if (cell.value === undefined || cell.value === null || cell.value === "") continue;
+      // Normalization may create defaults (Metadata, fallback labels, generic
+      // interfaces and link IDs). They are model data, not statements about
+      // the reviewed original, and therefore cannot become source facts.
+      if (cell.sourceBinding === "SYSTEM_GENERATED" || cell.locator.kind === "system-generated") continue;
+      const locator = cell.locator;
       sequence += 1;
       facts.push({ factId: `nip_${sequence}`, targetKind, ...(targetId ? { targetId } : {}),
-        field: `${table.tableId}.${field}`, mapping: "EXACT",
-        locator: cell.locator as ImportLocator });
+        field: `${table.tableId}.${field}`, mapping: cell.sourceBinding ?? "EXACT",
+        locator });
     }
   }
   return { ...source, networkImportProvenance: {

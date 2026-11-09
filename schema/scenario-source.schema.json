@@ -361,7 +361,7 @@
               "targetId": { "$ref": "#/$defs/id" },
               "targetStatus": { "enum": ["CURRENT", "HISTORICAL"] },
               "field": { "type": "string", "minLength": 1, "maxLength": 256 },
-              "mapping": { "enum": ["EXACT", "ALIAS"] },
+              "mapping": { "enum": ["EXACT", "ALIAS", "TRANSFORMED"] },
               "locator": {
                 "oneOf": [
                   { "type": "object", "additionalProperties": false, "required": ["kind", "sheet", "row", "column"], "properties": { "kind": { "const": "table-cell" }, "sheet": { "type": "string", "minLength": 1, "maxLength": 255 }, "row": { "type": "integer", "minimum": 1 }, "column": { "type": "string", "minLength": 1, "maxLength": 16 } } },
