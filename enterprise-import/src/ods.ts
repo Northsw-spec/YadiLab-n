@@ -7,6 +7,10 @@ import { EnterpriseImportError } from "./types.js";
 
 const ODS_MEDIA = "application/vnd.oasis.opendocument.spreadsheet";
 const MAX_REPEAT = 1_048_576;
+const MAX_ROWS = 1_048_576;
+const MAX_COLUMNS = 16_384;
+const MAX_MATERIALIZED_CELLS = 100_000;
+const MAX_FORMULA_DIAGNOSTICS = 10_000;
 function fail(code: string, message: string): never { throw new EnterpriseImportError(code, message); }
 function repeatCount(value: string | undefined, label: string): number {
   if (value === undefined) return 1;
@@ -55,33 +59,63 @@ function isEmptyCell(cell: XmlNode): boolean {
   return attr(cell, "formula") === undefined && attr(cell, "value") === undefined && attr(cell, "string-value") === undefined && attr(cell, "boolean-value") === undefined && attr(cell, "date-value") === undefined && attr(cell, "time-value") === undefined && cellText(cell) === "";
 }
 
+interface PlannedOdsCell {
+  readonly node: XmlNode;
+  readonly repeat: number;
+  readonly empty: boolean;
+  readonly formula: boolean;
+}
+
 function parseOdsSheet(sheetNode: XmlNode, name: string, diagnostics: ImportDiagnostic[]): PhysicalRow[] {
   const rows: PhysicalRow[] = [];
   let physicalRow = 1;
+  let materializedCells = 0;
+  let formulaDiagnostics = 0;
   for (const rowNode of sheetNode.children.filter((x) => localName(x.name) === "table-row")) {
     const rRepeat = repeatCount(attr(rowNode, "number-rows-repeated"), `Sheet ${name} row`);
+    if (physicalRow + rRepeat - 1 > MAX_ROWS) fail("IMPORT_ODS_ROW_LIMIT", `Sheet ${name} exceeds row limit.`);
     const rowCells = rowNode.children.filter((x) => ["table-cell", "covered-table-cell"].includes(localName(x.name)));
-    const hasData = rowCells.some((c) => !isEmptyCell(c));
+    const plannedCells: PlannedOdsCell[] = rowCells.map((node) => ({
+      node,
+      repeat: repeatCount(attr(node, "number-columns-repeated"), `Sheet ${name} column`),
+      empty: isEmptyCell(node),
+      formula: (attr(node, "formula") ?? "") !== "",
+    }));
+    const hasData = plannedCells.some((cell) => !cell.empty);
     if (!hasData && rRepeat > 10_000) { physicalRow += rRepeat; continue; }
-    if (physicalRow + rRepeat - 1 > 1_048_576) fail("IMPORT_ODS_ROW_LIMIT", `Sheet ${name} exceeds row limit.`);
+    let physicalCol = 1;
+    let cellsPerRow = 0;
+    let formulasPerRow = 0;
+    for (const cell of plannedCells) {
+      if (physicalCol + cell.repeat - 1 > MAX_COLUMNS) {
+        if (cell.empty) { physicalCol += cell.repeat; continue; }
+        fail("IMPORT_ODS_COLUMN_LIMIT", `Sheet ${name} exceeds column limit.`);
+      }
+      if (!cell.empty) {
+        cellsPerRow += cell.repeat;
+        if (cell.formula) formulasPerRow += cell.repeat;
+      }
+      physicalCol += cell.repeat;
+    }
+    const nextMaterializedCells = materializedCells + rRepeat * cellsPerRow;
+    if (nextMaterializedCells > MAX_MATERIALIZED_CELLS) fail("IMPORT_ODS_CELL_BUDGET", `Sheet ${name} exceeds the ${MAX_MATERIALIZED_CELLS} materialized-cell safety limit.`);
+    const nextFormulaDiagnostics = formulaDiagnostics + rRepeat * formulasPerRow;
+    if (nextFormulaDiagnostics > MAX_FORMULA_DIAGNOSTICS) fail("IMPORT_ODS_FORMULA_DIAGNOSTIC_BUDGET", `Sheet ${name} exceeds the ${MAX_FORMULA_DIAGNOSTICS} formula-diagnostic safety limit.`);
+    materializedCells = nextMaterializedCells;
+    formulaDiagnostics = nextFormulaDiagnostics;
     for (let rr = 0; rr < rRepeat; rr++) {
       const cells = new Map<string, ImportCell>();
-      let physicalCol = 1;
-      for (const cell of rowCells) {
-        const cRepeat = repeatCount(attr(cell, "number-columns-repeated"), `Sheet ${name} column`);
-        const empty = isEmptyCell(cell);
-        if (physicalCol + cRepeat - 1 > 16_384) {
-          if (empty) { physicalCol += cRepeat; continue; }
-          fail("IMPORT_ODS_COLUMN_LIMIT", `Sheet ${name} exceeds column limit.`);
-        }
-        for (let cc = 0; cc < cRepeat; cc++) {
-          if (!empty) {
-            const col = columnLetters(physicalCol + cc);
+      let materializedCol = 1;
+      for (const cell of plannedCells) {
+        if (materializedCol + cell.repeat - 1 > MAX_COLUMNS && cell.empty) { materializedCol += cell.repeat; continue; }
+        for (let cc = 0; cc < cell.repeat; cc++) {
+          if (!cell.empty) {
+            const col = columnLetters(materializedCol + cc);
             const row = physicalRow + rr;
-            cells.set(col, { value: odsCellValue(cell, diagnostics, name, row, col), locator: { kind: "table-cell", sheet: name, row, column: col } });
+            cells.set(col, { value: odsCellValue(cell.node, diagnostics, name, row, col), locator: { kind: "table-cell", sheet: name, row, column: col } });
           }
         }
-        physicalCol += cRepeat;
+        materializedCol += cell.repeat;
       }
       if (cells.size > 0) rows.push({ row: physicalRow + rr, cells });
     }
