@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { csvImportAdapter, jsonImportAdapter, createXlsxImportAdapter, createOdsImportAdapter, openSafeWorkbookArchive, runEnterpriseImport } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
 import { nodeZipArchiveBackend } from "./node_zip_backend.mjs";
+import { parseSafeXml } from "../../dist-enterprise-import-test/enterprise-import/src/xml-lite.js";
 const here=path.dirname(fileURLToPath(import.meta.url)); const root=path.resolve(here,"../..");
 const profile=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/enterprise-mapping-profile.json"),"utf8"));
 const enc=(s)=>new TextEncoder().encode(s); const workbookBytes=(name)=>new Uint8Array(fs.readFileSync(path.join(root,"tests/fixtures/workbooks",name))); const workbookProfile=structuredClone(profile); workbookProfile.tables[0].sourceTable="Devices"; const xlsx=createXlsxImportAdapter(nodeZipArchiveBackend); const ods=createOdsImportAdapter(nodeZipArchiveBackend); let pass=0;
@@ -43,5 +44,10 @@ await blocked("ODS XML DTD/entity declarations are blocked",{baselineId:"x",sour
 await blocked("ODS non-empty repeated columns beyond sheet limit are blocked",{baselineId:"x",source:{bytes:workbookBytes("ods-huge-repeat.ods"),mediaType:"application/vnd.oasis.opendocument.spreadsheet"},mappingProfile:workbookProfile,adapter:ods},"IMPORT_ODS_COLUMN_LIMIT");
 await blocked("invalid workbook headerRow option is blocked",{baselineId:"x",source:{bytes:workbookBytes("devices.xlsx"),mediaType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},mappingProfile:workbookProfile,adapter:xlsx,options:{headerRow:0}},"IMPORT_WORKBOOK_HEADER_ROW_INVALID");
 await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",directory:false,compressedSize:1,uncompressedSize:1000,read:async()=>new Uint8Array(1000)}],close:async()=>{}})}; await assert.rejects(()=>openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:10000,maxDecompressedBytes:10000,maxSingleFileBytes:2000,maxCompressionRatio:100}),e=>e?.code==="IMPORT_ARCHIVE_COMPRESSION_RATIO"); pass++; console.log("PASS workbook archive compression-ratio bomb is blocked"); })();
+await (async()=>{ const valid=parseSafeXml(enc('<root label="safe">text</root>'),"positive XML"); assert.equal(valid.attributes.label,"safe"); assert.equal(valid.text,"text"); pass++; console.log("PASS bounded XML attributes and text remain readable"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc(`<root value="${"a".repeat(64*1024+1)}"/>`),"oversized attribute"),e=>e?.code==="IMPORT_XML_ATTRIBUTE_TOO_LARGE"); pass++; console.log("PASS oversized XML attributes are blocked"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc(`<root>${"a".repeat(1024*1024+1)}</root>`),"oversized text"),e=>e?.code==="IMPORT_XML_TEXT_TOO_LARGE"); pass++; console.log("PASS oversized XML text is blocked"); })();
+await (async()=>{ await assert.rejects(async()=>parseSafeXml(enc("<root>unescaped & value</root>"),"bad entity"),e=>e?.code==="IMPORT_XML_INVALID_ENTITY"); pass++; console.log("PASS unescaped XML entities are blocked"); })();
+await (async()=>{ const parsed=parseSafeXml(enc('<root __proto__="safe"/>'),"prototype attribute"); assert.ok(Object.hasOwn(parsed.attributes,"__proto__")); assert.equal(parsed.attributes["__proto__"],"safe"); pass++; console.log("PASS XML prototype-named attributes remain ordinary data"); })();
 
-console.log(`PASS enterprise import adversarial: ${pass}/28 assertions`);
+console.log(`PASS enterprise import adversarial: ${pass}/33 assertions`);
