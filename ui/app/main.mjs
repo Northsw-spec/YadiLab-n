@@ -3314,6 +3314,14 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
           e("strong", null, `${transcript.command} · ${transcript.sourceLabel}`),
           e("small", null, `Engine ${transcript.engineId}@${transcript.engineVersion} · Runtime revision ${transcript.stateRevision} · ${transcript.boundary} · verdict ${transcript.truth}`),
           e("pre", null, transcript.lines.join("\n")),
+          probe?.category === "dns" ? e("p", {
+            className: "helper-note dns-probe-interpretation",
+            "data-dns-probe-interpretation": transcript.truth,
+          }, transcript.truth === "UNKNOWN"
+            ? "Tolkning: namnuppslagningen kunde inte verifieras med den aktuella resolverkonfigurationen. Det bevisar inte att IP-vägen generellt är nere — jämför med en separat modellerad IP-probe."
+            : transcript.truth === "TRUE"
+              ? "Tolkning: DNS-svaret verifierades mot den modellerade resolverkonfigurationen. Detta är separat evidens från generell IP-reachability."
+              : "Tolkning: DNS-proben gav inget verifierat namnuppslag. Jämför med en separat modellerad IP-probe och kontrollera resolverkonfigurationen." ) : null,
           e("details", null, e("summary", null, `Direkt modellerad evidens (${transcript.evidence.length})`),
             e("ul", null, ...transcript.evidence.map((item, index) => e("li", { key: `${item.kind}-${item.subject}-${index}` }, `${item.kind} · ${item.subject} · ${item.state}${Object.prototype.hasOwnProperty.call(item, "value") ? ` · ${JSON.stringify(item.value)}` : ""}`)))),
           e("button", { type: "button", onClick: () => onSaveEvidence?.(transcript) }, "Spara evidens i anteckningar"),
