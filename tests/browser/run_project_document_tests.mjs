@@ -52,6 +52,25 @@ assert.equal("engineState" in restored, false);
 assert.equal("selection" in restored, false);
 assert.equal("dirty" in restored, false);
 assert.equal(JSON.stringify(JSON.parse(await createProjectDocument(workspace, opts))), JSON.stringify(doc));
+// PROJECT-076B: imported provenance is optional historical metadata, but its
+// internal identity and target references must remain fail-closed on Save/Open.
+const provenanceSource = structuredClone(source);
+const provenanceSha = "a".repeat(64);
+provenanceSource.networkImportProvenance = { version: "network-import-provenance/v1",
+  source: { sourceId: `src_${provenanceSha}`, sha256: provenanceSha, byteSize: 1, mediaType: "text/csv" },
+  facts: [{ factId: "nip_1", targetKind: "resource", targetId: provenanceSource.resources[0].id,
+    field: "Devices.Asset ID", mapping: "EXACT", locator: { kind: "record-row", table: "Devices", row: 2 } }] };
+const provenanceText = await createProjectDocument({ ...workspace, source: provenanceSource }, opts);
+assert.deepEqual((await readProjectDocument(provenanceText, opts)).source.networkImportProvenance,
+  provenanceSource.networkImportProvenance, "valid provenance survives exact native project roundtrip");
+for (const [mutate, code] of [
+  [candidate => { candidate.networkImportProvenance.source.sourceId = "src_" + "b".repeat(64); }, "NETWORK_IMPORT_PROVENANCE_SOURCE_ID"],
+  [candidate => { candidate.networkImportProvenance.facts[0].targetId = "ghost"; }, "NETWORK_IMPORT_PROVENANCE_TARGET"],
+  [candidate => { candidate.networkImportProvenance.facts.push(structuredClone(candidate.networkImportProvenance.facts[0])); }, "NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT"],
+]) {
+  const candidate = structuredClone(provenanceSource); mutate(candidate);
+  await assert.rejects(createProjectDocument({ ...workspace, source: candidate }, opts), new RegExp(code));
+}
 // PROJECT-026: a truly blank New project is a legitimate editable draft, not
 // a compiled/runnable scenario. It must Save/Open without inventing resources,
 // links, test results or objectives. The executable source contract is unchanged.

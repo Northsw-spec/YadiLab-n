@@ -642,7 +642,25 @@ export function validateScenarioSemantics(
 
   const zones = new Set(source.zones.map((x) => x.id));
   const resources = new Set(source.resources.map((x) => x.id));
+  const connections = new Set(source.connections.map((x) => x.id));
   const tests = new Set(source.tests.map((x) => x.id));
+  const provenance = source.networkImportProvenance;
+  if (provenance !== undefined) {
+    if (provenance.source.sourceId !== `src_${provenance.source.sha256}`)
+      diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_SOURCE_ID", "networkImportProvenance.source.sourceId", "Provenance sourceId must be derived from its exact SHA-256."));
+    const factIds = new Set<string>();
+    provenance.facts.forEach((fact, index) => {
+      const path = `networkImportProvenance.facts[${index}]`;
+      if (factIds.has(fact.factId)) diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT", `${path}.factId`, "Provenance fact IDs must be unique."));
+      factIds.add(fact.factId);
+      const target = fact.targetId;
+      const valid = fact.targetKind === "scenario" ? target === undefined :
+        fact.targetKind === "resource" ? target !== undefined && resources.has(target) :
+        fact.targetKind === "connection" ? target !== undefined && connections.has(target) :
+        target !== undefined && zones.has(target);
+      if (!valid) diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_TARGET", `${path}.targetId`, "Provenance target does not exist with the declared targetKind."));
+    });
+  }
 
   const zoneParent = new Map<string, string>();
   source.zones.forEach((zone, i) => {

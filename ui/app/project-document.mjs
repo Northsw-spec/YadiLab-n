@@ -58,6 +58,22 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
   }
   const zoneIds = new Set(source.zones.map(x => x.id));
   const resourceIds = new Set(source.resources.map(x => x.id));
+  const connectionIds = new Set(source.connections.map(x => x.id));
+  const provenance = source.networkImportProvenance;
+  if (provenance !== undefined) {
+    if (provenance.source.sourceId !== "src_" + provenance.source.sha256)
+      blocked("NETWORK_IMPORT_PROVENANCE_SOURCE_ID");
+    const factIds = new Set();
+    for (const fact of provenance.facts) {
+      if (factIds.has(fact.factId)) blocked("NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT");
+      factIds.add(fact.factId);
+      const target = fact.targetId;
+      const valid = fact.targetKind === "scenario" ? target === undefined :
+        fact.targetKind === "resource" ? resourceIds.has(target) :
+        fact.targetKind === "connection" ? connectionIds.has(target) : zoneIds.has(target);
+      if (!valid) blocked("NETWORK_IMPORT_PROVENANCE_TARGET");
+    }
+  }
   const zoneParent = new Map();
   for (const zone of source.zones) {
     if (zone.parent !== undefined) {

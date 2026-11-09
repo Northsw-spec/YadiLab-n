@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import sourceSchema from "../../schema/scenario-source.schema.json" with { type: "json" };
 import normalizedSchema from "../../schema/scenario-normalized.schema.json" with { type: "json" };
@@ -18,8 +19,16 @@ assert.equal(result.devices, 4);
 assert.equal(result.links, 3);
 assert.ok(result.source);
 assert.equal(Boolean(validateSource(result.source)), true, JSON.stringify(validateSource.errors));
+const expectedSha = crypto.createHash("sha256").update(fs.readFileSync("examples/enterprise-import/network-devices-example.csv")).digest("hex");
+assert.equal(result.source.networkImportProvenance.source.sha256, expectedSha);
+assert.equal(result.source.networkImportProvenance.source.sourceId, `src_${expectedSha}`);
+assert.equal(result.source.networkImportProvenance.source.mediaType, "text/csv");
+assert.ok(result.source.networkImportProvenance.facts.some((fact) => fact.targetKind === "resource" && fact.targetId === "router01" && fact.locator.kind === "record-row"));
+assert.ok(result.source.networkImportProvenance.facts.some((fact) => fact.targetKind === "connection" && fact.locator.kind === "record-row"));
 const compiled = await compileBuilderWorkspace(createBuilderWorkspace(result.source), compilerOptions);
 assert.equal(compiled.compile.status, "valid", JSON.stringify(compiled.compile.diagnostics));
+assert.deepEqual(compiled.compile.model.networkImportProvenance, result.source.networkImportProvenance,
+  "Compiler retains import history but does not interpret it as Engine evidence");
 const excel = await previewNetworkTopologyFile(namedFile("examples/enterprise-import/enterprise-import-template.xlsx"));
 assert.equal(excel.ok, true, JSON.stringify(excel.diagnostics));
 assert.ok(excel.devices > 0);
