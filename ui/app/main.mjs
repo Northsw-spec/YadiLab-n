@@ -5324,7 +5324,13 @@ function App() {
     setWorkspace(resume);
   };
   const title = workspace.mode === "builder" ? workspace.source.metadata.title : workspace.scenario.metadata.title;
-  const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
+  // The curriculum selector is a launch choice, not proof that the current
+  // workspace is that lab. Keep its selection available for the next launch,
+  // but never render lab instructions over the welcome, an imported topology,
+  // or another scenario.
+  const activeScenarioId = workspace.mode === "builder" ? workspace.source.scenarioId : workspace.scenario.scenarioId;
+  const selectedGuidedLab = builtinGuidedLabs.find((lab) =>
+    lab.id === guidedLabId && lab.scenarioId === activeScenarioId);
   const evidenceWorkspace = activeJourney ? buildEvidenceWorkspace(activeJourney) : null;
   const troubleshootingTimeline = evidenceWorkspace ? buildTroubleshootingTimeline(evidenceWorkspace) : null;
   const selectedLabContract = selectedGuidedLab ? createPedagogicalLabContract(selectedGuidedLab) : null;

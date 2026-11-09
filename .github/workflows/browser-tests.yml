@@ -64,6 +64,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_async_lab_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/async-lab-drafts"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_curriculum_context_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/curriculum-context"
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_package_export_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/package-draft-export"
