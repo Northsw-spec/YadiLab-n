@@ -1,4 +1,4 @@
-import type { ImportCell, ImportDiagnostic, ImportDocument, ImportRecord, ImportTable } from "./types.js";
+import type { ImportCell, ImportDiagnostic, ImportDocument, ImportRecord, ImportSourceBinding, ImportTable } from "./types.js";
 
 // Inventory-to-workbook bridge. It maps only fields explicitly present in the
 // source. Address proximity, gateways and hostnames NEVER imply a physical link.
@@ -79,8 +79,14 @@ function rejectUnrepresentableField(
     });
   }
 }
-function cellValue(value: string, source: ImportCell | undefined, table: string, row: number): ImportCell {
-  return { value, locator: source?.locator ?? { kind: "record-row", table, row } };
+function cellValue(value: string, source: ImportCell | undefined,
+  sourceBinding: ImportSourceBinding = source ? "ALIAS" : "SYSTEM_GENERATED"): ImportCell {
+  // A normalized value without a source cell must remain explicit internal
+  // system output. Do not mint an intermediate table/row that the reviewed
+  // original never contained merely to satisfy a locator-shaped type.
+  return source
+    ? { value, locator: source.locator, sourceBinding }
+    : { value, locator: { kind: "system-generated" }, sourceBinding: "SYSTEM_GENERATED" };
 }
 function roleType(value: string | undefined, table: string, row: number, diagnostics: ImportDiagnostic[]): string {
   if (!value) {
@@ -101,9 +107,13 @@ function roleType(value: string | undefined, table: string, row: number, diagnos
   diagnostics.push({ code: "NETWORK_IMPORT_ROLE_UNKNOWN", severity: "warning", message: "An unrecognized device role was not mapped; rendered as a generic resource. Original role text is not displayed.", table, row });
   return "resource.generic";
 }
-function canonicalRecord(index: number, table: string, values: Record<string, { value: string; source?: ImportCell | undefined }>): ImportRecord {
+function canonicalRecord(index: number, values: Record<string, {
+  value: string;
+  source?: ImportCell | undefined;
+  sourceBinding?: ImportSourceBinding;
+}>): ImportRecord {
   const fields: Record<string, ImportCell> = {};
-  for (const [field, item] of Object.entries(values)) fields[field] = cellValue(item.value, item.source, table, index);
+  for (const [field, item] of Object.entries(values)) fields[field] = cellValue(item.value, item.source, item.sourceBinding);
   return { recordIndex: index, fields };
 }
 const positiveInt = (text: string | undefined): boolean => text !== undefined && /^\d+$/.test(text) && Number(text) >= 0 && Number(text) <= 32;
@@ -211,12 +221,17 @@ export function normalizeNetworkInventoryDocument(
     const id = stringCell(fields.id), label = stringCell(fields.label), type = stringCell(fields.type);
     if (!id || !ID.test(id)) { diagnostics.push({ code: "NETWORK_IMPORT_DEVICE_ID_INVALID", severity: "error", message: `Device row ${row.recordIndex} needs a stable lowercase ID (a-z, 0-9, underscore or hyphen).`, table: inventory.tableId, row: row.recordIndex }); continue; }
     const mappedType = roleType(type, inventory.tableId, row.recordIndex, diagnostics);
-    const nodeValues: Record<string, { value: string; source?: ImportCell | undefined }> = {
-      nodeId: { value: id, source: fields.id }, displayName: { value: label ?? id, source: fields.label ?? fields.id }, type: { value: mappedType, source: fields.type ?? fields.id },
+    const nodeValues: Record<string, { value: string; source?: ImportCell | undefined; sourceBinding?: ImportSourceBinding }> = {
+      nodeId: { value: id, source: fields.id },
+      // An ID is not an asserted display name. Keep the fallback in the model
+      // but do not state that the source declared a label when it did not.
+      displayName: { value: label ?? id, source: fields.label },
+      type: { value: mappedType, source: fields.type,
+        sourceBinding: type && mappedType === type ? "ALIAS" : fields.type ? "TRANSFORMED" : "SYSTEM_GENERATED" },
     };
     const declaredGateway = stringCell(fields.gateway);
     if (declaredGateway) nodeValues.gateway = { value: declaredGateway, source: fields.gateway };
-    nodes.push(canonicalRecord(row.recordIndex, "Nodes", nodeValues));
+    nodes.push(canonicalRecord(row.recordIndex, nodeValues));
     const cidr = stringCell(fields.cidr), ip = stringCell(fields.ip), prefix = stringCell(fields.prefix);
     // Independent source fields cannot establish competing IPv4/prefix truth.
     // Previously CIDR silently overwrote a different IP Address or prefix.
@@ -289,18 +304,20 @@ export function normalizeNetworkInventoryDocument(
         // primary interface without inventing an unsupported physical port.
         const portId = interfaceId ?? (interfaceName && ID.test(interfaceName) ? interfaceName : "primary");
         const portName = interfaceName ?? interfaceId ?? "primary";
-        const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
+        const values: Record<string, { value: string; source?: ImportCell | undefined; sourceBinding?: ImportSourceBinding }> = {
           nodeId: { value: id, source: fields.id },
-          interfaceId: { value: portId, source: fields.interfaceId ?? fields.interfaceName ?? fields.id },
-          name: { value: portName, source: fields.interfaceName ?? fields.interfaceId ?? fields.id },
+          interfaceId: { value: portId, source: fields.interfaceId ?? fields.interfaceName },
+          name: { value: portName, source: fields.interfaceName ?? fields.interfaceId },
         };
-        if (address) values.IPv4 = { value: address, source: fields.ip ?? fields.cidr };
-        if (subnetPrefix !== undefined) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr ?? fields.ip };
+        if (address) values.IPv4 = { value: address, source: fields.ip ?? fields.cidr,
+          sourceBinding: cidrParts || inline ? "TRANSFORMED" : "ALIAS" };
+        if (subnetPrefix !== undefined) values.prefix = { value: subnetPrefix, source: fields.prefix ?? fields.cidr ?? fields.ip,
+          sourceBinding: fields.prefix ? "ALIAS" : "TRANSFORMED" };
         if (ipv6) values.IPv6 = { value: ipv6, source: fields.ipv6 };
         if (ipv6Prefix !== undefined) values.IPv6Prefix = { value: ipv6Prefix, source: fields.ipv6Prefix };
         if (mac) values.MAC = { value: mac, source: fields.mac };
         if (mtu !== undefined) values.MTU = { value: mtu, source: fields.mtu };
-        interfaces.push(canonicalRecord(row.recordIndex, "Interfaces", values));
+        interfaces.push(canonicalRecord(row.recordIndex, values));
       }
     }
     const gateway = stringCell(fields.gateway);
@@ -326,14 +343,14 @@ export function normalizeNetworkInventoryDocument(
     } else {
       const values: Record<string, { value: string; source?: ImportCell | undefined }> = {
         linkId: { value: linkId ?? `link_row_${row.recordIndex}`,
-          source: fields.linkId ?? fields.target },
+          source: fields.linkId },
         nodeA: { value: id, source: fields.id },
         nodeB: { value: target, source: fields.target },
       };
       if (fromPort) values.interfaceA = { value: fromPort, source: fields.fromPort };
       if (toPort) values.interfaceB = { value: toPort, source: fields.toPort };
       if (linkKind) values.kind = { value: linkKind, source: fields.linkKind };
-      inlineLinks.push(canonicalRecord(row.recordIndex, "Links", values));
+      inlineLinks.push(canonicalRecord(row.recordIndex, values));
       pendingInlinePorts.push({ from: id, to: target, row: row.recordIndex,
         ...(fromPort ? { fromPort } : {}), ...(toPort ? { toPort } : {}) });
     }
@@ -427,11 +444,11 @@ export function normalizeNetworkInventoryDocument(
     if (stringCell(portA)) values.interfaceA = { value: stringCell(portA)!, source: portA };
     if (stringCell(portB)) values.interfaceB = { value: stringCell(portB)!, source: portB };
     if (stringCell(kind)) values.kind = { value: stringCell(kind)!, source: kind };
-    return canonicalRecord(row.recordIndex, "Links", values);
+    return canonicalRecord(row.recordIndex, values);
   }) : inlineLinks;
   if (new Set(nodes.map((r) => stringCell(r.fields.nodeId))).size !== nodes.length)
     diagnostics.push({ code: "NETWORK_IMPORT_DUPLICATE_DEVICE_ID", severity: "error", message: "Duplicate device IDs. Each device must have a unique stable ID." });
-  const metadata: ImportTable = { tableId: "Metadata", records: [canonicalRecord(1, "Metadata", { scenarioId: { value: "imported_network" }, title: { value: "Imported Network Topology" } })] };
+  const metadata: ImportTable = { tableId: "Metadata", records: [canonicalRecord(1, { scenarioId: { value: "imported_network" }, title: { value: "Imported Network Topology" } })] };
   const output: ImportTable[] = [metadata, { tableId: "Nodes", records: nodes }, { tableId: "Interfaces", records: interfaces }, { tableId: "Links", records: links }];
   if (!links.length) diagnostics.push({ code: "NETWORK_IMPORT_NO_EXPLICIT_LINKS", severity: "warning", message: "No explicit network links were supplied; the topology will show devices without connecting them." });
   if (nodes.length === 0) diagnostics.push({ code: "NETWORK_IMPORT_NO_DEVICES", severity: "error", message: "No valid device rows were found." });

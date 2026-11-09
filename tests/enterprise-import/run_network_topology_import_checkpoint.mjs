@@ -13,6 +13,19 @@ assert.equal(a.result.source.resources.find((x) => x.id === "sw01").type, "netwo
 assert.equal(a.result.source.resources.find((x) => x.id === "rt01").type, "network.router");
 assert.deepEqual(a.result.source.resources.find((x) => x.id === "pc01").interfaces[0].addresses, ["10.10.0.20"]);
 assert.deepEqual(a.result.source.connections.map((x) => [x.from.resource, x.to.resource]), [["sw01", "rt01"], ["pc01", "sw01"]]);
+// PROJECT-076D: the intermediate canonical document must make generated
+// defaults explicit instead of fabricating table/row locators for them.
+const generatedMetadata = a.prepared.document.tables.find((table) => table.tableId === "Metadata")?.records[0]?.fields;
+assert.equal(generatedMetadata?.scenarioId.locator.kind, "system-generated");
+assert.equal(generatedMetadata?.scenarioId.sourceBinding, "SYSTEM_GENERATED");
+const generatedInterface = a.prepared.document.tables.find((table) => table.tableId === "Interfaces")?.records[0]?.fields;
+assert.equal(generatedInterface?.interfaceId.locator.kind, "system-generated");
+assert.equal(generatedInterface?.name.sourceBinding, "SYSTEM_GENERATED");
+const generatedLink = a.prepared.document.tables.find((table) => table.tableId === "Links")?.records[0]?.fields;
+assert.equal(generatedLink?.linkId.locator.kind, "system-generated");
+assert.equal(generatedLink?.nodeB.sourceBinding, "ALIAS");
+const transformedRole = a.prepared.document.tables.find((table) => table.tableId === "Nodes")?.records[0]?.fields.type;
+assert.equal(transformedRole?.sourceBinding, "TRANSFORMED");
 const noConnections = map(await csv(`Asset ID,Hostname,Device Type,IP Address,Default Gateway\nsw01,Switch,Switch,10.0.0.2,10.0.0.1\nrt01,Router,Router,10.0.0.1,\n`));
 assert.equal(noConnections.result.ok, true, JSON.stringify(noConnections.diagnostics));
 assert.equal(noConnections.result.source.connections.length, 0, "Never infer links from addresses or gateways");

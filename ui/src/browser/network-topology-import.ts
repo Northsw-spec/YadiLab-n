@@ -1,6 +1,6 @@
 import type { ScenarioSource } from "../../../core-model/src/generated/contracts.js";
 import { mapNetworkWorkbookToScenario, normalizeNetworkInventoryDocument, selectEnterpriseImportAdapter } from "../../../enterprise-import/src/index.js";
-import type { ImportDiagnostic } from "../../../enterprise-import/src/types.js";
+import type { ImportDiagnostic, ImportDocument } from "../../../enterprise-import/src/types.js";
 import type { NetworkLinkSourceDecision, NetworkLinkSourceConflict } from "../../../enterprise-import/src/network-inventory.js";
 import { webCryptoImportHashProvider } from "../../../enterprise-import/src/hash.js";
 import { readEnterpriseImportFile, type BinaryReadableFile } from "./import-helper.js";
@@ -24,6 +24,48 @@ const MAX_QUICK_SOURCE_BYTES = 16 * 1024 * 1024;
 const ORIGINAL_SHA256 = /^[a-f0-9]{64}$/;
 function fail(code: "IC020_P1_SOURCE_CHANGED" | "IC020_P1_STALE"): never {
   throw Object.assign(new Error(code), { code });
+}
+
+// This is historical import metadata, not modeled evidence.  It binds each
+// projected fact to a locator in the reviewed original without embedding its
+// bytes or giving Engine any new topology/routing semantics.
+function bindNetworkImportProvenance(source: ScenarioSource, document: ImportDocument,
+  sourceSha256: string, sourceByteSize: number, mediaType: string): ScenarioSource {
+  let sequence = 0;
+  const resourceIds = new Set(source.resources.map((resource) => resource.id));
+  const zoneIds = new Set(source.zones.map((zone) => zone.id));
+  const connectionIds = new Set(source.connections.map((connection) => connection.id));
+  const facts: NonNullable<ScenarioSource["networkImportProvenance"]>["facts"][number][] = [];
+  for (const table of document.tables) for (const record of table.records) {
+    const candidateId = typeof record.fields.nodeId?.value === "string" ? record.fields.nodeId.value :
+      typeof record.fields.linkId?.value === "string" ? record.fields.linkId.value :
+      typeof record.fields.zoneId?.value === "string" ? record.fields.zoneId.value : undefined;
+    const targetKind = table.tableId === "Metadata" ? "scenario" :
+      candidateId && connectionIds.has(candidateId) ? "connection" :
+      candidateId && zoneIds.has(candidateId) ? "zone" : "resource";
+    const targetId = targetKind === "scenario" ? undefined : candidateId;
+    // A malformed normalizer output must not create dangling provenance; its
+    // normal validation will reject the import, and no partial source escapes.
+    if (targetKind !== "scenario" && (!targetId ||
+        (targetKind === "resource" && !resourceIds.has(targetId)))) continue;
+    for (const [field, cell] of Object.entries(record.fields)) {
+      if (cell.value === undefined || cell.value === null || cell.value === "") continue;
+      // Normalization may create defaults (Metadata, fallback labels, generic
+      // interfaces and link IDs). They are model data, not statements about
+      // the reviewed original, and therefore cannot become source facts.
+      if (cell.sourceBinding === "SYSTEM_GENERATED" || cell.locator.kind === "system-generated") continue;
+      const locator = cell.locator;
+      sequence += 1;
+      facts.push({ factId: `nip_${sequence}`, targetKind, ...(targetId ? { targetId } : {}),
+        field: `${table.tableId}.${field}`, mapping: cell.sourceBinding ?? "EXACT",
+        locator });
+    }
+  }
+  return { ...source, networkImportProvenance: {
+    version: "network-import-provenance/v1",
+    source: { sourceId: `src_${sourceSha256}`, sha256: sourceSha256,
+      byteSize: sourceByteSize, mediaType }, facts,
+  } };
 }
 
 export async function previewNetworkTopologyFile(
@@ -51,13 +93,17 @@ export async function previewNetworkTopologyFile(
   const mapped = mapNetworkWorkbookToScenario(normalized.document);
   const diagnostics = [...parsed.diagnostics, ...normalized.diagnostics, ...mapped.diagnostics];
   const ok = mapped.ok && !diagnostics.some((x) => x.severity === "error") && Boolean(mapped.source);
-  return { ok, ...(ok && mapped.source ? { source: mapped.source } : {}), filename: file.name,
+  const source = ok && mapped.source
+    ? bindNetworkImportProvenance(mapped.source, normalized.document, sourceSha256,
+      input.bytes.byteLength, input.mediaType)
+    : undefined;
+  return { ok, ...(source ? { source } : {}), filename: file.name,
     sourceSha256, sourceByteSize: input.bytes.byteLength,
     unmappedColumnCount: normalized.unmappedColumnCount,
     ...(normalized.linkSourceConflict ? { linkSourceConflict: normalized.linkSourceConflict } : {}),
     ...(normalized.linkSourceChoice ? { linkSourceChoice: normalized.linkSourceChoice } : {}),
-    sheets: parsed.document.tables.map((x) => x.tableId), devices: mapped.source?.resources.length ?? normalized.document.tables.find((t) => t.tableId === "Nodes")?.records.length ?? 0,
-    links: mapped.source?.connections.length ?? normalized.document.tables.find((t) => t.tableId === "Links")?.records.length ?? 0,
+    sheets: parsed.document.tables.map((x) => x.tableId), devices: source?.resources.length ?? normalized.document.tables.find((t) => t.tableId === "Nodes")?.records.length ?? 0,
+    links: source?.connections.length ?? normalized.document.tables.find((t) => t.tableId === "Links")?.records.length ?? 0,
     diagnostics };
 }
 

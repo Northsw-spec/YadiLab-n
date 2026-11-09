@@ -64,6 +64,25 @@ const second = await compileScenario(source, context);
 ok(second.ok, "second compile succeeds");
 if (second.ok) eq(second.model.sourceHash, first.model.sourceHash, "source hash deterministic");
 
+// PROJECT-076C: Builder-deleted imported targets are historical evidence, not
+// dangling live references. Normalization retains that status, while a marker
+// applied to a live target fails closed.
+const historicalProvenanceSource = structuredClone(source);
+const historicalSha = "a".repeat(64);
+historicalProvenanceSource.networkImportProvenance = { version: "network-import-provenance/v1",
+  source: { sourceId: `src_${historicalSha}`, sha256: historicalSha, byteSize: 1, mediaType: "text/csv" },
+  facts: [{ factId: "nip_deleted", targetKind: "resource", targetId: "retired_asset", targetStatus: "HISTORICAL",
+    field: "Devices.Asset ID", mapping: "EXACT", locator: { kind: "record-row", table: "Devices", row: 2 } }] };
+const historicalProvenanceResult = await compileScenario(historicalProvenanceSource, context);
+ok(historicalProvenanceResult.ok, "historical deleted provenance target compiles");
+if (historicalProvenanceResult.ok) eq(historicalProvenanceResult.model.networkImportProvenance?.facts[0]?.targetStatus,
+  "HISTORICAL", "normalization retains historical provenance status");
+const forgedHistoricalProvenance = structuredClone(historicalProvenanceSource);
+forgedHistoricalProvenance.networkImportProvenance.facts[0].targetId = source.resources[0].id;
+const forgedHistoricalResult = await compileScenario(forgedHistoricalProvenance, context);
+ok(!forgedHistoricalResult.ok && forgedHistoricalResult.diagnostics.some((item) => item.code === "NETWORK_IMPORT_PROVENANCE_TARGET"),
+  "historical status cannot relabel a live provenance target");
+
 
 // Compiler must honor the injected authoritative schema validator gates.
 {

@@ -52,6 +52,38 @@ assert.equal("engineState" in restored, false);
 assert.equal("selection" in restored, false);
 assert.equal("dirty" in restored, false);
 assert.equal(JSON.stringify(JSON.parse(await createProjectDocument(workspace, opts))), JSON.stringify(doc));
+// PROJECT-076B: imported provenance is optional historical metadata, but its
+// internal identity and target references must remain fail-closed on Save/Open.
+const provenanceSource = structuredClone(source);
+const provenanceSha = "a".repeat(64);
+provenanceSource.networkImportProvenance = { version: "network-import-provenance/v1",
+  source: { sourceId: `src_${provenanceSha}`, sha256: provenanceSha, byteSize: 1, mediaType: "text/csv" },
+  facts: [{ factId: "nip_1", targetKind: "resource", targetId: provenanceSource.resources[0].id,
+    field: "Devices.Asset ID", mapping: "EXACT", locator: { kind: "record-row", table: "Devices", row: 2 } }] };
+const provenanceText = await createProjectDocument({ ...workspace, source: provenanceSource }, opts);
+assert.deepEqual((await readProjectDocument(provenanceText, opts)).source.networkImportProvenance,
+  provenanceSource.networkImportProvenance, "valid provenance survives exact native project roundtrip");
+for (const [mutate, code] of [
+  [candidate => { candidate.networkImportProvenance.source.sourceId = "src_" + "b".repeat(64); }, "NETWORK_IMPORT_PROVENANCE_SOURCE_ID"],
+  [candidate => { candidate.networkImportProvenance.facts[0].targetId = "ghost"; }, "NETWORK_IMPORT_PROVENANCE_TARGET"],
+  [candidate => { candidate.networkImportProvenance.facts.push(structuredClone(candidate.networkImportProvenance.facts[0])); }, "NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT"],
+]) {
+  const candidate = structuredClone(provenanceSource); mutate(candidate);
+  await assert.rejects(createProjectDocument({ ...workspace, source: candidate }, opts), new RegExp(code));
+}
+// PROJECT-076C: a deleted topology target is retained as explicit historical
+// import evidence and must round-trip, while a forged historical marker cannot
+// hide a still-live binding (or silently re-bind after identity reuse).
+const historicalProvenanceSource = structuredClone(provenanceSource);
+historicalProvenanceSource.networkImportProvenance.facts[0].targetId = "retired_asset";
+historicalProvenanceSource.networkImportProvenance.facts[0].targetStatus = "HISTORICAL";
+const historicalText = await createProjectDocument({ ...workspace, source: historicalProvenanceSource }, opts);
+assert.deepEqual((await readProjectDocument(historicalText, opts)).source.networkImportProvenance,
+  historicalProvenanceSource.networkImportProvenance, "historical deleted-target provenance survives native Save/Open");
+const forgedHistorical = structuredClone(provenanceSource);
+forgedHistorical.networkImportProvenance.facts[0].targetStatus = "HISTORICAL";
+await assert.rejects(createProjectDocument({ ...workspace, source: forgedHistorical }, opts),
+  /NETWORK_IMPORT_PROVENANCE_TARGET/, "historical status must not relabel a live provenance target");
 // PROJECT-026: a truly blank New project is a legitimate editable draft, not
 // a compiled/runnable scenario. It must Save/Open without inventing resources,
 // links, test results or objectives. The executable source contract is unchanged.

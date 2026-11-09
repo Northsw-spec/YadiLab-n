@@ -57,6 +57,25 @@ function failure(workspace: BuilderWorkspace, ...diagnostics: readonly BrowserDi
   return { ok: false, workspace, diagnostics };
 }
 
+function preserveDeletedNetworkImportProvenance(
+  source: ScenarioSource,
+  deletedResources: ReadonlySet<string>,
+  deletedZones: ReadonlySet<string>,
+  deletedConnections: ReadonlySet<string>,
+): ScenarioSource {
+  const provenance = source.networkImportProvenance;
+  if (provenance === undefined) return source;
+  const facts = provenance.facts.map((fact) => {
+    const deleted = fact.targetKind === "resource" ? fact.targetId !== undefined && deletedResources.has(fact.targetId) :
+      fact.targetKind === "zone" ? fact.targetId !== undefined && deletedZones.has(fact.targetId) :
+      fact.targetKind === "connection" ? fact.targetId !== undefined && deletedConnections.has(fact.targetId) : false;
+    // Preserve imported evidence after a Builder deletion without allowing it
+    // to silently re-bind if a later edit reuses the same identity.
+    return deleted ? { ...fact, targetStatus: "HISTORICAL" as const } : fact;
+  });
+  return { ...source, networkImportProvenance: { ...provenance, facts } };
+}
+
 export function createBuilderWorkspace(source: ScenarioSource): BuilderWorkspace {
   return {
     mode: "builder",
@@ -250,11 +269,11 @@ export function deleteResource(workspace: BuilderWorkspace, resourceId: string, 
   const removedConnections = new Set(cascadeConnections ? references.map((x) => x.id) : []);
   const dependency = deletionSourceDependency(workspace.source, new Set([resourceId]), new Set(), removedConnections);
   if (dependency) return failure(workspace, dependency);
-  const source: ScenarioSource = {
+  const source: ScenarioSource = preserveDeletedNetworkImportProvenance({
     ...workspace.source,
     resources: workspace.source.resources.filter((x) => x.id !== resourceId),
     connections: cascadeConnections ? workspace.source.connections.filter((x) => x.from.resource !== resourceId && x.to.resource !== resourceId) : workspace.source.connections,
-  };
+  }, new Set([resourceId]), new Set(), removedConnections);
   const layoutOverrides = workspace.layoutOverrides.filter((x) => x.id !== resourceId);
   const next = invalidate({ ...workspace, layoutOverrides }, source);
   return success(setBuilderSelection(next, next.selection.ids.filter((id) => id !== resourceId)));
@@ -279,7 +298,10 @@ export function deleteConnection(workspace: BuilderWorkspace, connectionId: stri
   // topology deletion must not strand annotations or origin references.
   const dependency = deletionSourceDependency(workspace.source, new Set(), new Set(), new Set([connectionId]));
   if (dependency) return failure(workspace, dependency);
-  const next = invalidate(workspace, { ...workspace.source, connections: workspace.source.connections.filter((x) => x.id !== connectionId) });
+  const source = preserveDeletedNetworkImportProvenance(
+    { ...workspace.source, connections: workspace.source.connections.filter((x) => x.id !== connectionId) },
+    new Set(), new Set(), new Set([connectionId]));
+  const next = invalidate(workspace, source);
   return success(setBuilderSelection(next, next.selection.ids.filter((id) => id !== connectionId)));
 }
 
@@ -536,12 +558,12 @@ export function deleteZone(workspace: BuilderWorkspace, zoneId: string, cascade 
     .map((x) => x.id));
   const dependency = deletionSourceDependency(workspace.source, resourcesToDelete, zonesToDelete, removedConnections);
   if (dependency) return failure(workspace, dependency);
-  const source: ScenarioSource = {
+  const source: ScenarioSource = preserveDeletedNetworkImportProvenance({
     ...workspace.source,
     zones: workspace.source.zones.filter((x) => !zonesToDelete.has(x.id)),
     resources: workspace.source.resources.filter((x) => !resourcesToDelete.has(x.id)),
     connections: workspace.source.connections.filter((x) => !removedConnections.has(x.id)),
-  };
+  }, resourcesToDelete, zonesToDelete, removedConnections);
   const removed = new Set([...zonesToDelete, ...resourcesToDelete, ...removedConnections]);
   const layoutOverrides = workspace.layoutOverrides.filter((x) => !removed.has(x.id));
   const layout = workspace.layout ? {

@@ -1,6 +1,10 @@
 import type { EnterpriseBaseline, EnterpriseImportReport, EnterpriseMappingProfile, EnterpriseMappingReview, EnterpriseReimportDiff, EnterpriseReimportMergePlan } from "../../core-model/src/generated/contracts.js";
 
 export type MappingClass = "EXACT" | "ALIAS" | "USER_MAPPED";
+// Network-inventory normalization keeps this internal distinction until the
+// browser binds source provenance. SYSTEM_GENERATED is never serialized as a
+// source locator or a networkImportProvenance fact.
+export type ImportSourceBinding = "EXACT" | "ALIAS" | "TRANSFORMED" | "SYSTEM_GENERATED";
 
 export interface ImportDiagnostic {
   readonly code: string;
@@ -15,11 +19,13 @@ export interface ImportDiagnostic {
 export type ImportLocator =
   | { readonly kind: "table-cell"; readonly sheet: string; readonly row: number; readonly column: string }
   | { readonly kind: "record-row"; readonly table?: string; readonly row: number }
-  | { readonly kind: "json-pointer"; readonly pointer: string };
+  | { readonly kind: "json-pointer"; readonly pointer: string }
+  | { readonly kind: "system-generated" };
 
 export interface ImportCell {
   readonly value: unknown;
   readonly locator: ImportLocator;
+  readonly sourceBinding?: ImportSourceBinding;
 }
 
 export interface ImportRecord {
