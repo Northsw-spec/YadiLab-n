@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { csvImportAdapter, jsonImportAdapter, createXlsxImportAdapter, createOdsImportAdapter, openSafeWorkbookArchive, runEnterpriseImport } from "../../dist-enterprise-import-test/enterprise-import/src/index.js";
 import { nodeZipArchiveBackend } from "./node_zip_backend.mjs";
+import { ZipJsArchiveBackend } from "../../dist-enterprise-import-test/package-io/src/zipjs-backend.js";
+import { ArchiveReadLimitError } from "../../dist-enterprise-import-test/package-io/src/types.js";
 const here=path.dirname(fileURLToPath(import.meta.url)); const root=path.resolve(here,"../..");
 const profile=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/valid/enterprise-mapping-profile.json"),"utf8"));
 const enc=(s)=>new TextEncoder().encode(s); const workbookBytes=(name)=>new Uint8Array(fs.readFileSync(path.join(root,"tests/fixtures/workbooks",name))); const workbookProfile=structuredClone(profile); workbookProfile.tables[0].sourceTable="Devices"; const xlsx=createXlsxImportAdapter(nodeZipArchiveBackend); const ods=createOdsImportAdapter(nodeZipArchiveBackend); let pass=0;
@@ -43,5 +45,50 @@ await blocked("ODS XML DTD/entity declarations are blocked",{baselineId:"x",sour
 await blocked("ODS non-empty repeated columns beyond sheet limit are blocked",{baselineId:"x",source:{bytes:workbookBytes("ods-huge-repeat.ods"),mediaType:"application/vnd.oasis.opendocument.spreadsheet"},mappingProfile:workbookProfile,adapter:ods},"IMPORT_ODS_COLUMN_LIMIT");
 await blocked("invalid workbook headerRow option is blocked",{baselineId:"x",source:{bytes:workbookBytes("devices.xlsx"),mediaType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},mappingProfile:workbookProfile,adapter:xlsx,options:{headerRow:0}},"IMPORT_WORKBOOK_HEADER_ROW_INVALID");
 await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",directory:false,compressedSize:1,uncompressedSize:1000,read:async()=>new Uint8Array(1000)}],close:async()=>{}})}; await assert.rejects(()=>openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:10000,maxDecompressedBytes:10000,maxSingleFileBytes:2000,maxCompressionRatio:100}),e=>e?.code==="IMPORT_ARCHIVE_COMPRESSION_RATIO"); pass++; console.log("PASS workbook archive compression-ratio bomb is blocked"); })();
+await (async()=>{ const backend={open:async()=>({entries:[
+  {path:"first.xml",directory:false,read:async()=>new Uint8Array(20)},
+  {path:"second.xml",directory:false,read:async()=>new Uint8Array(20)},
+],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:10000,maxDecompressedBytes:32,maxSingleFileBytes:32,maxCompressionRatio:100});
+  try { await archive.read("first.xml"); await assert.rejects(()=>archive.read("second.xml"),e=>e?.code==="IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE"); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS actual decompressed bytes without ZIP size metadata are bounded");
+})();
+await (async()=>{ const backend={open:async()=>({entries:[{path:"data.xml",directory:false,read:async()=>enc("original")}],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:1,maxCompressedBytes:100,maxDecompressedBytes:100,maxSingleFileBytes:100,maxCompressionRatio:10});
+  try { const first=await archive.read("data.xml"); first[0]=0; assert.equal(new TextDecoder().decode(await archive.read("data.xml")),"original"); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS cached archive members cannot be mutated by callers");
+})();
+await (async()=>{ const backend=new ZipJsArchiveBackend(); const zipped=await backend.write([{path:"safe.xml",bytes:enc("safe")}]);
+  const archive=await openSafeWorkbookArchive(new Uint8Array(await zipped.arrayBuffer()),backend,{maxFiles:1,maxCompressedBytes:1000,maxDecompressedBytes:16,maxSingleFileBytes:16,maxCompressionRatio:100});
+  try { assert.equal(new TextDecoder().decode(await archive.read("safe.xml")),"safe"); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS production ZipJS backend reads a bounded valid archive");
+})();
+await (async()=>{ const backend=new ZipJsArchiveBackend(); const zipped=await backend.write([{path:"limited.xml",bytes:new Uint8Array(64).fill(65)}]);
+  const session=await backend.open(zipped);
+  try { await assert.rejects(()=>session.entries[0].read(16),ArchiveReadLimitError); }
+  finally { await session.close(); }
+  pass++; console.log("PASS production ZipJS stops output at the requested decompression limit");
+})();
+await (async()=>{ let reads=0; const backend={open:async()=>({entries:[{path:"a.xml",directory:false,read:async()=>{reads++; return enc("safe");}}],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:1,maxCompressedBytes:100,maxDecompressedBytes:100,maxSingleFileBytes:100,maxCompressionRatio:10});
+  try { const [first,second]=await Promise.all([archive.read("a.xml"),archive.read("a.xml")]); assert.equal(reads,1); assert.notStrictEqual(first,second); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS concurrent reads of one member share decompression but not mutable output");
+})();
+await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",directory:false,read:async()=>enc("safe")}],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:1,maxCompressedBytes:100,maxDecompressedBytes:100,maxSingleFileBytes:100,maxCompressionRatio:10});
+  await Promise.all([archive.close(),archive.close()]); await assert.rejects(()=>archive.read("a.xml"),e=>e?.code==="IMPORT_ARCHIVE_CLOSED");
+  pass++; console.log("PASS close is idempotent and prevents later reads");
+})();
+await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",directory:false,read:async()=>new Uint8Array(20)},{path:"b.xml",directory:false,read:async()=>new Uint8Array(20)}],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:100,maxDecompressedBytes:32,maxSingleFileBytes:32,maxCompressionRatio:10});
+  try { const outcomes=await Promise.allSettled([archive.read("a.xml"),archive.read("b.xml")]); assert.equal(outcomes.filter(x=>x.status==="fulfilled").length,1); assert.equal(outcomes.filter(x=>x.status==="rejected"&&x.reason?.code==="IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE").length,1); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS concurrent members cannot overrun the shared decompression budget");
+})();
+await (async()=>{ const backend={open:async()=>({entries:[],close:async()=>{}})}; await assert.rejects(()=>openSafeWorkbookArchive(enc("x"),backend,{maxFiles:NaN,maxCompressedBytes:100,maxDecompressedBytes:100,maxSingleFileBytes:100,maxCompressionRatio:10}),e=>e?.code==="IMPORT_ARCHIVE_LIMIT_INVALID"); pass++; console.log("PASS invalid archive limits fail closed"); })();
 
-console.log(`PASS enterprise import adversarial: ${pass}/28 assertions`);
+console.log(`PASS enterprise import adversarial: ${pass}/36 assertions`);
