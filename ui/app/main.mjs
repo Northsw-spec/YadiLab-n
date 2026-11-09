@@ -3522,6 +3522,18 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
     runRuntimeCommand(restoreRuntimeCheckpoint(workspace, checkpoint.id));
   };
 
+  const resetScenario = () => {
+    if (workspace.mode !== "runtime") return;
+    // Reset is a new troubleshooting run, not merely an Engine history step.
+    // Clear learner-owned proof and rendered journey state so a restored fault
+    // cannot still look verified from the previous run.
+    setWorkspace(resetRuntime(workspace));
+    setNotebook(null);
+    setDiagnostics([]);
+    onVisualJourney?.(null);
+    onTopologyState?.(null);
+  };
+
   return e("aside", { className: "side-panel" },
     e("h2", null, workspace.mode === "builder" ? "Byggläge" : "Körläge"),
     e("div", { className: "status-grid" },
@@ -3564,7 +3576,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
       e("div", { className: "runtime-history-actions" },
         e("button", { type: "button", disabled: workspace.history.past.length === 0, onClick: () => runRuntimeCommand(undoRuntime(workspace)) }, "Ångra"),
         e("button", { type: "button", disabled: workspace.history.future.length === 0, onClick: () => runRuntimeCommand(redoRuntime(workspace)) }, "Gör om"),
-        e("button", { type: "button", onClick: () => setWorkspace(resetRuntime(workspace)) }, "Återställ scenario"),
+        e("button", { type: "button", onClick: resetScenario }, "Återställ scenario"),
         e("button", { type: "button", onClick: createCheckpoint }, "Skapa checkpoint"),
         e("button", { type: "button", disabled: workspace.history.checkpoints.length === 0, onClick: restoreLastCheckpoint }, "Återställ senaste checkpoint"),
       ),
