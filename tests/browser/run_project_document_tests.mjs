@@ -71,6 +71,19 @@ for (const [mutate, code] of [
   const candidate = structuredClone(provenanceSource); mutate(candidate);
   await assert.rejects(createProjectDocument({ ...workspace, source: candidate }, opts), new RegExp(code));
 }
+// PROJECT-076C: a deleted topology target is retained as explicit historical
+// import evidence and must round-trip, while a forged historical marker cannot
+// hide a still-live binding (or silently re-bind after identity reuse).
+const historicalProvenanceSource = structuredClone(provenanceSource);
+historicalProvenanceSource.networkImportProvenance.facts[0].targetId = "retired_asset";
+historicalProvenanceSource.networkImportProvenance.facts[0].targetStatus = "HISTORICAL";
+const historicalText = await createProjectDocument({ ...workspace, source: historicalProvenanceSource }, opts);
+assert.deepEqual((await readProjectDocument(historicalText, opts)).source.networkImportProvenance,
+  historicalProvenanceSource.networkImportProvenance, "historical deleted-target provenance survives native Save/Open");
+const forgedHistorical = structuredClone(provenanceSource);
+forgedHistorical.networkImportProvenance.facts[0].targetStatus = "HISTORICAL";
+await assert.rejects(createProjectDocument({ ...workspace, source: forgedHistorical }, opts),
+  /NETWORK_IMPORT_PROVENANCE_TARGET/, "historical status must not relabel a live provenance target");
 // PROJECT-026: a truly blank New project is a legitimate editable draft, not
 // a compiled/runnable scenario. It must Save/Open without inventing resources,
 // links, test results or objectives. The executable source contract is unchanged.

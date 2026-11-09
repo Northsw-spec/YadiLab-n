@@ -68,9 +68,13 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
       if (factIds.has(fact.factId)) blocked("NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT");
       factIds.add(fact.factId);
       const target = fact.targetId;
-      const valid = fact.targetKind === "scenario" ? target === undefined :
-        fact.targetKind === "resource" ? resourceIds.has(target) :
-        fact.targetKind === "connection" ? connectionIds.has(target) : zoneIds.has(target);
+      const targetExists = fact.targetKind === "resource" ? target !== undefined && resourceIds.has(target) :
+        fact.targetKind === "connection" ? target !== undefined && connectionIds.has(target) :
+        fact.targetKind === "zone" ? target !== undefined && zoneIds.has(target) : false;
+      // Historical provenance records one-way Builder deletions. It cannot be
+      // used to relabel a live binding or to detach scenario-level evidence.
+      const valid = fact.targetStatus === "HISTORICAL" ? fact.targetKind !== "scenario" && target !== undefined && !targetExists :
+        fact.targetKind === "scenario" ? target === undefined : targetExists;
       if (!valid) blocked("NETWORK_IMPORT_PROVENANCE_TARGET");
     }
   }

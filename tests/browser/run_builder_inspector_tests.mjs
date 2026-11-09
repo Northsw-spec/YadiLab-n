@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { webcrypto } from "node:crypto";
+import Ajv2020 from "ajv/dist/2020.js";
+import sourceSchema from "../../schema/scenario-source.schema.json" with { type: "json" };
+import { createProjectDocument, readProjectDocument } from "../../ui/app/project-document.mjs";
 import {
   applyConnectionInspector,
   applyMissionInspector,
@@ -23,6 +27,8 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
 const source = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/valid/scenario-source.json"), "utf8"));
+if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
+const projectOptions = { validateSource: new Ajv2020({ strict: true }).compile(sourceSchema) };
 let checks = 0;
 function ok(value, message) { assert.ok(value, message); checks += 1; }
 function eq(actual, expected, message) { assert.deepEqual(actual, expected, message); checks += 1; }
@@ -251,6 +257,51 @@ eq(linkDeletion.workspace.source.connections.length, 0,
   "valid zone cascade removes child link");
 eq(linkDeletion.workspace.source.notes, beforeNote,
   "valid zone cascade preserves unrelated note");
+
+// PROJECT-076C: imported facts remain immutable evidence when Builder removes
+// their targets. The explicit status prevents a later reused ID re-binding it.
+function provenanceDeletionSource() {
+  const candidate = structuredClone(removableLinkSource);
+  // The Builder-focused deletion fixture deliberately has no repair steps;
+  // native project persistence additionally requires the ordinary source
+  // contract's non-empty canonical solution.
+  candidate.canonicalSolution = structuredClone(source.canonicalSolution);
+  const sha256 = "a".repeat(64);
+  candidate.networkImportProvenance = { version: "network-import-provenance/v1",
+    source: { sourceId: `src_${sha256}`, sha256, byteSize: 1, mediaType: "text/csv" },
+    facts: [
+      { factId: "nip_resource", targetKind: "resource", targetId: "rds01", field: "Devices.Asset ID", mapping: "EXACT", locator: { kind: "record-row", table: "Devices", row: 2 } },
+      { factId: "nip_connection", targetKind: "connection", targetId: "removable_link", field: "Connections.ID", mapping: "EXACT", locator: { kind: "record-row", table: "Connections", row: 2 } },
+      { factId: "nip_zone", targetKind: "zone", targetId: "server", field: "Zones.ID", mapping: "EXACT", locator: { kind: "record-row", table: "Zones", row: 2 } },
+    ] };
+  return candidate;
+}
+function provenanceStatus(result, factId) {
+  return result.workspace.source.networkImportProvenance.facts.find((fact) => fact.factId === factId)?.targetStatus;
+}
+async function assertProvenanceProjectRoundTrip(result, label) {
+  const text = await createProjectDocument(result.workspace, projectOptions);
+  const opened = await readProjectDocument(text, projectOptions);
+  eq(opened.source.networkImportProvenance, result.workspace.source.networkImportProvenance,
+    `${label} provenance survives native Save/Open`);
+}
+let provenanceDeletion = deleteConnection(createBuilderWorkspace(provenanceDeletionSource()), "removable_link");
+ok(provenanceDeletion.ok, "Delete Connection preserves imported evidence");
+eq(provenanceStatus(provenanceDeletion, "nip_connection"), "HISTORICAL", "connection deletion marks only its provenance fact historical");
+eq(provenanceStatus(provenanceDeletion, "nip_resource"), undefined, "connection deletion retains live resource provenance binding");
+await assertProvenanceProjectRoundTrip(provenanceDeletion, "connection deletion");
+provenanceDeletion = deleteResource(createBuilderWorkspace(provenanceDeletionSource()), "rds01", true);
+ok(provenanceDeletion.ok, "Delete Resource cascade preserves imported evidence");
+eq(provenanceStatus(provenanceDeletion, "nip_resource"), "HISTORICAL", "resource deletion marks resource provenance historical");
+eq(provenanceStatus(provenanceDeletion, "nip_connection"), "HISTORICAL", "resource cascade marks deleted connection provenance historical");
+eq(provenanceStatus(provenanceDeletion, "nip_zone"), undefined, "resource deletion retains live zone provenance binding");
+await assertProvenanceProjectRoundTrip(provenanceDeletion, "resource deletion");
+provenanceDeletion = deleteZone(createBuilderWorkspace(provenanceDeletionSource()), "server", true);
+ok(provenanceDeletion.ok, "Delete Zone cascade preserves imported evidence");
+eq(provenanceStatus(provenanceDeletion, "nip_zone"), "HISTORICAL", "zone deletion marks zone provenance historical");
+eq(provenanceStatus(provenanceDeletion, "nip_resource"), "HISTORICAL", "zone cascade marks resource provenance historical");
+eq(provenanceStatus(provenanceDeletion, "nip_connection"), "HISTORICAL", "zone cascade marks connection provenance historical");
+await assertProvenanceProjectRoundTrip(provenanceDeletion, "zone deletion");
 
 const mainSource = fs.readFileSync(path.join(root, "ui/app/main.mjs"), "utf8");
 ok(mainSource.includes("BuilderInspector"), "browser UI contains typed BuilderInspector component");

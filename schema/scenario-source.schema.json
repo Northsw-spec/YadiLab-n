@@ -359,6 +359,7 @@
               "factId": { "$ref": "#/$defs/id" },
               "targetKind": { "enum": ["scenario", "zone", "resource", "connection"] },
               "targetId": { "$ref": "#/$defs/id" },
+              "targetStatus": { "enum": ["CURRENT", "HISTORICAL"] },
               "field": { "type": "string", "minLength": 1, "maxLength": 256 },
               "mapping": { "enum": ["EXACT", "ALIAS"] },
               "locator": {

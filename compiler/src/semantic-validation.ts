@@ -654,10 +654,14 @@ export function validateScenarioSemantics(
       if (factIds.has(fact.factId)) diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_DUPLICATE_FACT", `${path}.factId`, "Provenance fact IDs must be unique."));
       factIds.add(fact.factId);
       const target = fact.targetId;
-      const valid = fact.targetKind === "scenario" ? target === undefined :
-        fact.targetKind === "resource" ? target !== undefined && resources.has(target) :
+      const targetExists = fact.targetKind === "resource" ? target !== undefined && resources.has(target) :
         fact.targetKind === "connection" ? target !== undefined && connections.has(target) :
-        target !== undefined && zones.has(target);
+        fact.targetKind === "zone" ? target !== undefined && zones.has(target) : false;
+      // A historical fact is evidence of a Builder deletion, not a bypass for
+      // current binding checks. It must name a now-absent topology object so a
+      // later reuse of the same ID cannot silently re-bind the imported fact.
+      const valid = fact.targetStatus === "HISTORICAL" ? fact.targetKind !== "scenario" && target !== undefined && !targetExists :
+        fact.targetKind === "scenario" ? target === undefined : targetExists;
       if (!valid) diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_TARGET", `${path}.targetId`, "Provenance target does not exist with the declared targetKind."));
     });
   }
