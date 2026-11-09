@@ -131,6 +131,7 @@ function normalizeScenario(
       .map((x) => ({ id: x.id, version: x.version, path: x.path, mime: x.mime, width: x.width, height: x.height, trusted: true as const }))
       .sort((a, b) => a.id.localeCompare(b.id, "en") || a.version.localeCompare(b.version, "en")),
     ...(source.enterpriseOrigin !== undefined ? { enterpriseOrigin: deepCloneJson(source.enterpriseOrigin) } : {}),
+    ...(source.networkImportProvenance !== undefined ? { networkImportProvenance: deepCloneJson(source.networkImportProvenance) } : {}),
     ...(source.faultOrigin !== undefined ? { faultOrigin: deepCloneJson(source.faultOrigin) } : {}),
     zones: source.zones.map((zone) => ({
       id: zone.id,

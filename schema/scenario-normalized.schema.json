@@ -217,6 +217,9 @@
         }
       }
     },
+    "networkImportProvenance": {
+      "$ref": "#/$defs/networkImportProvenance"
+    },
     "faultOrigin": {
       "type": "object",
       "additionalProperties": false,
@@ -335,6 +338,16 @@
     }
   },
   "$defs": {
+    "networkImportProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source", "facts"],
+      "properties": {
+        "version": { "const": "network-import-provenance/v1" },
+        "source": { "type": "object", "additionalProperties": false, "required": ["sourceId", "sha256", "byteSize", "mediaType"], "properties": { "sourceId": { "type": "string", "pattern": "^src_[0-9a-f]{64}$" }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "byteSize": { "type": "integer", "minimum": 1, "maximum": 16777216 }, "mediaType": { "type": "string", "minLength": 1, "maxLength": 255 } } },
+        "facts": { "type": "array", "maxItems": 200000, "items": { "type": "object", "additionalProperties": false, "required": ["factId", "targetKind", "field", "locator", "mapping"], "properties": { "factId": { "$ref": "#/$defs/id" }, "targetKind": { "enum": ["scenario", "zone", "resource", "connection"] }, "targetId": { "$ref": "#/$defs/id" }, "field": { "type": "string", "minLength": 1, "maxLength": 256 }, "mapping": { "enum": ["EXACT", "ALIAS"] }, "locator": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sheet", "row", "column"], "properties": { "kind": { "const": "table-cell" }, "sheet": { "type": "string", "minLength": 1, "maxLength": 255 }, "row": { "type": "integer", "minimum": 1 }, "column": { "type": "string", "minLength": 1, "maxLength": 16 } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "row"], "properties": { "kind": { "const": "record-row" }, "table": { "type": "string", "minLength": 1, "maxLength": 255 }, "row": { "type": "integer", "minimum": 1 } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "pointer"], "properties": { "kind": { "const": "json-pointer" }, "pointer": { "type": "string", "minLength": 1, "maxLength": 4096 } } }] } } } }
+      }
+    },
     "id": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]{0,63}$"
