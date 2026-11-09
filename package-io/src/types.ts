@@ -13,7 +13,17 @@ export interface ArchiveEntryDescriptor {
   readonly directory: boolean;
   readonly compressedSize?: number;
   readonly uncompressedSize?: number;
-  read(): Promise<Uint8Array>;
+  /**
+   * Read a member while enforcing a maximum number of output bytes when the
+   * backend can do so during decompression. Callers must still verify the
+   * returned size because third-party backends may not implement the bound.
+   */
+  read(maxOutputBytes?: number): Promise<Uint8Array>;
+}
+
+/** Raised by an archive backend when streaming output reaches its caller's limit. */
+export class ArchiveReadLimitError extends Error {
+  constructor() { super("Archive entry exceeds the requested output limit."); this.name = "ArchiveReadLimitError"; }
 }
 
 export interface ArchiveWriteEntry {
