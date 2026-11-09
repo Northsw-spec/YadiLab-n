@@ -43,5 +43,14 @@ await blocked("ODS XML DTD/entity declarations are blocked",{baselineId:"x",sour
 await blocked("ODS non-empty repeated columns beyond sheet limit are blocked",{baselineId:"x",source:{bytes:workbookBytes("ods-huge-repeat.ods"),mediaType:"application/vnd.oasis.opendocument.spreadsheet"},mappingProfile:workbookProfile,adapter:ods},"IMPORT_ODS_COLUMN_LIMIT");
 await blocked("invalid workbook headerRow option is blocked",{baselineId:"x",source:{bytes:workbookBytes("devices.xlsx"),mediaType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},mappingProfile:workbookProfile,adapter:xlsx,options:{headerRow:0}},"IMPORT_WORKBOOK_HEADER_ROW_INVALID");
 await (async()=>{ const backend={open:async()=>({entries:[{path:"a.xml",directory:false,compressedSize:1,uncompressedSize:1000,read:async()=>new Uint8Array(1000)}],close:async()=>{}})}; await assert.rejects(()=>openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:10000,maxDecompressedBytes:10000,maxSingleFileBytes:2000,maxCompressionRatio:100}),e=>e?.code==="IMPORT_ARCHIVE_COMPRESSION_RATIO"); pass++; console.log("PASS workbook archive compression-ratio bomb is blocked"); })();
+await (async()=>{ const backend={open:async()=>({entries:[
+  {path:"first.xml",directory:false,read:async()=>new Uint8Array(20)},
+  {path:"second.xml",directory:false,read:async()=>new Uint8Array(20)},
+],close:async()=>{}})};
+  const archive=await openSafeWorkbookArchive(enc("x"),backend,{maxFiles:2,maxCompressedBytes:10000,maxDecompressedBytes:32,maxSingleFileBytes:32,maxCompressionRatio:100});
+  try { await archive.read("first.xml"); await assert.rejects(()=>archive.read("second.xml"),e=>e?.code==="IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE"); }
+  finally { await archive.close(); }
+  pass++; console.log("PASS actual decompressed bytes without ZIP size metadata are bounded");
+})();
 
-console.log(`PASS enterprise import adversarial: ${pass}/28 assertions`);
+console.log(`PASS enterprise import adversarial: ${pass}/29 assertions`);

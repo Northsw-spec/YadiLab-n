@@ -43,6 +43,15 @@ function ratio(entry: ArchiveEntryDescriptor): number | undefined {
 class SafeArchive implements SafeWorkbookArchive {
   readonly paths: readonly string[];
   private readonly byPath = new Map<string, ArchiveEntryDescriptor>();
+  /*
+   * ZIP metadata is useful for rejecting an archive before any member is
+   * inflated, but it is not a trustworthy substitute for the bytes returned
+   * by an ArchiveBackend.  In particular, the backend interface permits an
+   * entry without an advertised uncompressed size.  Cache each member so a
+   * repeated read neither re-inflates it nor double-counts the same bytes.
+   */
+  private readonly readCache = new Map<string, Promise<Uint8Array>>();
+  private actualDecompressedBytes = 0;
   constructor(private readonly session: ArchiveReadSession, private readonly limits: WorkbookArchiveLimits) {
     const files = session.entries.filter((x) => !x.directory);
     if (files.length > limits.maxFiles) fail("IMPORT_ARCHIVE_TOO_MANY_FILES", `Workbook archive contains ${files.length} files; limit is ${limits.maxFiles}.`);
@@ -67,9 +76,20 @@ class SafeArchive implements SafeWorkbookArchive {
   async read(path: string): Promise<Uint8Array> {
     const entry = this.byPath.get(path);
     if (!entry) fail("IMPORT_ARCHIVE_MEMBER_MISSING", `Workbook archive member ${path} is missing.`);
+    const cached = this.readCache.get(path);
+    if (cached) return cached;
+    const read = this.readEntry(path, entry);
+    this.readCache.set(path, read);
+    return read;
+  }
+  private async readEntry(path: string, entry: ArchiveEntryDescriptor): Promise<Uint8Array> {
     const bytes = await entry.read();
     if (bytes.byteLength > this.limits.maxSingleFileBytes) fail("IMPORT_ARCHIVE_FILE_TOO_LARGE", `Workbook member ${path} exceeds the per-file limit after decompression.`);
     if (entry.uncompressedSize !== undefined && bytes.byteLength !== entry.uncompressedSize) fail("IMPORT_ARCHIVE_SIZE_MISMATCH", `Workbook member ${path} size does not match archive metadata.`);
+    this.actualDecompressedBytes += bytes.byteLength;
+    if (this.actualDecompressedBytes > this.limits.maxDecompressedBytes) {
+      fail("IMPORT_ARCHIVE_DECOMPRESSED_TOO_LARGE", "Workbook archive exceeds the decompressed-size limit after decompression.");
+    }
     return bytes;
   }
   close(): Promise<void> { return this.session.close(); }
