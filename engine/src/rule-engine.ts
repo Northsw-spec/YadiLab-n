@@ -1,6 +1,6 @@
 import { ownResource } from "./resource-lookup.js";
 import type { Normalizedscenariorule } from "../../core-model/src/generated/contracts.js";
-import { jsonEqual } from "./json.js";
+import { isRecord, jsonEqual } from "./json.js";
 import { queryAuthentication, queryMembership, queryPermission } from "./identity-engine.js";
 import { queryReachability } from "./network-engine.js";
 import { readPath } from "./path.js";
@@ -8,26 +8,78 @@ import { queryServiceEnabled } from "./service-engine.js";
 import { truthAll, truthAny, truthNot } from "./truth.js";
 import type { EngineQueryResult, RuleEvaluationContext } from "./types.js";
 
+const MAX_RULE_DEPTH = 256;
+const MAX_RULE_NODES = 10_000;
+
+function hasOwn(value: Readonly<Record<string, unknown>>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function invalidRuleTree(rule: unknown): string | undefined {
+  const pending: Array<{ readonly rule: unknown; readonly depth: number }> = [{ rule, depth: 1 }];
+  let nodes = 0;
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (++nodes > MAX_RULE_NODES) return `Rule tree exceeds the ${MAX_RULE_NODES}-node safety limit.`;
+    if (current.depth > MAX_RULE_DEPTH) return `Rule tree exceeds the ${MAX_RULE_DEPTH}-level safety limit.`;
+    if (!isRecord(current.rule) || !hasOwn(current.rule, "op") || typeof current.rule.op !== "string") return "Rule is missing a valid operation.";
+    switch (current.rule.op) {
+      case "all":
+      case "any": {
+        if (!hasOwn(current.rule, "rules") || !Array.isArray(current.rule.rules) || current.rule.rules.length === 0)
+          return `${current.rule.op.toUpperCase()} rule has no child rules; empty logic is not valid scenario evidence.`;
+        for (const child of current.rule.rules) pending.push({ rule: child, depth: current.depth + 1 });
+        break;
+      }
+      case "not":
+        if (!hasOwn(current.rule, "rule") || !isRecord(current.rule.rule)) return "NOT rule has no child rule.";
+        pending.push({ rule: current.rule.rule, depth: current.depth + 1 });
+        break;
+      case "equals":
+        if (typeof current.rule.target !== "string" || typeof current.rule.path !== "string" || !hasOwn(current.rule, "value")) return "Equals rule has invalid target, path, or value.";
+        break;
+      case "reachable":
+        if (typeof current.rule.from !== "string" || typeof current.rule.to !== "string" ||
+            (current.rule.protocol !== undefined && !["tcp", "udp", "icmp", "any"].includes(String(current.rule.protocol))) ||
+            (current.rule.port !== undefined && (!Number.isInteger(current.rule.port) || (current.rule.port as number) < 1 || (current.rule.port as number) > 65535))) return "Reachable rule has invalid endpoint, protocol, or port.";
+        break;
+      case "member_of":
+        if (typeof current.rule.subject !== "string" || typeof current.rule.group !== "string") return "Membership rule has invalid subject or group.";
+        break;
+      case "has_permission":
+        if (typeof current.rule.subject !== "string" || typeof current.rule.resource !== "string" || typeof current.rule.permission !== "string") return "Permission rule has invalid operands.";
+        break;
+      case "service_enabled":
+        if (typeof current.rule.target !== "string" || typeof current.rule.service !== "string") return "Service rule has invalid target or service.";
+        break;
+      case "test_result":
+        if (typeof current.rule.test !== "string" || !["TRUE", "FALSE", "UNKNOWN"].includes(String(current.rule.expected))) return "Test-result rule has invalid test or expected truth.";
+        break;
+      default:
+        return "Rule has an unsupported operation.";
+    }
+  }
+  return undefined;
+}
+
 export function evaluateRule(rule: Normalizedscenariorule, context: RuleEvaluationContext): EngineQueryResult<undefined> {
-  if (!rule || typeof rule !== "object" || !("op" in rule))
-    return { truth: "UNKNOWN", explanation: ["Rule is missing a valid operation."] };
+  const invalid = invalidRuleTree(rule);
+  if (invalid) return { truth: "UNKNOWN", explanation: [invalid] };
+  return evaluateValidatedRule(rule, context);
+}
+
+function evaluateValidatedRule(rule: Normalizedscenariorule, context: RuleEvaluationContext): EngineQueryResult<undefined> {
   switch (rule.op) {
     case "all": {
-      if (!Array.isArray(rule.rules) || rule.rules.length === 0)
-        return { truth: "UNKNOWN", explanation: ["ALL rule has no child rules; empty logic is not valid scenario evidence."] };
-      const children = rule.rules.map((child) => evaluateRule(child, context));
+      const children = rule.rules.map((child) => evaluateValidatedRule(child, context));
       return { truth: truthAll(children.map((item) => item.truth)), explanation: children.flatMap((item) => item.explanation) };
     }
     case "any": {
-      if (!Array.isArray(rule.rules) || rule.rules.length === 0)
-        return { truth: "UNKNOWN", explanation: ["ANY rule has no child rules; empty logic is not valid scenario evidence."] };
-      const children = rule.rules.map((child) => evaluateRule(child, context));
+      const children = rule.rules.map((child) => evaluateValidatedRule(child, context));
       return { truth: truthAny(children.map((item) => item.truth)), explanation: children.flatMap((item) => item.explanation) };
     }
     case "not": {
-      if (!rule.rule || typeof rule.rule !== "object")
-        return { truth: "UNKNOWN", explanation: ["NOT rule has no child rule."] };
-      const child = evaluateRule(rule.rule, context);
+      const child = evaluateValidatedRule(rule.rule, context);
       return { truth: truthNot(child.truth), explanation: child.explanation };
     }
     case "equals": {
