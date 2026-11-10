@@ -1116,6 +1116,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (!active) return;
     const nodeIds = nodes.map((node) => node.id);
     const edgeIds = edges.map((edge) => edge.id);
+    if (active.mode !== "builder") return;
     if (active.mode === "builder" && getPendingDraftChanges()) {
       // A repeated callback describing the ALREADY-selected nodes is not a
       // user attempt to discard the pending form; it needs no diagnostics.
@@ -1127,13 +1128,18 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }
     blockedCanvasActionRef.current = null;
     const primary = [...nodeIds, ...edgeIds].at(-1);
+    const currentIds = active.selection?.ids ?? [];
+    if (JSON.stringify(currentIds) === JSON.stringify([...nodeIds, ...edgeIds]) && active.selection?.primary === primary) return;
     // Selection carries no authority to replace the canonical source.
     // Apply it to the synchronously published current workspace only.
-    if (active.mode === "builder") {
-      setWorkspace(applyBuilderCanvasSelection(active, { nodeIds, edgeIds, primary }));
-    } else {
-      setWorkspace(setRuntimeSelection(active, [...nodeIds, ...edgeIds], primary));
-    }
+    setWorkspace(applyBuilderCanvasSelection(active, { nodeIds, edgeIds, primary }));
+  };
+  const onNodeClick = (_event, node) => {
+    const active = liveTopologyWorkspace();
+    if (!active || denyUnappliedCanvasChange(active, `node-click:${node.id}`)) return;
+    if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
+    if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
+    else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
   };
   const onNodeDragStop = (_event, node) => {
     const active = liveTopologyMutationWorkspace();
@@ -1424,6 +1430,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       selectionOnDrag: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       multiSelectionKeyCode: "Shift",
       selectionKeyCode: "Shift",
+      onNodeClick,
       onSelectionChange,
       onPaneClick: clearSelection,
       onPaneContextMenu: (event) => event.preventDefault(),
@@ -3327,8 +3334,9 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
 }
 
 
-function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false }) {
+function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled }) {
   const probeDisclosureRef = useRef(null);
+  const sourceSelectRef = useRef(null);
   useEffect(() => { if (autoOpen && probeDisclosureRef.current) probeDisclosureRef.current.open = true; }, [autoOpen, workspace.scenario.sourceHash, scenarioLoadKey]);
   const acceptancePresets = verifiedDeliveryProbePresets[workspace.scenario.scenarioId] ?? [];
   const initial = buildRuntimeActiveProbeModel(workspace, workspace.selection.primary);
@@ -3361,19 +3369,46 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
     const nextPresets = verifiedDeliveryProbePresets[workspace.scenario.scenarioId] ?? [];
     setPresetId(nextPresets[0]?.id ?? "");
     if (nextPresets[0]) applyAcceptancePreset(nextPresets[0]);
-    const next = buildRuntimeActiveProbeModel(workspace, sourceId || workspace.selection.primary, destinationId);
+    const next = buildRuntimeActiveProbeModel(workspace, workspace.selection.primary);
     if (next.sourceId && next.sourceId !== sourceId) setSourceId(next.sourceId);
     if (!next.probes.some((item) => item.probeId === probeId)) setProbeId(next.probes[0]?.probeId ?? "");
-    if (next.destinationId && !next.destinations.some((item) => item.id === destinationId)) setDestinationId(next.destinationId);
+    setDestinationId(next.destinationId ?? "");
     setTranscript(null);
-  }, [workspace.scenario.sourceHash, workspace.engineState.stateRevision, workspace.selection.primary, scenarioLoadKey]);
+  }, [workspace.scenario.sourceHash, scenarioLoadKey]);
+
+  useEffect(() => {
+    if (!diagnosticSourceRequest || diagnosticSourceRequest.scenarioHash !== workspace.scenario.sourceHash) return;
+    const requestedSourceId = diagnosticSourceRequest.sourceId;
+    const requested = buildRuntimeActiveProbeModel(workspace, requestedSourceId);
+    if (requested.sourceId !== requestedSourceId) {
+      onDiagnosticSourceRequestHandled?.(diagnosticSourceRequest.requestId);
+      return;
+    }
+    setSourceId(requestedSourceId);
+    setProbeId(requested.probes[0]?.probeId ?? "");
+    setDestinationId(requested.destinationId ?? "");
+    setTranscript(null);
+    onVisualJourney?.(null);
+    onTopologyState?.(null);
+    if (probeDisclosureRef.current) probeDisclosureRef.current.open = true;
+    globalThis.requestAnimationFrame?.(() => sourceSelectRef.current?.focus({ preventScroll: true }));
+    onDiagnosticSourceRequestHandled?.(diagnosticSourceRequest.requestId);
+  }, [diagnosticSourceRequest?.requestId, workspace.scenario.sourceHash]);
 
   useEffect(() => {
     const next = buildRuntimeActiveProbeModel(workspace, sourceId, destinationId);
+    if (sourceId && !next.sources.some((item) => item.id === sourceId)) {
+      const fallback = buildRuntimeActiveProbeModel(workspace, workspace.selection.primary);
+      setSourceId(fallback.sourceId ?? "");
+      setProbeId(fallback.probes[0]?.probeId ?? "");
+      setDestinationId(fallback.destinationId ?? "");
+      setTranscript(null);
+      return;
+    }
     if (!next.probes.some((item) => item.probeId === probeId)) setProbeId(next.probes[0]?.probeId ?? "");
     if (next.destinationId && !next.destinations.some((item) => item.id === destinationId)) setDestinationId(next.destinationId);
     setTranscript(null);
-  }, [sourceId]);
+  }, [sourceId, workspace.engineState.stateRevision]);
 
   const run = () => {
     if (!sourceId || !probe) return;
@@ -3413,7 +3448,7 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
             e("p", null, "Grönt ✓ betyder Engine TRUE/DELIVERED. Rött ✕ betyder Engine FALSE/DROP. UNKNOWN förblir lila och får ingen terminalmarkör.")),
         ) : null,
         e("label", { className: "inspector-field" }, "Källvärd",
-          e("select", { value: sourceId, onChange: (event) => setSourceId(event.target.value) },
+          e("select", { ref: sourceSelectRef, value: sourceId, onChange: (event) => setSourceId(event.target.value), "data-active-probe-source": sourceId },
             ...model.sources.map((target) => e("option", { key: target.id, value: target.id }, `${target.label} · ${target.id} · ${target.os}`)))),
         e("label", { className: "inspector-field" }, "Aktiv probe",
           e("select", { value: probe?.probeId ?? "", onChange: (event) => { setProbeId(event.target.value); setTranscript(null); } },
@@ -3595,11 +3630,13 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   );
 }
 
-function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraftChange, getPendingDraftChanges, getOtherPendingDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false }) {
+function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraftChange, getPendingDraftChanges, getOtherPendingDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled, onDiagnoseFromSource }) {
   const selected = workspace.selection.primary;
   const semantic = workspace.mode === "builder"
     ? [...workspace.source.zones, ...workspace.source.resources, ...workspace.source.connections].find((x) => x.id === selected)
     : [...workspace.scenario.zones, ...workspace.scenario.resources, ...workspace.scenario.connections].find((x) => x.id === selected);
+  const runtimeProbeModel = workspace.mode === "runtime" ? buildRuntimeActiveProbeModel(workspace, selected) : null;
+  const runtimeSelectedSource = runtimeProbeModel?.sources.find((source) => source.id === selected) ?? null;
   const [target, setTarget] = useState("");
   const [path, setPath] = useState("");
   const [value, setValue] = useState("true");
@@ -3692,6 +3729,11 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
         e("span", null, "Kontrollpunkter"), e("strong", null, String(workspace.history.checkpoints.length)),
       ),
     ),
+    runtimeSelectedSource ? e("section", { className: "runtime-diagnose-action", "data-runtime-diagnose-source": runtimeSelectedSource.id },
+      e("h3", null, "Runtime-information"),
+      e("p", { className: "helper-note" }, `${runtimeSelectedSource.label} är en modellerad ${runtimeSelectedSource.type.startsWith("windows.") ? "Windows" : "Linux"}-källvärd.`),
+      e("button", { type: "button", "data-diagnose-from-source": runtimeSelectedSource.id, onClick: () => onDiagnoseFromSource?.(runtimeSelectedSource.id) }, "Diagnostisera från denna enhet"),
+    ) : null,
     workspace.mode === "builder"
       ? e(React.Fragment, null,
           e(ImportHelper, { workspace, setWorkspace, setDiagnostics }),
@@ -3708,7 +3750,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
           e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics, onOpenTool: openGuidedTool }),
           e(RuntimeTroubleshootingSummaryPanel, { workspace, notebook, setDiagnostics }),
           e(RuntimeObservationPanel, { workspace, setDiagnostics, onSaveEvidence: saveObservationEvidence, onTopologyState }),
-          e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen }),
+          e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled }),
           e(RuntimeTroubleshootingNotebookPanel, { workspace, setWorkspace, notebook, setNotebook, setDiagnostics, onTopologyState }),
           e("details", { className: "inspector-disclosure" }, e("summary", null, "Inspektör"), e("pre", { className: "inspector" }, semantic ? pretty(semantic) : "Select a topology object."))),
     workspace.mode === "runtime" ? e("section", { className: "operation-editor" },
@@ -4551,6 +4593,8 @@ function App() {
   const [odtReplayOpen, setOdtReplayOpen] = useState(false);
   const [odtStructureOpen, setOdtStructureOpen] = useState(false);
   const [importedProbeAutoOpen, setImportedProbeAutoOpen] = useState(false);
+  const [diagnosticSourceRequest, setDiagnosticSourceRequest] = useState(null);
+  const diagnosticSourceRequestIdRef = useRef(0);
   const [diagnostics, setDiagnostics] = useState([]);
   const [busy, setBusy] = useState(false);
   const [guidedLabId, setGuidedLabId] = useState(() => builtinGuidedLabs[0]?.id ?? "");
@@ -4951,9 +4995,24 @@ function App() {
     setNotebook(null);
     setActiveJourney(null);
     setTopologyStateFocus(null);
+    setDiagnosticSourceRequest(null);
     return transitionId;
   };
   const isCurrentScenarioTransition = (transitionId) => scenarioTransitionRef.current === transitionId;
+  const requestDiagnoseFromSource = (sourceId) => {
+    const active = latestDrawioWorkspaceRef.current;
+    if (active.mode !== "runtime") return;
+    const model = buildRuntimeActiveProbeModel(active, sourceId);
+    if (model.sourceId !== sourceId) return;
+    setDiagnosticSourceRequest({
+      requestId: ++diagnosticSourceRequestIdRef.current,
+      scenarioHash: active.scenario.sourceHash,
+      sourceId,
+    });
+  };
+  const handleDiagnosticSourceRequest = (requestId) => {
+    setDiagnosticSourceRequest((current) => current?.requestId === requestId ? null : current);
+  };
   const reserveGuardedScenarioLaunch = () => {
     const launchToken = ++scenarioLaunchRequestRef.current;
     const transitionId = scenarioTransitionRef.current;
@@ -7264,7 +7323,7 @@ function App() {
         onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
         onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
         onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
-        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
+        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled: handleDiagnosticSourceRequest, onDiagnoseFromSource: requestDiagnoseFromSource, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,
         troubleshootingTimeline ? e("details", { className: "troubleshooting-timeline", "aria-label": "Troubleshooting timeline", "data-troubleshooting-timeline": "ready" }, e("summary", null, "Troubleshooting timeline"), e("small", null, `Session ${troubleshootingTimeline.sessionId}`), e("ol", null, ...troubleshootingTimeline.entries.slice(0, 24).map((entry) => e("li", { key: `${entry.sequence}-${entry.eventId ?? entry.action}` }, e("span", null, `${entry.sequence}. ${entry.category} · ${entry.action}`), e("small", null, entry.detail ?? entry.outcome ?? "Actual event"))))) : null,
