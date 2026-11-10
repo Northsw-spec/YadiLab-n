@@ -3129,7 +3129,11 @@ const guidedToolActions = {
     { tool: "observations", label: "Öppna observationer" },
     { tool: "probes", label: "Öppna aktiva prober" },
   ],
-  REVIEW_EVIDENCE: [{ tool: "notebook", label: "Öppna evidensanteckningar" }],
+  REVIEW_EVIDENCE: [
+    { tool: "observations", label: "Öppna observationer" },
+    { tool: "probes", label: "Öppna aktiva prober" },
+    { tool: "notebook", label: "Öppna evidensanteckningar" },
+  ],
   FORM_HYPOTHESIS: [{ tool: "notebook", label: "Öppna hypotesanteckningar" }],
   REMEDIATE: [{ tool: "notebook", label: "Öppna Typed Remediation" }],
   COLLECT_AFTER_EVIDENCE: [
