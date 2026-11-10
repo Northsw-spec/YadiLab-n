@@ -214,7 +214,9 @@ def main():
             pane = page.locator(".react-flow__pane")
             pane.scroll_into_view_if_needed()
             pane.click(position={"x": 20, "y": 20})
-            expect(page.locator(".side-panel .status-grid").first).to_contain_text("Vald\n—")
+            cleared_status = page.locator(".side-panel .status-grid").first.inner_text()
+            require("Vald" in cleared_status and "—" in cleared_status,
+                    f"Pane click did not clear Runtime selection: {cleared_status!r}")
             evidence["paneClear"] = True
 
             # Switch scenario and run the actual Linux SSH TCP/22 probe. The
