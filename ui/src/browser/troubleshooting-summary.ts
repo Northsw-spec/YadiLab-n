@@ -338,9 +338,16 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
 
   const completion = runtime.evaluation.completion.truth;
   const finalVerification = currentFinalVerificationRequirements(runtime, exactNotebook, latestRemediation);
-  const fullRecoveryVerified = completion === "TRUE" && finalVerification.complete && !historicalAction && (!latestRemediation || remediationReview?.status === "VERIFIED_IMPROVEMENT");
+  // An empty declared-requirement list has no missing items, but it is not
+  // evidence that the learner verified recovery. Require a saved evidence
+  // chain and a current, matched remediation review before claiming full
+  // recovery; PROJECT-085 still adds its explicit final probe requirements.
+  const evidenceBackedImprovement = allEvidence.length > 0 && remediationReview?.status === "VERIFIED_IMPROVEMENT";
+  const fullRecoveryVerified = completion === "TRUE" && finalVerification.complete && !historicalAction && evidenceBackedImprovement;
   const completionLabel = completion === "TRUE" ? "Slutfört labb: TRUE" : completion === "FALSE" ? "Slutfört labb: FALSE" : "Slutfört labb: UNKNOWN";
-  const uncertainty = status === "INSUFFICIENT_EVIDENCE"
+  const uncertainty = completion === "TRUE" && !fullRecoveryVerified && allEvidence.length === 0
+    ? "Scenariots modellerade mål är uppfyllt, men någon aktuell verifiering genom sparad evidens har ännu inte dokumenterats."
+    : status === "INSUFFICIENT_EVIDENCE"
     ? "Problemet är inte tillräckligt dokumenterat ännu. Ingen åtgärd eller verifierad förbättring finns i aktuell Notebook."
     : status === "INVESTIGATION_IN_PROGRESS"
       ? "Ingen åtgärd är dokumenterad; ingen förbättring är verifierad."

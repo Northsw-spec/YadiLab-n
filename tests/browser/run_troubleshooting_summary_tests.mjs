@@ -27,7 +27,7 @@ const source = {
     { id: "server1", type: "windows.server", label: "Windows server", interfaces: [{ id: "eth0", label: "Ethernet", addresses: ["10.78.101.80/24"] }], properties: { defaultGateway: "10.78.101.1", aclDefaultAction: "allow" } },
   ],
   connections: [{ id: "client_r1", kind: "network", from: { resource: "client1" }, to: { resource: "r1" }, properties: {} }, { id: "r1_server", kind: "network", from: { resource: "r1" }, to: { resource: "server1" }, properties: {} }],
-  tests: [], findings: [], objectives: [], completion: { op: "all", rules: [] }, hints: [],
+  tests: [], findings: [], objectives: [], completion: { op: "equals", target: "client1", path: "properties.networkProfile", value: "private" }, hints: [],
 };
 const normalized = { ...source, formatId: "infrastructure-cyber-lab.scenario", sourceHash: "8".repeat(64), minimumEngineVersion: "0.8.0", capabilityLocks: [], profileLocks: [], assetLocks: [], resources: source.resources.map((resource) => ({ ...resource, asset: { mode: "auto" } })) };
 const builder = { ...createBuilderWorkspace(source), compile: { status: "valid", model: normalized, diagnostics: [] } };
@@ -53,9 +53,22 @@ async function verifiedSession() {
 await check("empty report is explicit and does not invent success", async () => {
   const result = await buildTroubleshootingSummary(runtime);
   assert.equal(result.ok, true);
+  assert.equal(result.summary.completion, "TRUE");
+  assert.equal(result.summary.fullRecoveryVerified, false);
+  assert.equal(result.summary.actions.length, 0);
+  assert.equal(result.summary.verifications.length, 0);
+  assert.match(result.summary.markdown, /Fullständig incidentåterställning verifierad: NEJ/);
+  assert.match(result.summary.uncertainty, /modellerade mål är uppfyllt.*sparad evidens/i);
   assert.equal(result.summary.status, "INSUFFICIENT_EVIDENCE");
-  assert.match(result.summary.uncertainty, /Ingen observation|inte tillräckligt dokumenterat/i);
+  assert.match(result.summary.uncertainty, /Ingen observation|inte tillräckligt dokumenterat|sparad evidens/i);
   assert.ok(!result.summary.markdown.includes("canonicalSolution"));
+});
+
+await check("completion without declared final probes is not full recovery", async () => {
+  const result = await buildTroubleshootingSummary(runtime);
+  assert.equal(result.summary.completion, "TRUE");
+  assert.equal(result.summary.finalVerification.required.length, 0);
+  assert.equal(result.summary.fullRecoveryVerified, false);
 });
 
 await check("saved failed probe is reported without an action", async () => {
@@ -87,6 +100,7 @@ await check("matched before and after evidence produces a truthful report", asyn
   notebook = (await captureRuntimeActiveProbeEvidence(runtime, notebook, probe.transcript)).notebook;
   const result = await buildTroubleshootingSummary(runtime, notebook);
   assert.equal(result.summary.status, "VERIFIED_IMPROVEMENT");
+  assert.equal(result.summary.fullRecoveryVerified, true);
   assert.equal(result.summary.verification.pairs[0].before, "FALSE");
   assert.equal(result.summary.verification.pairs[0].after, "TRUE");
   assert.match(result.summary.markdown, /FALSE → TRUE/);
@@ -162,4 +176,4 @@ await check("a different operation at the same revision cannot inherit old verif
   assert.equal(result.summary.verification.historical, true);
 });
 
-console.log(`PASS Troubleshooting Summary logic: ${pass}/9 assertions.`);
+console.log(`PASS Troubleshooting Summary logic: ${pass}/10 assertions.`);
