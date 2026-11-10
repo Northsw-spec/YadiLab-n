@@ -1,4 +1,5 @@
 import {
+  canonicalTroubleshootingJson,
   createTroubleshootingNotebook,
   reviewRemediationLoop,
   verifyTroubleshootingNotebook,
@@ -6,7 +7,8 @@ import {
   type TroubleshootingNotebook,
   type TroubleshootingNotebookEntry,
 } from "../../../observation-engine/src/index.js";
-import type { TruthValue } from "../../../engine/src/index.js";
+import { applyOperation } from "../../../engine/src/index.js";
+import type { ScenarioOperation, TruthValue } from "../../../engine/src/index.js";
 import type { BrowserDiagnostic, BrowserWorkspace, RuntimeWorkspace } from "./types.js";
 
 export type TroubleshootingSummaryStatus =
@@ -149,6 +151,15 @@ function compactJson(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
+function isCurrentRemediationState(runtime: RuntimeWorkspace, remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>): boolean {
+  if (runtime.engineState.stateRevision !== remediation.afterStateRevision) return false;
+  const predecessor = runtime.history.past.at(-1);
+  if (!predecessor || predecessor.stateRevision !== remediation.beforeStateRevision) return false;
+  const replayed = applyOperation(predecessor, remediation.operation as ScenarioOperation);
+  if (!replayed.ok || replayed.state.stateRevision !== runtime.engineState.stateRevision) return false;
+  return canonicalTroubleshootingJson(replayed.state) === canonicalTroubleshootingJson(runtime.engineState);
+}
+
 function markdownFor(summary: Omit<TroubleshootingSummary, "markdown" | "reportIdentity">): string {
   const lines = [
     `# FELSÖKNING — ${summary.title}`,
@@ -218,7 +229,7 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
     if (!result.ok || !result.review) return { ok: false, diagnostics: result.diagnostics.map((item) => error(item.code, item.message)) };
     remediationReview = result.review;
   }
-  const historicalAction = latestRemediation ? runtime.engineState.stateRevision > latestRemediation.afterStateRevision : false;
+  const historicalAction = latestRemediation ? !isCurrentRemediationState(runtime, latestRemediation) : false;
   let status: TroubleshootingSummaryStatus;
   if (!allEvidence.length) status = "INSUFFICIENT_EVIDENCE";
   else if (!latestRemediation) status = "INVESTIGATION_IN_PROGRESS";

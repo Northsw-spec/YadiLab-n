@@ -9,7 +9,7 @@ import {
   previewRuntimeTypedRemediation,
   runRuntimeActiveProbe,
 } from "../../dist-browser-test/ui/src/browser/index.js";
-import { applyRuntimeOperationWithHistory } from "../../dist-browser-test/ui/src/browser/runtime-history.js";
+import { applyRuntimeOperationWithHistory, createRuntimeCheckpoint, redoRuntime, restoreRuntimeCheckpoint, undoRuntime } from "../../dist-browser-test/ui/src/browser/runtime-history.js";
 
 let pass = 0;
 const check = async (name, fn) => { await fn(); pass += 1; console.log(`PASS ${name}`); };
@@ -33,6 +33,22 @@ const normalized = { ...source, formatId: "infrastructure-cyber-lab.scenario", s
 const builder = { ...createBuilderWorkspace(source), compile: { status: "valid", model: normalized, diagnostics: [] } };
 let runtime = previewRuntime(builder).workspace;
 let notebook;
+
+async function verifiedSession() {
+  let current = previewRuntime(builder).workspace;
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  const capturedBefore = await captureRuntimeActiveProbeEvidence(current, undefined, before.transcript);
+  let currentNotebook = capturedBefore.notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const request = { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.1.1" } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa gatewayen.");
+  current = committed.workspace;
+  currentNotebook = committed.notebook;
+  const after = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  currentNotebook = (await captureRuntimeActiveProbeEvidence(current, currentNotebook, after.transcript)).notebook;
+  return { runtime: current, notebook: currentNotebook };
+}
 
 await check("empty report is explicit and does not invent success", async () => {
   const result = await buildTroubleshootingSummary(runtime);
@@ -87,4 +103,63 @@ await check("a later Runtime revision downgrades historical verification", async
   assert.equal(result.summary.verification.historical, true);
 });
 
-console.log(`PASS Troubleshooting Summary logic: ${pass}/5 assertions.`);
+await check("undo restores the fault and marks the old verification historical", async () => {
+  const session = await verifiedSession();
+  const undone = undoRuntime(session.runtime);
+  assert.equal(undone.ok, true);
+  assert.equal(undone.workspace.engineState.stateRevision, 0);
+  assert.equal(undone.workspace.engineState.resources.client1.properties.defaultGateway, "10.78.1.254");
+  const probe = runRuntimeActiveProbe(undone.workspace, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  assert.equal(probe.transcript.truth, "FALSE");
+  const result = await buildTroubleshootingSummary(undone.workspace, session.notebook);
+  assert.equal(result.summary.status, "HISTORICAL_VERIFIED_NEEDS_RECHECK");
+  assert.equal(result.summary.verification.historical, true);
+  assert.match(result.summary.markdown, /Ny verifiering behövs/);
+});
+
+await check("restoring a pre-repair checkpoint cannot retain current verification", async () => {
+  let current = previewRuntime(builder).workspace;
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  let currentNotebook = (await captureRuntimeActiveProbeEvidence(current, undefined, before.transcript)).notebook;
+  const checkpoint = createRuntimeCheckpoint(current, "Before repair");
+  current = checkpoint.workspace;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const request = { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.1.1" } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token);
+  current = committed.workspace;
+  currentNotebook = committed.notebook;
+  const after = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  currentNotebook = (await captureRuntimeActiveProbeEvidence(current, currentNotebook, after.transcript)).notebook;
+  const restored = restoreRuntimeCheckpoint(current, checkpoint.workspace.history.checkpoints[0].id);
+  assert.equal(restored.ok, true);
+  const result = await buildTroubleshootingSummary(restored.workspace, currentNotebook);
+  assert.equal(result.summary.status, "HISTORICAL_VERIFIED_NEEDS_RECHECK");
+  assert.equal(result.summary.runtimeRevision, 0);
+});
+
+await check("redo is accepted only when Runtime history proves the exact repaired state", async () => {
+  const session = await verifiedSession();
+  const undone = undoRuntime(session.runtime);
+  const redone = redoRuntime(undone.workspace);
+  assert.equal(redone.ok, true);
+  assert.equal(redone.workspace.engineState.stateRevision, 1);
+  assert.equal(redone.workspace.engineState.resources.client1.properties.defaultGateway, "10.78.1.1");
+  const result = await buildTroubleshootingSummary(redone.workspace, session.notebook);
+  assert.equal(result.summary.status, "VERIFIED_IMPROVEMENT");
+  assert.equal(result.summary.verification.historical, false);
+});
+
+await check("a different operation at the same revision cannot inherit old verification", async () => {
+  const session = await verifiedSession();
+  const undone = undoRuntime(session.runtime);
+  const branched = applyRuntimeOperationWithHistory(undone.workspace, { op: "set", target: "client1", path: "properties.networkProfile", value: "public" });
+  assert.equal(branched.ok, true);
+  assert.equal(branched.workspace.engineState.stateRevision, 1);
+  assert.equal(branched.workspace.engineState.resources.client1.properties.defaultGateway, "10.78.1.254");
+  const result = await buildTroubleshootingSummary(branched.workspace, session.notebook);
+  assert.equal(result.summary.status, "HISTORICAL_VERIFIED_NEEDS_RECHECK");
+  assert.equal(result.summary.verification.historical, true);
+});
+
+console.log(`PASS Troubleshooting Summary logic: ${pass}/9 assertions.`);

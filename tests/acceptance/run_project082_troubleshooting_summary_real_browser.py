@@ -169,6 +169,25 @@ def main():
             require(downloaded_path.read_text() == markdown, "Markdown download differed from visible report model")
             evidence["gateway"] = {"status": "VERIFIED_IMPROVEMENT", "copyMatches": True, "downloadMatches": True}
 
+            # Undo must restore the fault and make the old verification historical.
+            page.get_by_role("button", name="Ångra").click()
+            expect(page.locator('[data-runtime-panel="progress"]')).to_contain_text("Tillståndsrevision: 0", timeout=15000)
+            require("FALSE" in run_probe(page, "windows.ping", "FALSE", save=False), "Undo did not restore the failed gateway probe")
+            historical = wait_summary_status(page, "HISTORICAL_VERIFIED_NEEDS_RECHECK")
+            expect(historical).to_contain_text("Ny verifiering behövs")
+            historical_markdown = historical.locator('[data-summary-markdown="true"]').input_value()
+            require("Status: Historisk förbättring" in historical_markdown, "Markdown did not carry the historical status")
+            historical.locator('[data-summary-copy="true"]').click()
+            expect(historical.locator('[data-summary-copy-feedback="true"]')).to_contain_text("kopierades", timeout=10000)
+            require(page.evaluate("navigator.clipboard.readText()") == historical_markdown, "Undo clipboard text differed from visible historical report")
+            with page.expect_download() as historical_download_info:
+                historical.locator('[data-summary-download="true"]').click()
+            historical_download = historical_download_info.value
+            historical_download_path = args.evidence_dir / f"after-undo-{historical_download.suggested_filename}"
+            historical_download.save_as(str(historical_download_path))
+            require(historical_download_path.read_text() == historical_markdown, "Undo Markdown download differed from visible historical report")
+            evidence["gateway"]["afterUndo"] = {"status": "HISTORICAL_VERIFIED_NEEDS_RECHECK", "copyMatches": True, "downloadMatches": True}
+
             # Reset and scenario switch must clear the current report identity.
             reset(page)
             wait_summary_status(page, "INSUFFICIENT_EVIDENCE")
