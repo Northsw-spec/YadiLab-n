@@ -151,7 +151,7 @@ function compactJson(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
-function isCurrentRemediationState(runtime: RuntimeWorkspace, remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>): boolean {
+export function isCurrentRemediationState(runtime: RuntimeWorkspace, remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>): boolean {
   if (runtime.engineState.stateRevision !== remediation.afterStateRevision) return false;
   const predecessor = runtime.history.past.at(-1);
   if (!predecessor || predecessor.stateRevision !== remediation.beforeStateRevision) return false;
