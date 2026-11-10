@@ -24,6 +24,10 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .main-actions-context { display: flex; gap: .55rem; flex-wrap: wrap; }
 .context-select { display: grid; gap: .18rem; color: #a9c2d8; font-size: .7rem; min-width: min(100%, 18rem); }
 .context-select select { min-width: 0; border: 1px solid #31506d; border-radius: 6px; background: #0b1726; color: #edf8ff; padding: .38rem .45rem; }
+.main-actions-guided-start { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .55rem .7rem; border: 1px solid #386b61; border-radius: 9px; background: #102f32; }
+.main-actions-guided-start .guided-lab-primary-button { min-height: 2.8rem; font-weight: 800; border: 2px solid #6ed7b2; background: #185d59; color: #fff; box-shadow: 0 1px 8px rgba(50,176,139,.2); }
+.main-actions-guided-start .guided-lab-primary-button:hover:not(:disabled) { background: #247b70; }
+.main-actions-guided-start > span { color: #d7f2e5; font-size: .83rem; }
 .main-actions-menus { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; }
 .main-actions-primary-import { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .55rem .7rem; border: 1px solid #34628a; border-radius: 9px; background: #102943; }
 .main-actions-primary-import .network-import-primary-button { min-height: 2.8rem; font-weight: 800; border: 2px solid #5ebfe7; background: #185074; color: #fff; box-shadow: 0 1px 8px rgba(32,142,191,.18); }
@@ -118,6 +122,7 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .helper-note { margin: 0; color: #9fb5cc; font-size: .86rem; }
 .helper-grid { display: grid; gap: .65rem; }
 .helper-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.guided-next-actions { padding-top: .15rem; }
 .helper-stage { border-top: 1px solid #22364e; padding-top: .7rem; display: grid; gap: .55rem; }
 .helper-stage h4 { margin: 0; color: #d8e7f7; }
 .helper-status { margin: 0; padding: .4rem .55rem; border-radius: 6px; background: #15253a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
