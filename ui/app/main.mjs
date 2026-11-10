@@ -1141,6 +1141,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
     else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
   };
+  const onEdgeClick = (_event, edge) => {
+    const active = liveTopologyWorkspace();
+    if (!active || active.mode !== "runtime") return;
+    if (active.selection?.primary === edge.id && active.selection?.ids?.length === 1) return;
+    setWorkspace(setRuntimeSelection(active, [edge.id], edge.id));
+  };
   const onNodeDragStop = (_event, node) => {
     const active = liveTopologyMutationWorkspace();
     if (!active || denyUnappliedCanvasChange(active) ||
@@ -1431,6 +1437,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       multiSelectionKeyCode: "Shift",
       selectionKeyCode: "Shift",
       onNodeClick,
+      onEdgeClick,
       onSelectionChange,
       onPaneClick: clearSelection,
       onPaneContextMenu: (event) => event.preventDefault(),
