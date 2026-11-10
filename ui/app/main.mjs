@@ -1298,8 +1298,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const target = baseFlow.nodes.find((node) => node.id === nodeId);
       if (target) flowApi.current?.setCenter?.(target.position.x + (target.width ?? 160) / 2, target.position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 260 });
     }
-    if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [nodeId], nodeId));
-    else setWorkspace(setRuntimeSelection(active, [nodeId], nodeId));
+    // The bounded 10k explorer is a read-only visual projection. Avoid
+    // rebuilding the 10,000-row Builder selection map during navigation.
+    if (!validTenThousandFocus) {
+      if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [nodeId], nodeId));
+      else setWorkspace(setRuntimeSelection(active, [nodeId], nodeId));
+    }
     setTopologyContextMenu(null);
   };
   const goTopologyBack = () => {
