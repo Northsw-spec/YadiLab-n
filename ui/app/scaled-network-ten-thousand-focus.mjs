@@ -107,10 +107,11 @@ async function buildRootFocus(model, rootId, pageNumber) {
   let layoutDiagnostics = [];
   let usedFallback = false;
   // A focused interaction must remain responsive even when the imported
-  // source contains a high-degree switch. ELK is still used for small
-  // bounded projections; larger focused pages use the deterministic
-  // topology-aware fallback directly instead of blocking the UI thread.
-  if (bounded.resources.length <= 32) {
+  // source contains a high-degree switch. The bounded interactive projection
+  // uses the deterministic topology-aware fallback; ELK remains available to
+  // the source-row page path and is only used here for a degenerate no-edge
+  // singleton where it cannot block the interaction.
+  if (bounded.resources.length <= 1 && bounded.connections.length === 0) {
     try { layout = await runAutoLayout(bounded, new ElkLayoutBackend()); }
     catch (cause) { layout = { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] }; }
   } else {
