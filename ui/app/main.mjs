@@ -1309,6 +1309,22 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }
     setTopologyContextMenu(null);
   };
+  useEffect(() => {
+    if (!validTenThousandFocus) return undefined;
+    const panel = topologyPanelRef.current;
+    if (!panel) return undefined;
+    const onNativeDoubleClick = (event) => {
+      const resourceNode = event.target?.closest?.(".react-flow__node-resource")?.closest?.(".react-flow__node[data-id]");
+      const nodeId = resourceNode?.getAttribute?.("data-id");
+      if (!nodeId || !canonicalResourceById.has(nodeId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const resource = canonicalResourceById.get(nodeId);
+      focusTopologyNode(nodeId, resource?.label ?? nodeId);
+    };
+    panel.addEventListener("dblclick", onNativeDoubleClick, true);
+    return () => panel.removeEventListener("dblclick", onNativeDoubleClick, true);
+  }, [validTenThousandFocus, canonicalResourceById, topologyFocusRoot]);
   const goTopologyBack = () => {
     setTopologyViewHistory((history) => {
       if (history.length <= 1) return history;
