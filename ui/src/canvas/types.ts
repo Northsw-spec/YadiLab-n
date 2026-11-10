@@ -62,6 +62,10 @@ export interface CanvasNode {
 export interface CanvasEdgeData {
   readonly semanticId: string;
   readonly connectionKind: NormalizedScenario["connections"][number]["kind"];
+  /** True when this edge is a visual overview summary, never a physical link. */
+  readonly summaryOnly?: boolean;
+  /** Number of canonical declared links represented by a summary edge. */
+  readonly declaredLinkCount?: number;
   readonly properties: Readonly<Record<string, unknown>>;
   readonly visual: SemanticLinkDescriptor;
 }
