@@ -1214,6 +1214,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onNodeClick = (_event, node) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `node-click:${node.id}`)) return;
+    if (validTenThousandFocus) return;
     if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
     else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
