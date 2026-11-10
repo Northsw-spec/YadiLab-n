@@ -144,6 +144,7 @@ def main():
             page.locator('.react-flow__node[data-id="client1"]').click()
             expect(field(probe_panel, "Källvärd")).to_have_value("server1")
             field(probe_panel, "Källvärd").select_option("client1")
+            field(probe_panel, "Destination").select_option("server1")
             transcript = run_probe(page)[1]
             expect(transcript).to_contain_text("verdict FALSE")
             add_hypothesis(page, "Gatewayen kan vara felaktig.")
