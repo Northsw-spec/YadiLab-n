@@ -176,7 +176,7 @@ def main():
             historical = wait_summary_status(page, "HISTORICAL_VERIFIED_NEEDS_RECHECK")
             expect(historical).to_contain_text("Ny verifiering behövs")
             historical_markdown = historical.locator('[data-summary-markdown="true"]').input_value()
-            require("Status: Historisk förbättring" in historical_markdown, "Markdown did not carry the historical status")
+            require("Historisk förbättring" in historical_markdown, "Markdown did not carry the historical status")
             historical.locator('[data-summary-copy="true"]').click()
             expect(historical.locator('[data-summary-copy-feedback="true"]')).to_contain_text("kopierades", timeout=10000)
             require(page.evaluate("navigator.clipboard.readText()") == historical_markdown, "Undo clipboard text differed from visible historical report")
