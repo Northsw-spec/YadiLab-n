@@ -1629,9 +1629,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     },
     e(ReactFlow, {
       key: hierarchyCanvasKey,
-      nodes: flow.nodes.map((node) => node.type === "resource"
-        ? { ...node, data: { ...node.data, onDoubleClick: (event) => onNodeDoubleClick(event, node) } }
-        : node),
+      nodes: flow.nodes,
       edges: flow.edges,
       nodeTypes,
       edgeTypes,
