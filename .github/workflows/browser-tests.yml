@@ -43,6 +43,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null
           mkdir -p "$RUNNER_TEMP/yadilab-evidence"
+          node tests/browser/run_project080_tcp_interpretation_tests.mjs
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_release_identity_real_browser.py \
             --url http://127.0.0.1:18981/ --expected-commit "$YADILAB_EXPECTED_COMMIT" \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/identity"
@@ -73,6 +74,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project079_dns_troubleshooting_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project079-dns-troubleshooting"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project080_root_cause_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project080-root-cause"
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_package_export_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/package-draft-export"

@@ -8,6 +8,7 @@
  */
 
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
+import { modeledTcpProbeInterpretation } from "./tcp-probe-interpretation.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectFileControls } from "./project-file-controls.mjs";
 import { createPendingBuilderDraftRegistry } from "./builder-draft-guard.mjs";
@@ -3228,6 +3229,7 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
   const visualRunSequenceRef = useRef(0);
   const model = buildRuntimeActiveProbeModel(workspace, sourceId || workspace.selection.primary, destinationId);
   const probe = model.probes.find((item) => item.probeId === probeId) ?? model.probes[0];
+  const tcpInterpretation = modeledTcpProbeInterpretation(transcript);
 
   const applyAcceptancePreset = (preset) => {
     if (!preset) return;
@@ -3314,6 +3316,10 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
           e("strong", null, `${transcript.command} · ${transcript.sourceLabel}`),
           e("small", null, `Engine ${transcript.engineId}@${transcript.engineVersion} · Runtime revision ${transcript.stateRevision} · ${transcript.boundary} · verdict ${transcript.truth}`),
           e("pre", null, transcript.lines.join("\n")),
+          tcpInterpretation ? e("p", {
+            className: "helper-note tcp-probe-interpretation",
+            "data-tcp-probe-interpretation": tcpInterpretation.code,
+          }, tcpInterpretation.text) : null,
           probe?.category === "dns" ? e("p", {
             className: "helper-note dns-probe-interpretation",
             "data-dns-probe-interpretation": transcript.truth,
