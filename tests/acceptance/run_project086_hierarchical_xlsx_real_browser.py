@@ -118,6 +118,7 @@ def viewport(page):
 
 def case(browser, url):
     page, errors, outside = setup(browser, url)
+    page.on("console", lambda message: print(f"BROWSER CONSOLE: {message.text}", flush=True) if "PROJECT-086" in message.text else None)
     try:
         source, devices, links = hierarchical_xlsx()
         source_sha = hashlib.sha256(source).hexdigest()
