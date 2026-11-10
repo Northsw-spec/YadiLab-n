@@ -124,6 +124,7 @@ import { reviewNmapObservationAssociations } from "../../enterprise-import/src/n
 import networkFaultPack from "../../fault-packs/builtin/network-core.json";
 import windowsFaultPack from "../../fault-packs/builtin/windows-core.json";
 import linuxFaultPack from "../../fault-packs/builtin/linux-core.json";
+import { buildTroubleshootingSummary, createTroubleshootingSummaryDownload } from "../src/browser/troubleshooting-summary.js";
 
 const builtinFaultPacks = [networkFaultPack, windowsFaultPack, linuxFaultPack];
 const builtinFaultPackLabels = {
@@ -3195,6 +3196,78 @@ function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics
   );
 }
 
+function RuntimeTroubleshootingSummaryPanel({ workspace, notebook, setDiagnostics }) {
+  const [summary, setSummary] = useState(null);
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const textRef = useRef(null);
+  useEffect(() => {
+    let active = true;
+    setSummary(null);
+    setCopyFeedback("");
+    buildTroubleshootingSummary(workspace, notebook ?? undefined).then((result) => {
+      if (!active) return;
+      if (result.diagnostics.length) setDiagnostics(result.diagnostics);
+      setSummary(result.ok ? result.summary ?? null : null);
+    });
+    return () => { active = false; };
+  }, [workspace.scenario.sourceHash, workspace.engineState.stateRevision, notebook?.notebookIdentity]);
+  const copySummary = async () => {
+    if (!summary) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(summary.markdown);
+      setCopyFeedback("Sammanfattningen kopierades till urklipp.");
+    } catch {
+      textRef.current?.focus();
+      textRef.current?.select();
+      setCopyFeedback("Urklipp kunde inte användas. Texten är markerad — kopiera manuellt med Ctrl+C.");
+    }
+  };
+  const downloadSummary = () => {
+    if (summary) downloadBlob(new Blob([summary.markdown], { type: "text/markdown" }), createTroubleshootingSummaryDownload(summary).filename);
+  };
+  return e("details", { open: true, className: "observation-helper troubleshooting-summary", "data-troubleshooting-summary": "v0.82" },
+    e("summary", null, "Felsökningssammanfattning"),
+    e("div", { className: "observation-helper-body" },
+      summary ? e(React.Fragment, null,
+        e("p", { className: "helper-note" }, "Samma aktuella Runtime- och Notebook-evidens används för visningen, kopieringen och Markdown-nedladdningen. Rapporten visar inte dold facit- eller lösningsinformation."),
+        e("div", { className: "status-grid", "data-troubleshooting-summary-status": summary.status },
+          e("span", null, "Ärende / labb"), e("strong", null, summary.title),
+          e("span", null, "Status"), e("strong", null, summary.statusLabel),
+          e("span", null, "Runtime-revision"), e("strong", null, String(summary.runtimeRevision)),
+          e("span", null, "Completion separat"), e("strong", null, summary.completionLabel),
+        ),
+        e("section", { className: "summary-section" }, e("h4", null, "Problem"), e("p", null, summary.problem)),
+        e("section", { className: "summary-section" }, e("h4", null, "Undersökningar"), summary.evidence.length
+          ? e("ul", { className: "notebook-entries" }, ...summary.evidence.map((item) => e("li", { key: item.entryId, "data-summary-evidence": item.entryId },
+            e("strong", null, `${item.command}${item.truth ? ` · ${item.truth}` : ""}`),
+            e("small", null, `${item.source}${item.destination ? ` → ${item.destination}` : ""} · rev ${item.revision}`),
+            !item.truth ? e("p", null, item.result) : null)))
+          : e("p", { className: "helper-note" }, "Ingen observation eller aktiv probe är sparad ännu.")),
+        e("section", { className: "summary-section" }, e("h4", null, "Användarens hypotes"), e("p", null, summary.hypothesis ? `${summary.hypothesis.text}${summary.hypothesis.historical ? " · historisk revision" : ""}` : "Ingen hypotes är dokumenterad.")),
+        e("section", { className: "summary-section" }, e("h4", null, "Genomförd åtgärd"), summary.action
+          ? e(React.Fragment, null,
+            e("p", null, `${summary.action.label} · ${summary.action.target}`),
+            e("small", null, `${summary.action.operation} · rev ${summary.action.beforeRevision} → ${summary.action.afterRevision}`),
+            e("p", null, `${summary.action.beforeValue} → ${summary.action.afterValue}`),
+            summary.action.note ? e("p", null, summary.action.note) : null)
+          : e("p", null, "Ingen åtgärd är dokumenterad.")),
+        e("section", { className: "summary-section" }, e("h4", null, "Verifiering"), summary.verification?.pairs.length
+          ? e("ul", { className: "notebook-entries" }, ...summary.verification.pairs.map((pair, index) => e("li", { key: `${pair.label}-${index}`, "data-summary-verification": pair.pairStatus },
+            e("strong", null, pair.label), e("small", null, `${pair.before} → ${pair.after} · ${pair.pairStatus}${summary.verification.historical ? " · historisk" : ""}`))))
+          : e("p", null, "Ingen matchad före-/efterevidens finns ännu.")),
+        e("section", { className: "summary-section", "data-summary-uncertainty": "true" }, e("h4", null, "Kvarstående osäkerhet"), e("p", null, summary.uncertainty)),
+        e("p", { className: "helper-note" }, summary.modeledEnvironment),
+        e("label", { className: "summary-copy-field" }, "Rapporttext", e("textarea", { ref: textRef, readOnly: true, value: summary.markdown, rows: 12, "data-summary-markdown": "true", onFocus: (event) => event.currentTarget.select() })),
+        e("div", { className: "helper-actions" },
+          e("button", { type: "button", onClick: copySummary, "data-summary-copy": "true" }, "Kopiera för IT-ärende"),
+          e("button", { type: "button", onClick: downloadSummary, "data-summary-download": "true" }, "Ladda ner sammanfattning (.md)")),
+        copyFeedback ? e("p", { className: "helper-note", role: "status", "data-summary-copy-feedback": "true" }, copyFeedback) : null,
+      ) : e("p", { className: "helper-note" }, "Bygger aktuell felsökningssammanfattning…"),
+    ),
+  );
+}
+
 function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, onTopologyState }) {
   const initialModel = buildRuntimeObservationModel(workspace, workspace.selection.primary);
   const [targetId, setTargetId] = useState(initialModel.targetId ?? "");
@@ -3633,6 +3706,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
           e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics, onOpenTool: openGuidedTool }),
+          e(RuntimeTroubleshootingSummaryPanel, { workspace, notebook, setDiagnostics }),
           e(RuntimeObservationPanel, { workspace, setDiagnostics, onSaveEvidence: saveObservationEvidence, onTopologyState }),
           e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen }),
           e(RuntimeTroubleshootingNotebookPanel, { workspace, setWorkspace, notebook, setNotebook, setDiagnostics, onTopologyState }),
