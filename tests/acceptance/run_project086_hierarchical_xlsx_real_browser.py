@@ -168,6 +168,8 @@ def case(browser, url):
         client_node = page.locator(f'.react-flow__node[data-id="{client_id(38)}"]')
         client_box = client_node.bounding_box()
         require(client_box is not None, "Missing focused client bounds")
+        print(f"PROJECT-086: client box={client_box}", flush=True)
+        print(f"PROJECT-086: client hit={page.evaluate('(p) => document.elementFromPoint(p.x, p.y)?.outerHTML.slice(0, 180)', {'x': client_box['x'] + client_box['width'] / 2, 'y': client_box['y'] + client_box['height'] / 2})}", flush=True)
         page.mouse.dblclick(client_box["x"] + client_box["width"] / 2, client_box["y"] + client_box["height"] / 2)
         print("PROJECT-086: client double click", flush=True)
         page.wait_for_timeout(5000)
