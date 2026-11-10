@@ -95,7 +95,8 @@ function probePreparation(workspace: RuntimeWorkspace, requirement: Extract<Requ
   const candidates = model.probes.filter((probe) => {
     if (requirement.category === "dns") return probe.category === "dns" && probe.argumentKind === "dns_name";
     if (requirement.protocol === "icmp") return probe.category === "connectivity" && probe.probeId.endsWith("ping");
-    if (requirement.protocol === "tcp") return probe.category === "connectivity" && probe.argumentKind === "destination_port";
+    if (requirement.protocol === "tcp") return probe.category === "connectivity" && probe.argumentKind === "destination_port" && (probe.probeId.endsWith("nc_tcp") || probe.commandTemplate.includes("nc -vz"));
+    if (requirement.protocol === "udp") return probe.category === "connectivity" && probe.argumentKind === "destination_port" && (probe.probeId.endsWith("udp_delivery") || probe.commandTemplate.includes("ss -lunp"));
     return requirement.category === undefined || probe.category === requirement.category;
   });
   if (!candidates.length) return undefined;
@@ -116,7 +117,7 @@ function repeatProbePreparation(workspace: RuntimeWorkspace, entry: Troubleshoot
   const probe = model.probes.find((candidate) => entry.protocol === "icmp"
     ? candidate.probeId.endsWith("ping")
     : entry.protocol === "tcp"
-      ? candidate.argumentKind === "destination_port"
+      ? candidate.argumentKind === "destination_port" && (candidate.probeId.endsWith("nc_tcp") || candidate.commandTemplate.includes("nc -vz"))
       : entry.category === "dns" ? candidate.category === "dns" : candidate.category === entry.category);
   if (!probe || (entry.destinationId && !model.destinations.some((destination) => destination.id === entry.destinationId))) return undefined;
   return {
