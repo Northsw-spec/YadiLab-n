@@ -139,7 +139,7 @@ def case(browser, url):
         expect(panel.locator('[data-network-import-activate="true"]')).to_be_enabled()
         panel.locator('[data-network-import-activate="true"]').click()
         expect(panel).to_have_count(0, timeout=240000)
-        expect(page.locator("h2", has_text="Byggläge")).to_be_visible(timeout=30000)
+        require(page.locator(".side-panel h2").inner_text(timeout=30000) == "Byggläge", "XLSX activation did not remain in Builder")
         expect(page.locator('[data-scale-p4e1-focus-page="true"]')).to_be_visible(timeout=180000)
         exported = exported_source(page)
         require([row[0] for row in devices] == [row["id"] for row in exported["resources"]], "Canonical device IDs changed")
