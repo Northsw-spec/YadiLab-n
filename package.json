@@ -166,6 +166,7 @@
     "test:audit007-p2b-import-fields": "tsc -p tests/tsconfig.enterprise-import.json && node tests/enterprise-import/run_audit007_p2b_import_field_integrity_tests.mjs",
     "test:audit007-p3-address-contract": "tsc -p tests/tsconfig.engine.json && tsc -p tests/tsconfig.enterprise.json && node tests/security/run_audit007_p3_network_address_contract_tests.mjs",
     "test:scale001-p0-source": "tsc -p tests/tsconfig.browser.json && node tests/browser/run_scale001_network_capacity_tests.mjs",
+    "test:scale001-p4b1-hierarchical": "node tests/browser/run_scale001_p4b1_hierarchical_fallback_tests.mjs",
     "test:scale001-p1a-office-structure": "tsc -p tests/tsconfig.browser.json && node tests/browser/run_scale001_p1a_office_large_structural_tests.mjs",
     "test:scale001-p1b1-office-batch": "tsc -p tests/tsconfig.browser.json && node tests/browser/run_scale001_p1b1_office_batch_disclosure_tests.mjs",
     "test:scale001-p1b2-office-topology": "tsc -p tests/tsconfig.browser.json && node tests/browser/run_scale001_p1b2_office_reviewed_topology_tests.mjs",

@@ -12,6 +12,29 @@ const fail=code=>{const e=new Error(code);e.code=code;throw e;};
 const validId=x=>typeof x==="string"&&ID.test(x);
 const has=x=>Array.isArray(x);
 
+function boundedDeterministicLayout(model) {
+  const resources = [...model.resources].sort((a,b) => a.id.localeCompare(b.id, "en"));
+  const maxLabel = resources.reduce((max, resource) => Math.max(max, [...String(resource.label ?? resource.id)].length), 0);
+  const width = Math.max(180, Math.min(520, 24 + Math.max(22, maxLabel) * 7));
+  const height = 96;
+  const gapX = 48;
+  const gapY = 40;
+  const columns = Math.max(1, Math.min(12, Math.ceil(Math.sqrt(resources.length))));
+  return {
+    formatId: "infrastructure-cyber-lab.layout",
+    schemaVersion: "0.1.0",
+    scenarioId: model.scenarioId,
+    engine: "elk.layered",
+    nodes: resources.map((resource, index) => ({
+      id: resource.id,
+      x: (index % columns) * (width + gapX),
+      y: Math.floor(index / columns) * (height + gapY),
+      width,
+      height,
+    })),
+  };
+}
+
 export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page){
   if(!Number.isSafeInteger(page)||page<1||page>100)
     fail("SCALE_P4B1_SELECTION_BLOCKED");
@@ -90,10 +113,15 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
     fail("SCALE_P4B1_SOURCE_BLOCKED");
   const bounded={...model,zones:[],resources,connections:visible};
   let layout;
+  let layoutDiagnostics=[];
+  let usedFallback=false;
   try{layout=await runAutoLayout(bounded,new ElkLayoutBackend());}
-  catch{fail("SCALE_P4B1_LAYOUT_BLOCKED");}
-  if(!layout?.ok||!layout.document||layout.document.scenarioId!==model.scenarioId)
-    fail("SCALE_P4B1_LAYOUT_BLOCKED");
+  catch(cause){layout={ok:false,diagnostics:[{severity:"error",code:"LAYOUT_BACKEND_FAILED",message:cause instanceof Error?cause.message:String(cause)}]};}
+  if(!layout?.ok||!layout.document||layout.document.scenarioId!==model.scenarioId){
+    usedFallback=true;
+    layoutDiagnostics=layout?.diagnostics??[];
+    layout={ok:true,document:boundedDeterministicLayout(bounded),diagnostics:[...layoutDiagnostics,{severity:"warning",code:"SCALE_P4B1_LAYOUT_FALLBACK",message:"ELK validation rejected this bounded projection; deterministic grid fallback retained all selected source nodes and links."}]};
+  }
   let canvas;
   try{canvas=projectScenarioToCanvas(bounded,layout.document);}
   catch{fail("SCALE_P4B1_PROJECTION_BLOCKED");}
@@ -113,6 +141,8 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
     focusedNodes:canvas.nodes.length,focusedEdges:canvas.edges.length,
     hiddenOriginalLinks:LINKS-visible.length,
     focusCanvas:canvas,contextNodeIds:Object.freeze(context),
+    layoutStrategy:usedFallback?"bounded-deterministic-grid":"elk.layered",
+    layoutDiagnostics:Object.freeze(layoutDiagnostics.map(d=>Object.freeze({...d}))),
     canActivate:false,engineVerified:false,physicalTopologyVerified:false
   });
 }
