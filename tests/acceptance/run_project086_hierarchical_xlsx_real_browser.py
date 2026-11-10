@@ -165,7 +165,10 @@ def case(browser, url):
         client_box = client_node.bounding_box()
         require(client_box is not None, "Missing focused client bounds")
         page.mouse.dblclick(client_box["x"] + client_box["width"] / 2, client_box["y"] + client_box["height"] / 2)
-        page.wait_for_timeout(5000)
+        page.wait_for_function(
+            "expected => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === expected",
+            arg=client_id(38), timeout=180000,
+        )
         client_focus_root = page.locator('.topology-panel').get_attribute('data-topology-focus-root')
         require(client_focus_root == client_id(38), "Double-click did not open the client's canonical focused graph")
         page.locator('[data-topology-back="true"]').click()
