@@ -8,6 +8,7 @@
  */
 
 import { UdpIcmpFailureXRay } from "./udp-icmp-xray.mjs";
+import { modeledTcpProbeInterpretation } from "./tcp-probe-interpretation.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectFileControls } from "./project-file-controls.mjs";
 import { createPendingBuilderDraftRegistry } from "./builder-draft-guard.mjs";
@@ -3212,34 +3213,6 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
   );
 }
 
-
-function modeledTcpProbeInterpretation(transcript) {
-  if (transcript?.protocol !== "tcp") return null;
-  const listener = transcript.listenerServiceDecision;
-  if (transcript.truth === "FALSE" && (listener?.disposition === "SERVICE_DISABLED" || listener?.serviceState === "DISABLED")) {
-    return {
-      code: "SERVICE_DISABLED",
-      text: "Engine-evidens: nätväg och policy passerade, men destinationens modellerade tjänst är avstängd. Kontrollera tjänstestatus på målservern innan du ändrar nätverkspolicy.",
-    };
-  }
-  const blockedPolicy = transcript.policyDecisions?.find((decision) => decision.truth === "FALSE");
-  if (transcript.truth === "FALSE" && blockedPolicy) {
-    return {
-      code: "POLICY_BLOCKED",
-      text: `Engine-evidens: trafikpolicyn blockerade på ${blockedPolicy.resourceId} innan målserverns listener prövades. Kontrollera klientens brandvägg/policy; TCP-felet bevisar inte att SSH-tjänsten är avstängd.`,
-    };
-  }
-  if (transcript.truth === "TRUE") {
-    return {
-      code: "REACHABLE_LISTENER",
-      text: "Engine-evidens: TCP/porten nådde en aktiv listener på målservern. Det verifierar tjänstetillgänglighet för den modellerade vägen.",
-    };
-  }
-  return {
-    code: "CAUSE_NOT_PROVEN",
-    text: "Tolkning: TCP-resultatet ensamt skiljer inte mellan tjänst och policy. Kör en tjänsteobservation och en policyobservation innan du väljer remediation.",
-  };
-}
 
 function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false }) {
   const probeDisclosureRef = useRef(null);
