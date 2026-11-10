@@ -105,6 +105,8 @@ export function buildTopologyFocusPage(network: TopologyCanonicalNetwork, rootId
   const directRootEdges = network.connections
     .filter((connection) => (connection.from.resource === rootId || connection.to.resource === rootId) && visible.has(connection.from.resource) && visible.has(connection.to.resource))
     .sort((a, b) => a.id.localeCompare(b.id, "en"));
+  const allRootEdges = network.connections
+    .filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId);
   const neighborEdges = network.connections
     .filter((connection) => visibleNeighbors.includes(connection.from.resource) && visibleNeighbors.includes(connection.to.resource))
     .sort((a, b) => a.id.localeCompare(b.id, "en"));
@@ -116,7 +118,7 @@ export function buildTopologyFocusPage(network: TopologyCanonicalNetwork, rootId
     .slice(0, budget);
   const visibleRootLinks = visibleEdges.filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId).length;
   const visibleNeighborLinks = visibleEdges.length - visibleRootLinks;
-  const totalRootLinks = directRootEdges.length;
+  const totalRootLinks = allRootEdges.length;
   return {
     rootId,
     page: safePage,
