@@ -105,6 +105,10 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project086_hierarchical_xlsx_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project086-hierarchical-xlsx"
+          # PROJECT-087: bounded enterprise overview and both explicit legacy workbook profiles.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project087_enterprise_topology_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project087-enterprise-topology"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

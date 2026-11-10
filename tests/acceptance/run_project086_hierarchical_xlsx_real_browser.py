@@ -182,6 +182,19 @@ def case(browser, url):
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
         page.locator('[data-topology-overview="true"]').click()
         expect(page.locator('[data-topology-focus-root]')).to_have_count(0, timeout=180000)
+        expect(page.locator('section[data-topology-overview]')).to_be_visible(timeout=180000)
+        overview_groups = page.locator('.react-flow__node [data-overview-group]')
+        require(1 <= overview_groups.count() <= 64, "10k overview rendered an unbounded number of group nodes")
+        require("10000 canonical devices · 10000 declared links" in page.locator('section[data-topology-overview]').inner_text(), "10k overview lost canonical counts")
+
+        # The overview is a bounded visual summary. Resolve the real access
+        # device through the canonical search before testing node context and
+        # focus navigation; no source-row page is treated as the overview.
+        search.fill("access-0002")
+        result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text="access-0002").first
+        expect(result).to_be_visible(timeout=30000)
+        result.click()
+        page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
 
         root = page.locator('.react-flow__node[data-id="access-0002"]')
         expect(root).to_be_visible(timeout=180000)

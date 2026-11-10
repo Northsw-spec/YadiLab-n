@@ -1,4 +1,5 @@
 import type { ImportCell, ImportDiagnostic, ImportDocument, ImportRecord, ImportSourceBinding, ImportTable } from "./types.js";
+import { resolveWorkbookCompatibility } from "./workbook-compatibility.js";
 
 // Inventory-to-workbook bridge. It maps only fields explicitly present in the
 // source. Address proximity, gateways and hostnames NEVER imply a physical link.
@@ -141,6 +142,13 @@ export function normalizeNetworkInventoryDocument(
   document: ImportDocument,
   options: Readonly<{ linkSourceChoice?: NetworkLinkSourceDecision }> = {},
 ): NetworkInventoryNormalization {
+  const workbookCompatibility = resolveWorkbookCompatibility(document);
+  if (workbookCompatibility.profile === "legacy-src-22") {
+    // Preserve the original SRC worksheet names through the review and
+    // provenance path. workbook-mapping.ts performs the explicit six-sheet
+    // projection while retaining the other sixteen sheets as documentation.
+    return { document, diagnostics: workbookCompatibility.diagnostics, unmappedColumnCount: 0 };
+  }
   const choice = options?.linkSourceChoice;
   const validChoice = choice === undefined || choice === "LINKS_SHEET" || choice === "INLINE_CONNECTED_TO";
   // Do not silently prefer the first of two competing network inventory

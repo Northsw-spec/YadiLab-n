@@ -18,6 +18,8 @@ export { computeExternalMappingProfileHash, externalDataCapabilities, mapExterna
 export type { ExternalCanonicalMappingResult, ExternalFormatCapability, ExternalFormatStatus, ExternalMappingPreview } from "./external-mapping.js";
 export { mapNetworkWorkbookToScenario, previewNetworkWorkbook, standardWorkbookSheets, validateNetworkWorkbook, YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION } from "./workbook-mapping.js";
 export type { StandardWorkbookSheet, WorkbookImportResult, WorkbookPreview } from "./workbook-mapping.js";
+export { resolveWorkbookCompatibility, workbookCompatibilityInfo } from "./workbook-compatibility.js";
+export type { LegacyWorkbookProfile, PreservedDocumentationSheet, WorkbookCompatibility } from "./workbook-compatibility.js";
 export { resolveReconciliationGroup, searchReconciliation, summarizeReconciliation } from "./reconciliation.js";
 export type { ReconciliationGroup, ReconciliationStatus, ReconciliationSummary } from "./reconciliation.js";
 
