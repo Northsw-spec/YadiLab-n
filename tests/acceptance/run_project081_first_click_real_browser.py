@@ -53,6 +53,7 @@ def click_next_tool(page, tool):
         "observations": '[data-observation-engine="wave1"]',
         "probes": '[data-active-probe-engine="wave2"]',
         "notebook": '[data-troubleshooting-notebook="v0.75"]',
+        "remediation": '[data-troubleshooting-notebook="v0.75"]',
     }
     panel = open_details(page, selectors[tool])
     expect(panel.locator("select, textarea, button:not([disabled])").first).to_be_focused()
@@ -165,7 +166,7 @@ def main():
             click_next_tool(page, "notebook")
             add_hypothesis(page)
             workflow_phase(page, "REMEDIATE")
-            click_next_tool(page, "notebook")
+            click_next_tool(page, "remediation")
             apply_gateway_remediation(page)
             workflow_phase(page, "COLLECT_AFTER_EVIDENCE")
             click_next_tool(page, "probes")

@@ -3135,7 +3135,7 @@ const guidedToolActions = {
     { tool: "notebook", label: "Öppna evidensanteckningar" },
   ],
   FORM_HYPOTHESIS: [{ tool: "notebook", label: "Öppna hypotesanteckningar" }],
-  REMEDIATE: [{ tool: "notebook", label: "Öppna Typed Remediation" }],
+  REMEDIATE: [{ tool: "remediation", label: "Öppna Typed Remediation" }],
   COLLECT_AFTER_EVIDENCE: [
     { tool: "observations", label: "Öppna observationer" },
     { tool: "probes", label: "Öppna aktiva prober" },
@@ -3548,6 +3548,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
       observations: '[data-observation-engine="wave1"]',
       probes: '[data-active-probe-engine="wave2"]',
       notebook: '[data-troubleshooting-notebook="v0.75"]',
+      remediation: '[data-troubleshooting-notebook="v0.75"]',
     };
     const panel = document.querySelector(selectors[tool]);
     if (!panel) return false;
