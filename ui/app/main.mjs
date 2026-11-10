@@ -1322,8 +1322,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const resource = canonicalResourceById.get(nodeId);
       focusTopologyNode(nodeId, resource?.label ?? nodeId);
     };
-    panel.addEventListener("dblclick", onNativeDoubleClick, true);
-    return () => panel.removeEventListener("dblclick", onNativeDoubleClick, true);
+    document.addEventListener("dblclick", onNativeDoubleClick, true);
+    return () => document.removeEventListener("dblclick", onNativeDoubleClick, true);
   }, [validTenThousandFocus, canonicalResourceById, topologyFocusRoot]);
   const goTopologyBack = () => {
     setTopologyViewHistory((history) => {
