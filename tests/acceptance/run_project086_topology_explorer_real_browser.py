@@ -99,8 +99,7 @@ def main():
             expect(page.locator('[data-topology-context-details="node"]')).to_contain_text("client1")
             page.get_by_role("button", name="Stäng detaljer").click()
 
-            node_box = node.bounding_box()
-            page.mouse.dblclick(node_box["x"] + node_box["width"] / 2, node_box["y"] + node_box["height"] / 2, button="left")
+            node.dblclick(force=True)
             expect(page.locator('[data-topology-breadcrumb="focus"]')).to_be_visible(timeout=10000)
             expect(page.locator('[data-topology-focus-counts]')).to_be_visible(timeout=10000)
             expect(page.locator('[data-topology-context-menu]')).to_have_count(0)
