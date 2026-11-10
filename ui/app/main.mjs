@@ -399,7 +399,7 @@ function ResourceNode({ data, selected }) {
   const active = modeledStateFocus || ["current", "arrived", "dropped", "uncertain", "no_path"].includes(data.journeyState) || (data.activeInterfaceIds?.length ?? 0) > 0;
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
+  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
       e(DeviceChassis, { family, active }),
@@ -1612,7 +1612,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     },
     e(ReactFlow, {
       key: hierarchyCanvasKey,
-      nodes: flow.nodes,
+      nodes: flow.nodes.map((node) => node.type === "resource"
+        ? { ...node, data: { ...node.data, onDoubleClick: (event) => onNodeDoubleClick(event, node) } }
+        : node),
       edges: flow.edges,
       nodeTypes,
       edgeTypes,
