@@ -9,6 +9,7 @@ import {
 } from "../../../observation-engine/src/index.js";
 import { applyOperation } from "../../../engine/src/index.js";
 import type { ScenarioOperation, TruthValue } from "../../../engine/src/index.js";
+import type { Normalizedscenariotroubleshootingactiveproberequirement } from "../../../core-model/src/generated/contracts.js";
 import type { BrowserDiagnostic, BrowserWorkspace, RuntimeWorkspace } from "./types.js";
 
 export type TroubleshootingSummaryStatus =
@@ -51,6 +52,7 @@ export interface TroubleshootingSummaryAction {
 }
 
 export interface TroubleshootingSummaryVerification {
+  readonly remediationEntryId?: string;
   readonly status: RemediationReview["status"];
   readonly historical: boolean;
   readonly pairs: readonly {
@@ -59,6 +61,13 @@ export interface TroubleshootingSummaryVerification {
     readonly after: string;
     readonly pairStatus: string;
   }[];
+}
+
+export interface TroubleshootingSummaryFinalVerification {
+  readonly required: readonly Normalizedscenariotroubleshootingactiveproberequirement[];
+  readonly completed: readonly Normalizedscenariotroubleshootingactiveproberequirement[];
+  readonly missing: readonly Normalizedscenariotroubleshootingactiveproberequirement[];
+  readonly complete: boolean;
 }
 
 export interface TroubleshootingSummary {
@@ -71,6 +80,10 @@ export interface TroubleshootingSummary {
   readonly statusLabel: string;
   readonly runtimeRevision: number;
   readonly evidence: readonly TroubleshootingSummaryEvidence[];
+  readonly actions: readonly TroubleshootingSummaryAction[];
+  readonly verifications: readonly TroubleshootingSummaryVerification[];
+  readonly finalVerification: TroubleshootingSummaryFinalVerification;
+  readonly fullRecoveryVerified: boolean;
   readonly hypothesis?: TroubleshootingSummaryHypothesis;
   readonly action?: TroubleshootingSummaryAction;
   readonly verification?: TroubleshootingSummaryVerification;
@@ -147,6 +160,31 @@ function entryById(notebook: TroubleshootingNotebook, entryId: string): Troubles
   return notebook.entries.find((entry) => entry.entryId === entryId);
 }
 
+export function declaredFinalVerificationRequirements(runtime: RuntimeWorkspace): readonly Normalizedscenariotroubleshootingactiveproberequirement[] {
+  return (runtime.scenario.troubleshootingObjectives ?? [])
+    .filter((objective) => !objective.required)
+    .flatMap((objective) => objective.requirements)
+    .filter((requirement): requirement is Normalizedscenariotroubleshootingactiveproberequirement => requirement.kind === "active_probe" && requirement.truth === "TRUE");
+}
+
+function matchesFinalVerificationRequirement(requirement: Normalizedscenariotroubleshootingactiveproberequirement, entry: Extract<TroubleshootingNotebookEntry, { readonly kind: "active_probe" }>): boolean {
+  return entry.truth === "TRUE"
+    && (requirement.sourceId === undefined || requirement.sourceId === entry.sourceId)
+    && (requirement.destinationId === undefined || requirement.destinationId === entry.destinationId)
+    && (requirement.protocol === undefined || requirement.protocol === entry.protocol)
+    && (requirement.port === undefined || requirement.port === entry.port)
+    && (requirement.queryName === undefined || requirement.queryName === entry.queryName);
+}
+
+export function currentFinalVerificationRequirements(runtime: RuntimeWorkspace, notebook: TroubleshootingNotebook, latestRemediation?: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>): TroubleshootingSummaryFinalVerification {
+  const required = declaredFinalVerificationRequirements(runtime);
+  const minimumSequence = latestRemediation?.sequence ?? 0;
+  const current = notebook.entries.filter((entry): entry is Extract<TroubleshootingNotebookEntry, { readonly kind: "active_probe" }> => entry.kind === "active_probe" && entry.stateRevision === runtime.engineState.stateRevision && entry.sequence > minimumSequence);
+  const completed = required.filter((requirement) => current.some((entry) => matchesFinalVerificationRequirement(requirement, entry)));
+  const missing = required.filter((requirement) => !completed.includes(requirement));
+  return { required, completed, missing, complete: missing.length === 0 };
+}
+
 function compactJson(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
@@ -181,9 +219,27 @@ function markdownFor(summary: Omit<TroubleshootingSummary, "markdown" | "reportI
   } else {
     lines.push("- Ingen observation eller aktiv probe är sparad ännu.");
   }
+  lines.push("", "## Genomförda åtgärder");
+  if (summary.actions.length) {
+    for (const action of summary.actions) {
+      lines.push(`- ${action.label} på ${action.target}`);
+      lines.push(`  - Registrerad ändring: ${action.operation}`);
+      if (action.parameters) lines.push(`  - Parametrar: ${compactJson(action.parameters)}`);
+      lines.push(`  - Runtime-revision: ${action.beforeRevision} → ${action.afterRevision}`);
+      lines.push(`  - Värde: ${action.beforeValue} → ${action.afterValue}`);
+      if (action.note) lines.push(`  - Användaranteckning: ${action.note}`);
+    }
+  } else lines.push("- Ingen åtgärd är dokumenterad.");
+  lines.push("", "## Verifieringar per åtgärd");
+  if (summary.verifications.length) {
+    for (const verification of summary.verifications) {
+      lines.push(`- ${verification.remediationEntryId ?? "Åtgärd"}: ${verification.status}${verification.historical ? " (historisk)" : ""}`);
+      for (const pair of verification.pairs) lines.push(`  - ${pair.label}: ${pair.before} → ${pair.after} (${pair.pairStatus})`);
+    }
+  } else lines.push("- Ingen matchad före-/efterevidens finns ännu.");
   lines.push("", "## Användarens hypotes");
   lines.push(summary.hypothesis ? `${summary.hypothesis.text} (rev ${summary.hypothesis.revision}${summary.hypothesis.historical ? ", historisk" : ""})` : "Ingen hypotes är dokumenterad.");
-  lines.push("", "## Genomförd åtgärd");
+  lines.push("", "## Senaste åtgärd (kompatibilitetsprojektion)");
   if (summary.action) {
     lines.push(`- ${summary.action.label} på ${summary.action.target}`);
     lines.push(`- Registrerad ändring: ${summary.action.operation}`);
@@ -194,14 +250,14 @@ function markdownFor(summary: Omit<TroubleshootingSummary, "markdown" | "reportI
   } else {
     lines.push("- Ingen åtgärd är dokumenterad.");
   }
-  lines.push("", "## Verifiering");
+  lines.push("", "## Senaste verifiering (kompatibilitetsprojektion)");
   if (summary.verification?.pairs.length) {
     for (const pair of summary.verification.pairs) lines.push(`- ${pair.label}: ${pair.before} → ${pair.after} (${pair.pairStatus})`);
     lines.push(`- Review-status: ${summary.verification.status}${summary.verification.historical ? " (historisk)" : ""}`);
   } else {
     lines.push("- Ingen matchad före-/efterevidens finns ännu.");
   }
-  lines.push("", "## Kvarstående osäkerhet", summary.uncertainty, "", "## Uppgiftens separata completion-evaluering", `- ${summary.completionLabel}`, "", "## Miljö", summary.modeledEnvironment, "", `Scenario source hash: ${summary.scenarioHash}`);
+  lines.push("", "## Slutverifiering", `- Fullständig incidentåterställning verifierad: ${summary.fullRecoveryVerified ? "JA" : "NEJ"}`, `- Aktuella slutprober: ${summary.finalVerification.completed.length}/${summary.finalVerification.required.length}`, "", "## Kvarstående osäkerhet", summary.uncertainty, "", "## Uppgiftens separata completion-evaluering", `- ${summary.completionLabel}`, "", "## Miljö", summary.modeledEnvironment, "", `Scenario source hash: ${summary.scenarioHash}`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -238,26 +294,27 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
   else if (remediationReview.status === "VERIFIED_IMPROVEMENT") status = historicalAction ? "HISTORICAL_VERIFIED_NEEDS_RECHECK" : "VERIFIED_IMPROVEMENT";
   else status = "NO_VERIFIED_IMPROVEMENT";
 
-  const evidence = allEvidence.slice(-8).map(evidenceResult);
+  const evidence = allEvidence.map(evidenceResult);
   const hypothesisCandidates = exactNotebook.entries.filter((entry): entry is Extract<TroubleshootingNotebookEntry, { readonly kind: "learner_note" }> => entry.kind === "learner_note" && entry.noteKind === "hypothesis" && (!latestRemediation || entry.sequence < latestRemediation.sequence));
   const hypothesisEntry = hypothesisCandidates.at(-1);
   const hypothesis = hypothesisEntry ? { text: hypothesisEntry.text, revision: hypothesisEntry.stateRevision, historical: hypothesisEntry.stateRevision !== runtime.engineState.stateRevision } : undefined;
-  const action = latestRemediation ? {
-    entryId: latestRemediation.entryId,
-    label: latestRemediation.typedAction?.label ?? `${latestRemediation.operation.op.toUpperCase()} ${latestRemediation.operation.path}`,
-    target: latestRemediation.typedAction?.targetId ?? latestRemediation.operation.target,
-    operation: `${latestRemediation.operation.op.toUpperCase()} ${latestRemediation.operation.target}.${latestRemediation.operation.path}`,
-    ...(latestRemediation.typedAction?.parameters ? { parameters: latestRemediation.typedAction.parameters } : {}),
-    beforeRevision: latestRemediation.beforeStateRevision,
-    afterRevision: latestRemediation.afterStateRevision,
-    beforeValue: displayValue(latestRemediation.beforeValueState, latestRemediation.beforeValue),
-    afterValue: displayValue(latestRemediation.afterValueState, latestRemediation.afterValue),
-    ...(latestRemediation.learnerNote ? { note: latestRemediation.learnerNote } : {}),
-  } satisfies TroubleshootingSummaryAction : undefined;
-  const verification = remediationReview ? {
-    status: remediationReview.status,
-    historical: historicalAction,
-    pairs: remediationReview.pairs.map((pair) => {
+  const actionFor = (remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>): TroubleshootingSummaryAction => ({
+    entryId: remediation.entryId,
+    label: remediation.typedAction?.label ?? `${remediation.operation.op.toUpperCase()} ${remediation.operation.path}`,
+    target: remediation.typedAction?.targetId ?? remediation.operation.target,
+    operation: `${remediation.operation.op.toUpperCase()} ${remediation.operation.target}.${remediation.operation.path}`,
+    ...(remediation.typedAction?.parameters ? { parameters: remediation.typedAction.parameters } : {}),
+    beforeRevision: remediation.beforeStateRevision,
+    afterRevision: remediation.afterStateRevision,
+    beforeValue: displayValue(remediation.beforeValueState, remediation.beforeValue),
+    afterValue: displayValue(remediation.afterValueState, remediation.afterValue),
+    ...(remediation.learnerNote ? { note: remediation.learnerNote } : {}),
+  });
+  const verificationFor = (remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>, review: RemediationReview): TroubleshootingSummaryVerification => ({
+    remediationEntryId: remediation.entryId,
+    status: review.status,
+    historical: !isCurrentRemediationState(runtime, remediation),
+    pairs: review.pairs.map((pair) => {
       const before = entryById(exactNotebook, pair.beforeEntryId);
       const after = entryById(exactNotebook, pair.afterEntryId);
       const beforeEvidence = before && isEvidence(before) ? before : undefined;
@@ -269,9 +326,19 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
         pairStatus: pair.status,
       };
     }),
-  } satisfies TroubleshootingSummaryVerification : undefined;
+  });
+  const reviewedRemediations: readonly { readonly remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>; readonly review?: RemediationReview }[] = await Promise.all(remediations.map(async (remediation) => {
+    const result = await reviewRemediationLoop(exactNotebook, remediation.entryId);
+    return { remediation, ...(result.ok && result.review ? { review: result.review } : {}) };
+  }));
+  const actions = remediations.map(actionFor);
+  const verifications = reviewedRemediations.filter((item): item is { readonly remediation: Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>; readonly review: RemediationReview } => item.review !== undefined).map((item) => verificationFor(item.remediation, item.review));
+  const action = latestRemediation ? actionFor(latestRemediation) : undefined;
+  const verification = remediationReview ? verificationFor(latestRemediation!, remediationReview) : undefined;
 
   const completion = runtime.evaluation.completion.truth;
+  const finalVerification = currentFinalVerificationRequirements(runtime, exactNotebook, latestRemediation);
+  const fullRecoveryVerified = completion === "TRUE" && finalVerification.complete && !historicalAction && (!latestRemediation || remediationReview?.status === "VERIFIED_IMPROVEMENT");
   const completionLabel = completion === "TRUE" ? "Slutfört labb: TRUE" : completion === "FALSE" ? "Slutfört labb: FALSE" : "Slutfört labb: UNKNOWN";
   const uncertainty = status === "INSUFFICIENT_EVIDENCE"
     ? "Problemet är inte tillräckligt dokumenterat ännu. Ingen åtgärd eller verifierad förbättring finns i aktuell Notebook."
@@ -285,7 +352,9 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
             ? "Matchad före-/efterevidens styrker ingen förbättring."
             : status === "HISTORICAL_VERIFIED_NEEDS_RECHECK"
               ? `Förbättringen verifierades vid rev ${latestRemediation?.afterStateRevision}, men aktuell Runtime är rev ${runtime.engineState.stateRevision}. Ny verifiering behövs.`
-              : "Förbättring verifierad med matchad före-/efterevidens. Det betyder inte automatiskt att hela labbet är klart; completion-evalueringen visas separat.";
+      : fullRecoveryVerified
+        ? "Alla deklarerade slutprober är sparade med TRUE i aktuell Runtime och completion är TRUE. Incidenten kan beskrivas som verifierat återställd."
+        : "Förbättring verifierad med matchad före-/efterevidens, men fullständig incidentåterställning är ännu inte styrkt av alla aktuella slutprober.";
   const base = {
     scenarioId: runtime.scenario.scenarioId,
     scenarioHash: runtime.scenario.sourceHash,
@@ -296,6 +365,10 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
     statusLabel: statusLabel(status),
     runtimeRevision: runtime.engineState.stateRevision,
     evidence,
+    actions,
+    verifications,
+    finalVerification,
+    fullRecoveryVerified,
     ...(hypothesis ? { hypothesis } : {}),
     ...(action ? { action } : {}),
     ...(verification ? { verification } : {}),

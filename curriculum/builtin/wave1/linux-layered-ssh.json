@@ -4,7 +4,7 @@
   "scenarioId": "guided_linux_layered_ssh",
   "metadata": {
     "title": "Linux · SSH fungerar inte — felsök hela anslutningen",
-    "description": "Guided troubleshooting curriculum Wave 1 · layered incident.",
+    "description": "Guided troubleshooting curriculum Wave 1 · SSH connectivity incident.",
     "language": "sv",
     "authors": ["Foundation curriculum"],
     "tags": ["guided-lab", "wave1", "linux", "layered-incident", "ssh"],
@@ -108,6 +108,17 @@
         {"id": "service_state", "label": "Dokumentera serverns SSH-tjänstestatus", "kind": "observation", "category": "service", "targetId": "server1"},
         {"id": "ssh_failure", "label": "Mät TCP/22 till servern", "kind": "active_probe", "category": "connectivity", "sourceId": "client1", "destinationId": "server1", "protocol": "tcp", "port": 22, "truth": "FALSE"}
       ]
+    },
+    {
+      "id": "final_function_verification",
+      "title": "Verifiera återställd SSH-funktion",
+      "description": "När labbets mål är uppfyllt krävs aktuella, sparade TRUE-resultat för både ICMP-vägen och TCP/22.",
+      "required": false,
+      "evidenceOrder": "unordered",
+      "requirements": [
+        {"id": "final_icmp", "label": "Slutlig ICMP-kontroll till servern", "kind": "active_probe", "category": "connectivity", "sourceId": "client1", "destinationId": "server1", "protocol": "icmp", "truth": "TRUE"},
+        {"id": "final_ssh", "label": "Slutlig TCP/22-kontroll till servern", "kind": "active_probe", "category": "connectivity", "sourceId": "client1", "destinationId": "server1", "protocol": "tcp", "port": 22, "truth": "TRUE"}
+      ]
     }
   ],
   "completion": {
@@ -118,7 +129,7 @@
     ]
   },
   "hints": [
-    {"level": 1, "text": "Separera vägproblem från tjänsteproblem och spara faktiska Engine-resultat innan du ändrar något."},
+    {"level": 1, "text": "Samla modellerad evidens och spara faktiska Engine-resultat innan du ändrar något."},
     {"level": 2, "text": "Verifiera varje förbättring med ett nytt, jämförbart test i aktuell Runtime."}
   ],
   "notes": [],

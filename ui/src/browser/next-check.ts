@@ -10,7 +10,7 @@ import {
 } from "../../../observation-engine/src/index.js";
 import type { Normalizedscenariotroubleshootingevidencerequirement } from "../../../core-model/src/generated/contracts.js";
 import { buildRuntimeActiveProbeModel, buildRuntimeObservationModel } from "./observations.js";
-import { isCurrentRemediationState } from "./troubleshooting-summary.js";
+import { currentFinalVerificationRequirements, isCurrentRemediationState } from "./troubleshooting-summary.js";
 import type { BrowserDiagnostic, BrowserWorkspace, RuntimeWorkspace } from "./types.js";
 
 export type NextCheckTool = "observations" | "probes" | "notebook" | "remediation" | "summary";
@@ -247,6 +247,19 @@ export async function buildNextBestCheck(workspace: BrowserWorkspace, notebook?:
         title: "Fortsätt undersöka incidenten", reason: "En del av incidenten förbättrades, men labbets completion är ännu inte TRUE. Samla ny, jämförbar evidens för den återstående felbilden.", actionLabel: "Öppna aktiva prober", tool: "probes", progress,
         remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":partial-unavailable",
       }, review);
+    }
+    if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT" && runtime.evaluation.completion.truth === "TRUE") {
+      const finalVerification = currentFinalVerificationRequirements(runtime, exactNotebook!, latestRemediation);
+      const missing = finalVerification.missing[0];
+      if (missing) {
+        const preparation = probePreparation(runtime, missing);
+        const label = missing.protocol === "icmp" ? "ICMP-kontroll" : missing.protocol === "tcp" ? "TCP-test" : "slutlig probe";
+        return success({
+          scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
+          title: "Verifiera återstående funktion", reason: "Konfigurationen uppfyller labbets mål, men all aktuell slutlig probe-evidens är ännu inte dokumenterad.", actionLabel: `Förbered ${label}`, tool: "probes", ...(preparation ? { preparation } : {}), progress,
+          remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":final:" + missing.id,
+        }, review);
+      }
     }
     if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT") return success({
       scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process",

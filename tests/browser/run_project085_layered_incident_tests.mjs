@@ -103,6 +103,9 @@ await check("SSH-first remediation remains incomplete until gateway is repaired"
   assert.equal(ping.transcript.truth, "FALSE");
   notebook = await saveProbe(runtime, notebook, tcp.transcript);
   notebook = await saveProbe(runtime, notebook, ping.transcript);
+  const interfaceObservation = runRuntimeObservation(runtime, "client1", "linux.ip_addr");
+  assert.equal(interfaceObservation.ok, true);
+  notebook = await saveObservation(runtime, notebook, interfaceObservation.transcript);
   const partial = await buildTroubleshootingSummary(runtime, notebook);
   assert.equal(partial.summary.completion, "FALSE");
   assert.equal((await buildGuidedTroubleshootingWorkflow(runtime, notebook)).workflow.phase, "CONTINUE_INVESTIGATION");
@@ -117,7 +120,49 @@ await check("SSH-first remediation remains incomplete until gateway is repaired"
   notebook = await saveProbe(runtime, notebook, finalPing.transcript);
   const complete = await buildTroubleshootingSummary(runtime, notebook);
   assert.equal(complete.summary.completion, "TRUE");
+  assert.equal(complete.summary.actions.length, 2);
+  assert.equal(complete.summary.verifications.length, 2);
+  assert.equal(complete.summary.actions[0].target, "server1");
+  assert.equal(complete.summary.actions[1].target, "client1");
+  assert.match(complete.summary.markdown, /Enable or disable service/);
+  assert.match(complete.summary.markdown, /Change default gateway/);
+  assert.match(complete.summary.markdown, /FALSE → TRUE/);
+  assert.ok(complete.summary.evidence.length > 8);
+  assert.match(complete.summary.markdown, /ip route show/);
+  assert.match(complete.summary.markdown, /nc -vz server1 22/);
   assert.equal((await buildGuidedTroubleshootingWorkflow(runtime, notebook)).workflow.phase, "VERIFICATION_COMPLETE");
+});
+
+await check("completion alone cannot replace the final current ICMP probe", async () => {
+  let runtime = freshRuntime();
+  let notebook = await collectBaseline(runtime);
+  notebook = await addHypothesis(runtime, notebook, "Gatewayen behöver korrigeras.");
+  const gateway = await applyAction(runtime, notebook, { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.5.1" } });
+  runtime = gateway.workspace; notebook = gateway.notebook;
+  notebook = await saveProbe(runtime, notebook, probe(runtime, "linux.ping").transcript);
+  notebook = await saveProbe(runtime, notebook, probe(runtime, "linux.nc_tcp", { port: 22 }).transcript);
+  notebook = await addHypothesis(runtime, notebook, "SSH behöver aktiveras.");
+  const ssh = await applyAction(runtime, notebook, { actionId: "set_service_enabled", targetId: "server1", parameters: { service: "ssh", enabled: true } });
+  runtime = ssh.workspace; notebook = ssh.notebook;
+  const finalTcp = probe(runtime, "linux.nc_tcp", { port: 22 });
+  assert.equal(finalTcp.transcript.truth, "TRUE");
+  notebook = await saveProbe(runtime, notebook, finalTcp.transcript);
+  assert.equal(runtime.evaluation.completion.truth, "TRUE");
+  const incomplete = await buildGuidedTroubleshootingWorkflow(runtime, notebook);
+  assert.notEqual(incomplete.workflow.phase, "VERIFICATION_COMPLETE");
+  const next = await buildNextBestCheck(runtime, notebook);
+  assert.equal(next.nextCheck.title, "Verifiera återstående funktion");
+  assert.equal(next.nextCheck.preparation.probeId, "linux.ping");
+  assert.equal(next.nextCheck.preparation.destinationId, "server1");
+  const partialSummary = await buildTroubleshootingSummary(runtime, notebook);
+  assert.equal(partialSummary.summary.fullRecoveryVerified, false);
+  assert.equal(partialSummary.summary.finalVerification.missing.length, 1);
+  notebook = await saveProbe(runtime, notebook, probe(runtime, "linux.ping").transcript);
+  const complete = await buildGuidedTroubleshootingWorkflow(runtime, notebook);
+  assert.equal(complete.workflow.phase, "VERIFICATION_COMPLETE");
+  const finalSummary = await buildTroubleshootingSummary(runtime, notebook);
+  assert.equal(finalSummary.summary.fullRecoveryVerified, true);
+  assert.equal(finalSummary.summary.finalVerification.missing.length, 0);
 });
 
 await check("an irrelevant remediation is not reported as an improvement", async () => {
@@ -183,4 +228,4 @@ await check("undoing both repairs returns the real broken matrix", async () => {
   assert.equal(tcp.transcript.truth, "FALSE");
 });
 
-console.log(`PASS PROJECT-085 layered incident logic: ${checks}/6 assertions.`);
+console.log(`PASS PROJECT-085 layered incident logic: ${checks}/7 assertions.`);

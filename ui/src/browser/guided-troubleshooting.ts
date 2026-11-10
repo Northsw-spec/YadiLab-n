@@ -10,7 +10,7 @@ import {
   type TroubleshootingNotebookEntry,
 } from "../../../observation-engine/src/index.js";
 import type { BrowserDiagnostic, BrowserWorkspace } from "./types.js";
-import { isCurrentRemediationState } from "./troubleshooting-summary.js";
+import { currentFinalVerificationRequirements, isCurrentRemediationState } from "./troubleshooting-summary.js";
 
 export const GUIDED_TROUBLESHOOTING_ID = "foundation.guided_troubleshooting" as const;
 export const GUIDED_TROUBLESHOOTING_VERSION = "0.1.0" as const;
@@ -103,6 +103,8 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
   const afterEvidence = latestRemediation ? exactNotebook.entries.filter((entry) => isEvidence(entry) && entry.stateRevision === latestRemediation.afterStateRevision && entry.sequence > latestRemediation.sequence) : [];
   const historicalRemediation = latestRemediation ? !isCurrentRemediationState(workspace, latestRemediation) : false;
   const hasMatchedAfterEvidence = remediationReview ? remediationReview.status !== "PENDING_AFTER_EVIDENCE" && !historicalRemediation : false;
+  const finalVerification = currentFinalVerificationRequirements(workspace, exactNotebook, latestRemediation);
+  const finalVerificationComplete = finalVerification.complete;
 
   let phase: GuidedTroubleshootingPhase;
   let nextAction: string;
@@ -113,12 +115,14 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
     } else if (!hasMatchedAfterEvidence) {
       phase = "COLLECT_AFTER_EVIDENCE";
       nextAction = "Run and save the same relevant observation or probe after the remediation so the before/after evidence can be compared.";
-    } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT" && (workspace.scenario.completion.op === "all" ? (workspace.scenario.completion.rules.length === 0 || workspace.evaluation.completion.truth === "TRUE") : workspace.evaluation.completion.truth === "TRUE")) {
+    } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT" && (workspace.scenario.completion.op === "all" ? (workspace.scenario.completion.rules.length === 0 || workspace.evaluation.completion.truth === "TRUE") : workspace.evaluation.completion.truth === "TRUE") && finalVerificationComplete) {
       phase = "VERIFICATION_COMPLETE";
-      nextAction = "The notebook contains a verified before/after improvement and the scenario completion evaluates TRUE. Review the evidence and record your learner conclusion if appropriate.";
+      nextAction = "The notebook contains a verified before/after improvement, current final probes and TRUE scenario completion. Review the evidence and record your learner conclusion if appropriate.";
     } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT") {
       phase = "CONTINUE_INVESTIGATION";
-      nextAction = "A before/after improvement is verified, but the scenario completion is still FALSE or UNKNOWN. Continue investigating the remaining incident layer; do not report the whole incident as resolved.";
+      nextAction = finalVerificationComplete
+        ? "A before/after improvement is verified, but scenario completion is still FALSE or UNKNOWN. Continue investigating; do not report the whole incident as resolved."
+        : "A before/after improvement is verified, but all declared final probes are not yet saved in the current Runtime. Continue the investigation; do not report the whole incident as resolved.";
     } else {
       phase = "CONTINUE_INVESTIGATION";
       nextAction = "The saved before/after evidence does not verify an improvement. Continue investigating from the evidence; the workflow will not choose another remediation for you.";
@@ -186,6 +190,7 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
     stateRevision: workspace.engineState.stateRevision,
     notebookIdentity: exactNotebook.notebookIdentity,
     evidenceReviewIdentity: evidenceReview.reviewIdentity,
+    finalVerification: { complete: finalVerification.complete, completed: finalVerification.completed.map((requirement) => requirement.id), missing: finalVerification.missing.map((requirement) => requirement.id) },
     latestRemediationEntryId: latestRemediation?.entryId ?? null,
     remediationReviewIdentity: remediationReview?.reviewIdentity ?? null,
     phase,

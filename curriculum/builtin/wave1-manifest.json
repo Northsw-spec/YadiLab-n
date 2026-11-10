@@ -140,7 +140,7 @@
       "title": "Linux · SSH fungerar inte — felsök hela anslutningen",
       "platform": "linux",
       "focus": "service",
-      "summary": "Layered incident: separera fel i nätverksväg och SSH-tjänst.",
+      "summary": "Linux-klienten kan inte ansluta till serverns SSH-tjänst. Undersök orsaken och verifiera återställningen.",
       "sequence": 9,
       "difficulty": {
         "layers": 4,

@@ -31,6 +31,8 @@ eq(built.labs.map(x=>x.sequence),[1,2,3,4,5,6,7,8,9],"curriculum sequence is det
 const layered=built.labs.find(x=>x.id==="guided_linux_layered_ssh");
 ok(!!layered,"layered Linux incident is catalogued");
 eq(layered.source.troubleshootingObjectives[0].requirements.length,4,"layered incident has four ordered evidence requirements");
+eq(layered.source.troubleshootingObjectives[1].required,false,"layered incident declares separate optional final-verification requirements");
+eq(layered.source.troubleshootingObjectives[1].requirements.length,2,"layered incident requires current ICMP and TCP final probes");
 eq(layered.source.canonicalSolution.operations.length,2,"layered incident retains two authored acceptance operations");
 ok(built.labs.every(x=>x.boundary==="LEARNER_VISIBLE_NO_SOLUTION"),"catalog boundary explicitly excludes solution guidance");
 const visible=JSON.stringify(built.labs.map(({source,...x})=>x));

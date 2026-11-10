@@ -3276,6 +3276,19 @@ function RuntimeTroubleshootingSummaryPanel({ workspace, notebook, setDiagnostic
             e("small", null, `${item.source}${item.destination ? ` → ${item.destination}` : ""} · rev ${item.revision}`),
             !item.truth ? e("p", null, item.result) : null)))
           : e("p", { className: "helper-note" }, "Ingen observation eller aktiv probe är sparad ännu.")),
+        e("section", { className: "summary-section", "data-summary-actions": "true" }, e("h4", null, "Genomförda åtgärder"), summary.actions.length
+          ? e("ol", { className: "notebook-entries" }, ...summary.actions.map((action) => e("li", { key: action.entryId, "data-summary-action": action.entryId },
+            e("strong", null, `${action.label} · ${action.target}`),
+            e("small", null, `${action.operation} · rev ${action.beforeRevision} → ${action.afterRevision}`),
+            e("p", null, `${action.beforeValue} → ${action.afterValue}`),
+            action.note ? e("p", null, action.note) : null)))
+          : e("p", { className: "helper-note" }, "Ingen åtgärd är dokumenterad.")),
+        e("section", { className: "summary-section", "data-summary-verifications": "true" }, e("h4", null, "Verifieringar per åtgärd"), summary.verifications.length
+          ? e("ul", { className: "notebook-entries" }, ...summary.verifications.map((verification) => e("li", { key: verification.remediationEntryId ?? verification.status, "data-summary-remediation-verification": verification.remediationEntryId ?? "unknown" },
+            e("strong", null, `${verification.status}${verification.historical ? " · historisk" : ""}`),
+            ...verification.pairs.map((pair, index) => e("small", { key: `${verification.remediationEntryId ?? "verification"}-${index}`, "data-summary-verification": pair.pairStatus }, `${pair.label}: ${pair.before} → ${pair.after} · ${pair.pairStatus}`)))))
+          : e("p", { className: "helper-note" }, "Ingen matchad före-/efterevidens finns ännu.")),
+        e("section", { className: "summary-section", "data-summary-final-verification": summary.fullRecoveryVerified ? "TRUE" : "FALSE" }, e("h4", null, "Slutverifiering"), e("p", null, `Fullständig incidentåterställning verifierad: ${summary.fullRecoveryVerified ? "JA" : "NEJ"}`), e("p", null, `Aktuella slutprober: ${summary.finalVerification.completed.length}/${summary.finalVerification.required.length}`)),
         e("section", { className: "summary-section" }, e("h4", null, "Användarens hypotes"), e("p", null, summary.hypothesis ? `${summary.hypothesis.text}${summary.hypothesis.historical ? " · historisk revision" : ""}` : "Ingen hypotes är dokumenterad.")),
         e("section", { className: "summary-section" }, e("h4", null, "Genomförd åtgärd"), summary.action
           ? e(React.Fragment, null,
