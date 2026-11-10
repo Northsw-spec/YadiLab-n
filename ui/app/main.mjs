@@ -2374,6 +2374,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     ) : null,
     topologyContextDetails ? e("aside", { className: "topology-context-details", "data-topology-context-details": topologyContextDetails.kind, role: "status" },
       e("strong", null, topologyContextDetails.label ?? topologyContextDetails.id),
+      topologyContextDetails.id ? e("small", null, topologyContextDetails.id) : null,
       topologyContextDetails.type ? e("small", null, topologyContextDetails.type) : null,
       topologyContextDetails.source ? e("small", null, `${topologyContextDetails.source} → ${topologyContextDetails.target}`) : null,
       topologyContextDetails.addresses?.length ? e("small", null, topologyContextDetails.addresses.join(", ")) : null,
