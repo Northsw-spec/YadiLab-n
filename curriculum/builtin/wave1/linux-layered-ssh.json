@@ -1,0 +1,136 @@
+{
+  "formatId": "infrastructure-cyber-lab.scenario-source",
+  "schemaVersion": "0.1.0",
+  "scenarioId": "guided_linux_layered_ssh",
+  "metadata": {
+    "title": "Linux · SSH fungerar inte — felsök hela anslutningen",
+    "description": "Guided troubleshooting curriculum Wave 1 · layered incident.",
+    "language": "sv",
+    "authors": ["Foundation curriculum"],
+    "tags": ["guided-lab", "wave1", "linux", "layered-incident", "ssh"],
+    "briefing": "En klient kan inte etablera SSH-anslutning till en server i ett annat nät. Undersök anslutningsvägen och tjänstens tillgänglighet. Dokumentera dina observationer, gör motiverade ändringar och verifiera att tjänsten faktiskt fungerar."
+  },
+  "requires": {
+    "capabilities": [
+      {"id": "core.network", "version": "^1.0.0"},
+      {"id": "core.linux", "version": "^1.0.0"}
+    ],
+    "profiles": []
+  },
+  "zones": [
+    {"id": "client_zone", "label": "Client zone", "kind": "lan"},
+    {"id": "transit_zone", "label": "Transit", "kind": "lan"},
+    {"id": "server_zone", "label": "Server zone", "kind": "server"}
+  ],
+  "resources": [
+    {
+      "id": "client1",
+      "type": "linux.workstation",
+      "label": "Linux client",
+      "zone": "client_zone",
+      "properties": {
+        "defaultGateway": "10.78.5.254",
+        "dnsServers": [],
+        "dhcp": {"enabled": true},
+        "aclDefaultAction": "allow",
+        "NetworkManager": {"enabled": true},
+        "systemdResolved": {"enabled": true}
+      },
+      "interfaces": [
+        {"id": "eth0", "label": "eth0", "addresses": ["10.78.5.20/24"]}
+      ]
+    },
+    {
+      "id": "r1",
+      "type": "network.router",
+      "label": "Router",
+      "zone": "transit_zone",
+      "properties": {
+        "routes": [
+          {"id": "to-server", "destination": "server1", "via": "server1", "action": "forward", "enabled": true}
+        ]
+      },
+      "interfaces": [
+        {"id": "lan", "label": "LAN", "addresses": ["10.78.5.1/24", "10.78.105.1/24"]}
+      ]
+    },
+    {
+      "id": "server1",
+      "type": "linux.server",
+      "label": "Linux server",
+      "zone": "server_zone",
+      "properties": {
+        "defaultGateway": "10.78.105.1",
+        "aclDefaultAction": "allow",
+        "ssh": {"enabled": false, "port": 22, "protocol": "tcp"},
+        "NetworkManager": {"enabled": true},
+        "systemdResolved": {"enabled": true}
+      },
+      "interfaces": [
+        {"id": "eth0", "label": "eth0", "addresses": ["10.78.105.80/24"]}
+      ]
+    }
+  ],
+  "connections": [
+    {"id": "client_r1", "kind": "network", "from": {"resource": "client1"}, "to": {"resource": "r1"}, "properties": {}},
+    {"id": "r1_server", "kind": "network", "from": {"resource": "r1"}, "to": {"resource": "server1"}, "properties": {}}
+  ],
+  "tests": [
+    {"id": "icmp_reachability", "type": "network.reachability", "params": {"from": "client1", "to": "server1", "protocol": "icmp"}, "expectedInitial": "FALSE", "expectedSolved": "TRUE"},
+    {"id": "ssh_reachability", "type": "network.reachability", "params": {"from": "client1", "to": "server1", "protocol": "tcp", "port": 22}, "expectedInitial": "FALSE", "expectedSolved": "TRUE"}
+  ],
+  "findings": [],
+  "objectives": [
+    {
+      "id": "restore_layered_incident",
+      "title": "Återställ SSH-anslutningen genom motiverade ändringar",
+      "category": "troubleshooting",
+      "required": true,
+      "condition": {
+        "op": "all",
+        "rules": [
+          {"op": "equals", "target": "client1", "path": "properties.defaultGateway", "value": "10.78.5.1"},
+          {"op": "service_enabled", "target": "server1", "service": "ssh"}
+        ]
+      }
+    }
+  ],
+  "troubleshootingObjectives": [
+    {
+      "id": "layered_evidence_chain",
+      "title": "Undersök både väg och tjänst",
+      "description": "Samla separat evidens för anslutningsvägen och SSH-tjänsten. En förbättring av en del av incidenten bevisar inte att hela funktionen är återställd.",
+      "required": true,
+      "evidenceOrder": "ordered",
+      "requirements": [
+        {"id": "route_state", "label": "Dokumentera klientens routingtabell", "kind": "observation", "category": "routing", "targetId": "client1"},
+        {"id": "icmp_failure", "label": "Mät ICMP-anslutningen till servern", "kind": "active_probe", "category": "connectivity", "sourceId": "client1", "destinationId": "server1", "protocol": "icmp", "truth": "FALSE"},
+        {"id": "service_state", "label": "Dokumentera serverns SSH-tjänstestatus", "kind": "observation", "category": "service", "targetId": "server1"},
+        {"id": "ssh_failure", "label": "Mät TCP/22 till servern", "kind": "active_probe", "category": "connectivity", "sourceId": "client1", "destinationId": "server1", "protocol": "tcp", "port": 22, "truth": "FALSE"}
+      ]
+    }
+  ],
+  "completion": {
+    "op": "all",
+    "rules": [
+      {"op": "equals", "target": "client1", "path": "properties.defaultGateway", "value": "10.78.5.1"},
+      {"op": "service_enabled", "target": "server1", "service": "ssh"}
+    ]
+  },
+  "hints": [
+    {"level": 1, "text": "Separera vägproblem från tjänsteproblem och spara faktiska Engine-resultat innan du ändrar något."},
+    {"level": 2, "text": "Verifiera varje förbättring med ett nytt, jämförbart test i aktuell Runtime."}
+  ],
+  "notes": [],
+  "canonicalSolution": {
+    "operations": [
+      {"op": "set", "target": "client1", "path": "properties.defaultGateway", "value": "10.78.5.1"},
+      {"op": "set", "target": "server1", "path": "properties.ssh.enabled", "value": true}
+    ]
+  },
+  "layoutHints": [
+    {"target": "client1", "rank": 1},
+    {"target": "r1", "rank": 2},
+    {"target": "server1", "rank": 3}
+  ]
+}

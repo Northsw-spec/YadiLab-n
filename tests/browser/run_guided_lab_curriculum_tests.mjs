@@ -22,16 +22,23 @@ const sources={};
 for(const lab of manifest.labs) sources[lab.path]=JSON.parse(fs.readFileSync(lab.path,"utf8"));
 const built=buildGuidedLabCatalog(manifest,sources);
 ok(built.ok,"Wave-1 curriculum manifest validates");
-eq(built.labs.length,8,"Wave-1 exposes exactly eight guided labs");
-eq(built.labs.filter(x=>x.platform==="windows").length,4,"Wave-1 has four Windows labs");
-eq(built.labs.filter(x=>x.platform==="linux").length,4,"Wave-1 has four Linux labs");
-eq(built.labs.map(x=>x.sequence),[1,2,3,4,5,6,7,8],"curriculum sequence is deterministic");
+eq(built.labs.length,9,"Wave-1 exposes the eight legacy labs plus one layered incident");
+const legacyLabs=built.labs.filter(x=>x.id!=="guided_linux_layered_ssh");
+eq(legacyLabs.length,8,"Wave-1 retains exactly eight legacy guided labs");
+eq(legacyLabs.filter(x=>x.platform==="windows").length,4,"legacy Wave-1 has four Windows labs");
+eq(legacyLabs.filter(x=>x.platform==="linux").length,4,"legacy Wave-1 has four Linux labs");
+eq(built.labs.map(x=>x.sequence),[1,2,3,4,5,6,7,8,9],"curriculum sequence is deterministic");
+const layered=built.labs.find(x=>x.id==="guided_linux_layered_ssh");
+ok(!!layered,"layered Linux incident is catalogued");
+eq(layered.source.troubleshootingObjectives[0].requirements.length,4,"layered incident has four ordered evidence requirements");
+eq(layered.source.canonicalSolution.operations.length,2,"layered incident retains two authored acceptance operations");
 ok(built.labs.every(x=>x.boundary==="LEARNER_VISIBLE_NO_SOLUTION"),"catalog boundary explicitly excludes solution guidance");
 const visible=JSON.stringify(built.labs.map(({source,...x})=>x));
 for(const forbidden of ["canonicalSolution","faultOrigin","hiddenTruth","typedAction","parameters"]){ok(!visible.includes(forbidden),`learner-visible catalog omits ${forbidden}`)}
 
 const compilerOptions={compilerContext:{validateSource:()=>({valid:true,diagnostics:[]}),validateNormalized:()=>({valid:true,diagnostics:[]}),catalog:{capabilities:catalog.capabilities,profiles:catalog.profiles,assets:catalog.assets},engineBaselineVersion:"0.8.0"}};
-for(const lab of built.labs){
+let layeredBuilder=createBuilderWorkspace(cloneGuidedLabSource(layered)); layeredBuilder=await compileBuilderWorkspace(layeredBuilder,compilerOptions); eq(layeredBuilder.compile.status,"valid","layered Linux incident compiles semantically");
+for(const lab of legacyLabs){
   const source=cloneGuidedLabSource(lab); const spec=truth[lab.id]; ok(!!spec,`${lab.id} has test-only acceptance truth`);
   ok(source.troubleshootingObjectives?.length===1,`${lab.id} has one transparent troubleshooting objective`);
   eq(source.troubleshootingObjectives[0].requirements.length,2,`${lab.id} requires a two-step baseline evidence chain`);

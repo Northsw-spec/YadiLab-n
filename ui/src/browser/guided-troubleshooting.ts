@@ -113,9 +113,12 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
     } else if (!hasMatchedAfterEvidence) {
       phase = "COLLECT_AFTER_EVIDENCE";
       nextAction = "Run and save the same relevant observation or probe after the remediation so the before/after evidence can be compared.";
-    } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT") {
+    } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT" && (workspace.scenario.completion.op === "all" ? (workspace.scenario.completion.rules.length === 0 || workspace.evaluation.completion.truth === "TRUE") : workspace.evaluation.completion.truth === "TRUE")) {
       phase = "VERIFICATION_COMPLETE";
-      nextAction = "The notebook contains a verified before/after improvement. Review the evidence and record your learner conclusion if appropriate.";
+      nextAction = "The notebook contains a verified before/after improvement and the scenario completion evaluates TRUE. Review the evidence and record your learner conclusion if appropriate.";
+    } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT") {
+      phase = "CONTINUE_INVESTIGATION";
+      nextAction = "A before/after improvement is verified, but the scenario completion is still FALSE or UNKNOWN. Continue investigating the remaining incident layer; do not report the whole incident as resolved.";
     } else {
       phase = "CONTINUE_INVESTIGATION";
       nextAction = "The saved before/after evidence does not verify an improvement. Continue investigating from the evidence; the workflow will not choose another remediation for you.";

@@ -44,6 +44,7 @@ import guidedLinuxGateway from "../../curriculum/builtin/wave1/linux-gateway.jso
 import guidedLinuxDns from "../../curriculum/builtin/wave1/linux-dns.json";
 import guidedLinuxFirewall from "../../curriculum/builtin/wave1/linux-firewall.json";
 import guidedLinuxSsh from "../../curriculum/builtin/wave1/linux-ssh.json";
+import guidedLinuxLayeredSsh from "../../curriculum/builtin/wave1/linux-layered-ssh.json";
 import defaultEnterpriseMapping from "../../examples/enterprise-import/enterprise-import-template.mapping.json";
 import { previewNetworkTopologyFile, verifyNetworkTopologyOriginalForActivation } from "../src/browser/network-topology-import.js";
 import { compareCoreNetworkReimport } from "../src/browser/core-network-reimport-review.js";
@@ -349,6 +350,7 @@ const guidedLabSourceMap = {
   "curriculum/builtin/wave1/linux-dns.json": guidedLinuxDns,
   "curriculum/builtin/wave1/linux-firewall.json": guidedLinuxFirewall,
   "curriculum/builtin/wave1/linux-ssh.json": guidedLinuxSsh,
+  "curriculum/builtin/wave1/linux-layered-ssh.json": guidedLinuxLayeredSsh,
 };
 const guidedLabCatalog = buildGuidedLabCatalog(curriculumManifest, guidedLabSourceMap);
 const builtinGuidedLabs = guidedLabCatalog.ok ? guidedLabCatalog.labs : [];
