@@ -125,7 +125,7 @@ import { reviewNmapObservationAssociations } from "../../enterprise-import/src/n
 import networkFaultPack from "../../fault-packs/builtin/network-core.json";
 import windowsFaultPack from "../../fault-packs/builtin/windows-core.json";
 import linuxFaultPack from "../../fault-packs/builtin/linux-core.json";
-import { buildTroubleshootingSummary, createTroubleshootingSummaryDownload } from "../src/browser/troubleshooting-summary.js";
+import { buildTroubleshootingSummary, createTroubleshootingSummaryDownload, troubleshootingSummaryStatusLabel } from "../src/browser/troubleshooting-summary.js";
 import { buildNextBestCheck } from "../src/browser/next-check.js";
 
 const builtinFaultPacks = [networkFaultPack, windowsFaultPack, linuxFaultPack];
@@ -3285,7 +3285,7 @@ function RuntimeTroubleshootingSummaryPanel({ workspace, notebook, setDiagnostic
           : e("p", { className: "helper-note" }, "Ingen åtgärd är dokumenterad.")),
         e("section", { className: "summary-section", "data-summary-verifications": "true" }, e("h4", null, "Verifieringar per åtgärd"), summary.verifications.length
           ? e("ul", { className: "notebook-entries" }, ...summary.verifications.map((verification) => e("li", { key: verification.remediationEntryId ?? verification.status, "data-summary-remediation-verification": verification.remediationEntryId ?? "unknown" },
-            e("strong", null, `${verification.status}${verification.historical ? " · historisk" : ""}`),
+            e("strong", null, `${troubleshootingSummaryStatusLabel(verification.status)}${verification.historical ? " · historisk" : ""}`),
             ...verification.pairs.map((pair, index) => e("small", { key: `${verification.remediationEntryId ?? "verification"}-${index}`, "data-summary-remediation-verification-status": pair.pairStatus }, `${pair.label}: ${pair.before} → ${pair.after} · ${pair.pairStatus}`)))))
           : e("p", { className: "helper-note" }, "Ingen matchad före-/efterevidens finns ännu.")),
         e("section", { className: "summary-section", "data-summary-final-verification": summary.fullRecoveryVerified ? "TRUE" : "FALSE" }, e("h4", null, "Slutverifiering"), e("p", null, `Fullständig incidentåterställning verifierad: ${summary.fullRecoveryVerified ? "JA" : "NEJ"}`), e("p", null, `Aktuella slutprober: ${summary.finalVerification.completed.length}/${summary.finalVerification.required.length}`)),

@@ -112,7 +112,7 @@ function displayValue(state: "KNOWN" | "ABSENT", value: unknown): string {
   return state === "KNOWN" ? JSON.stringify(value) : "<absent>";
 }
 
-function statusLabel(status: TroubleshootingSummaryStatus): string {
+export function troubleshootingSummaryStatusLabel(status: TroubleshootingSummaryStatus): string {
   return {
     INVESTIGATION_IN_PROGRESS: "Utredning pågår",
     ACTION_RECORDED_NO_RETEST: "Åtgärd utförd, omtest saknas",
@@ -362,7 +362,7 @@ export async function buildTroubleshootingSummary(workspace: BrowserWorkspace, n
     problem: runtime.scenario.metadata.briefing || runtime.scenario.metadata.description || "Scenario utan användarsynlig problembeskrivning.",
     modeledEnvironment: "Modellerad YadiLab-simulering; ingen verklig host- eller nätverksexekvering.",
     status,
-    statusLabel: statusLabel(status),
+    statusLabel: troubleshootingSummaryStatusLabel(status),
     runtimeRevision: runtime.engineState.stateRevision,
     evidence,
     actions,
