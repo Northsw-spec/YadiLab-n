@@ -3302,6 +3302,7 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
   const observationDisclosureRef = useRef(null);
   const observationTargetRef = useRef(null);
   const observationCommandRef = useRef(null);
+  const preparedObservationCommandRef = useRef(null);
   const initialModel = buildRuntimeObservationModel(workspace, workspace.selection.primary);
   const [targetId, setTargetId] = useState(initialModel.targetId ?? "");
   const [commandId, setCommandId] = useState(initialModel.commands[0]?.commandId ?? "");
@@ -3318,7 +3319,10 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
 
   useEffect(() => {
     const next = buildRuntimeObservationModel(workspace, targetId);
-    if (!next.commands.some((command) => command.commandId === commandId)) setCommandId(next.commands[0]?.commandId ?? "");
+    const preparedCommandId = preparedObservationCommandRef.current;
+    preparedObservationCommandRef.current = null;
+    if (preparedCommandId && next.commands.some((command) => command.commandId === preparedCommandId)) setCommandId(preparedCommandId);
+    else if (!next.commands.some((command) => command.commandId === commandId)) setCommandId(next.commands[0]?.commandId ?? "");
     setTranscript(null);
   }, [targetId]);
 
@@ -3326,7 +3330,10 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
     if (!nextCheckPreparation || nextCheckPreparation.tool !== "observations" || nextCheckPreparation.scenarioHash !== workspace.scenario.sourceHash) return;
     const next = buildRuntimeObservationModel(workspace, nextCheckPreparation.targetId);
     if (next.targetId) setTargetId(next.targetId);
-    if (nextCheckPreparation.commandId && next.commands.some((command) => command.commandId === nextCheckPreparation.commandId)) setCommandId(nextCheckPreparation.commandId);
+    if (nextCheckPreparation.commandId && next.commands.some((command) => command.commandId === nextCheckPreparation.commandId)) {
+      preparedObservationCommandRef.current = nextCheckPreparation.commandId;
+      setCommandId(nextCheckPreparation.commandId);
+    }
     setTranscript(null);
     if (observationDisclosureRef.current) observationDisclosureRef.current.open = true;
     globalThis.requestAnimationFrame?.(() => (nextCheckPreparation.commandId ? observationCommandRef.current : observationTargetRef.current)?.focus({ preventScroll: true }));
