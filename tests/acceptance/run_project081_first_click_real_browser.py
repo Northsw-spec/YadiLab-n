@@ -189,7 +189,8 @@ def main():
 
             # Scenario switch clears the old lab context and does not reuse its transcript.
             start_selected_lab(page, "guided_win_dns")
-            expect(page.locator('[data-curriculum-wave]')).to_contain_text("Windows · fel DNS-resolver")
+            expect(page.locator('[data-curriculum-wave]')).to_contain_text("Inbyggd guidad labb 2/8")
+            expect(page.locator('[data-curriculum-wave]')).to_contain_text("DNS:")
             workflow_phase(page, "COLLECT_EVIDENCE")
             require(page.locator('[data-active-probe-transcript="ready"]').count() == 0,
                     "Scenario switch retained an old active-probe transcript")
