@@ -192,6 +192,8 @@ def main():
             check.get_by_role("button", name=re.compile("Öppna observation")).click()
             observation_panel = page.locator('[data-observation-engine="wave1"]')
             expect(field(observation_panel, "Mål")).to_have_value("server1")
+            expect(check).to_contain_text("Flera stödda alternativ")
+            field(observation_panel, "Modellerat kommando").select_option("linux.systemctl_status")
             expect(field(observation_panel, "Modellerat kommando")).to_have_value("linux.systemctl_status")
             service_transcript = run_observation(page)
             expect(service_transcript).to_contain_text("sshd: inactive")
