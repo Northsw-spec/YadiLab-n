@@ -665,6 +665,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyVlan, setTopologyVlan] = useState("");
   const [topologyFocusRoot, setTopologyFocusRoot] = useState(null);
   const [topologyFocusPage, setTopologyFocusPage] = useState(1);
+  const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
+  const topologyFocusRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyContextMenu, setTopologyContextMenu] = useState(null);
   const [topologyContextDetails, setTopologyContextDetails] = useState(null);
@@ -690,6 +692,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   useEffect(() => {
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
+    setTopologyFocusProjection(null);
+    topologyFocusRequestRef.current += 1;
     setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
     setTopologyContextMenu(null);
     setTopologyContextDetails(null);
@@ -840,6 +844,34 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     scaledTenThousandFocus?.source===workspace.source&&
     scaledTenThousandFocus?.model===workspace.compile.model
       ?scaledTenThousandFocus:null;
+  useEffect(() => {
+    const source = validTenThousandFocus?.source;
+    const model = validTenThousandFocus?.model;
+    const rootId = topologyFocusRoot;
+    if (!source || !model || !rootId) {
+      topologyFocusRequestRef.current += 1;
+      setTopologyFocusProjection(null);
+      return undefined;
+    }
+    const request = ++topologyFocusRequestRef.current;
+    const generation = projectGeneration;
+    const transition = getScenarioTransitionId();
+    setTopologyFocusProjection(null);
+    void buildScaledNetworkTenThousandFocus(model, validTenThousandFocus.nodeOrder, topologyFocusPage, { rootId })
+      .then((focus) => {
+        const active = liveTopologyWorkspace();
+        if (request !== topologyFocusRequestRef.current || generation !== projectGeneration || transition !== getScenarioTransitionId() ||
+            !active || active.mode !== "builder" || active.source !== source || active.compile.model !== model) return;
+        setTopologyFocusProjection(focus);
+      })
+      .catch((error) => {
+        if (request === topologyFocusRequestRef.current) {
+          setTopologyFocusProjection(null);
+          setDiagnostics([{ severity: "error", code: typeof error?.code === "string" ? error.code : "SCALE_P4B1_FOCUS_BLOCKED", message: "Fokuserad topologiprojektion blockerades; den kanoniska Builder-källan ändrades inte." }]);
+        }
+      });
+    return () => { topologyFocusRequestRef.current += 1; };
+  }, [validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
   const tenThousandGuard=workspace.mode==="builder"&&(
     workspace.source.resources.length>=5000||
     (scaledTenThousandSessionActive&&
@@ -861,13 +893,16 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
-  const projection = validHierarchyFocus?.focusCanvas ??
+  const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
+    ? topologyFocusProjection
+    : null;
+  const projection = tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? vm?.canvas;
-  const localFocusPage = !validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
+  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
     ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
-    : null;
+    : null);
   const visibleProjection = localFocusPage && projection
     ? { ...projection, nodes: projection.nodes.filter((node) => localFocusPage.nodeIds.includes(node.id)), edges: projection.edges.filter((edge) => localFocusPage.edgeIds.includes(edge.id)) }
     : projection;
@@ -1250,7 +1285,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
-    if (nodeOrder?.includes(nodeId) && onScaledTenThousandFocusPage && !baseFlow.nodes.some((node) => node.id === nodeId)) {
+    if (validTenThousandFocus) {
+      setTopologyFocusRoot(nodeId);
+      setTopologyFocusPage(1);
+      setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: `Fokuserad enhet: ${label}`, page: 1 }]);
+    } else if (nodeOrder?.includes(nodeId) && onScaledTenThousandFocusPage && !baseFlow.nodes.some((node) => node.id === nodeId)) {
       void onScaledTenThousandFocusPage(Math.floor(nodeOrder.indexOf(nodeId) / 100) + 1);
     } else {
       setTopologyFocusRoot(nodeId);
@@ -1320,7 +1359,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
         e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
         e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
-        localFocusPage ? e("p", { "data-topology-focus-counts": "true" }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleLinks} synliga av ${localFocusPage.totalLinks} länkar`) : null,
+        localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
         selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
           e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
           e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
@@ -1409,7 +1448,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("p",{[validTenThousandFocus.sourceKind==="office-p4c3b"?"data-scale-p4c3b-active-page":validTenThousandFocus.sourceKind==="ods-p4f2"?"data-scale-p4f2-active-page":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"data-scale-p4e1-active-page":"data-scale-p4b1-active-page"]:String(validTenThousandFocus.page)},
           "Original "+(validTenThousandFocus.sourceKind==="office-p4c3b"?"DOCX/ODT":validTenThousandFocus.sourceKind==="ods-p4f2"?"ODS":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"XLSX":"CSV")+" source rows "+validTenThousandFocus.rowFirst+"–"+
           validTenThousandFocus.rowLast+". NOT sites, discovered physical cables or Engine evidence."),
-        validTenThousandFocus.layoutStrategy === "bounded-deterministic-grid" ? e("p", { "data-scale-p4b1-layout-diagnostic": "FALLBACK", role: "status" }, "ELK-layouten validerade inte denna begränsade vy; en deterministisk, bunden grid-layout används och behåller alla valda källnoder och länkar.") : null,
+        validTenThousandFocus.layoutStrategy === "bounded-deterministic-topology" || validTenThousandFocus.layoutStrategy === "bounded-deterministic-grid" ? e("p", { "data-scale-p4b1-layout-diagnostic": "FALLBACK", role: "status" }, "ELK-layouten validerade inte denna begränsade vy; en deterministisk, topologimedveten och bunden layout används och behåller alla valda källnoder och länkar.") : null,
+        tenThousandTopologyProjection ? e("p", { "data-scale-p4b1-focused-subgraph": "true", role: "status" }, `Fokuserad kanonisk delgraf: ${tenThousandTopologyProjection.focusPage.visibleNeighbors} grannar på sida ${tenThousandTopologyProjection.focusPage.page}/${tenThousandTopologyProjection.focusPage.pageCount}; ${tenThousandTopologyProjection.layoutStrategy === "elk.layered" ? "ELK" : "topologimedveten fallback"}-layout.`) : null,
         e("label",null,"Original "+(validTenThousandFocus.sourceKind==="office-p4c3b"?"Office":validTenThousandFocus.sourceKind==="ods-p4f2"?"ODS":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"XLSX":"CSV")+" device row page",
           e("select",{[validTenThousandFocus.sourceKind==="office-p4c3b"?"data-scale-p4c3b-focus-page":validTenThousandFocus.sourceKind==="ods-p4f2"?"data-scale-p4f2-focus-page":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"data-scale-p4e1-focus-page":"data-scale-p4b1-focus-page"]:"true",
             value:String(validTenThousandFocus.page),disabled:scaledTenThousandFocusBusy,
@@ -1558,6 +1598,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      ...(topologyFocusRoot ? { "data-topology-focus-root": topologyFocusRoot, "data-topology-focus-page": String(topologyFocusPage) } : {}),
       "data-topology-last-valid-size": topologyViewportState.lastValidSize ? `${topologyViewportState.lastValidSize.width}x${topologyViewportState.lastValidSize.height}` : "UNMEASURED",
       "data-topology-preserve-canonical-geometry": String(topologyViewportState.preserveCanonicalGeometry),
       "data-topology-rebuild-visual-geometry": String(topologyViewportState.rebuildVisualGeometry),

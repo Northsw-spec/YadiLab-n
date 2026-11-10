@@ -1,6 +1,7 @@
 import {runAutoLayout} from "../../layout/src/auto-layout.js";
 import {ElkLayoutBackend} from "../../layout/src/elk-backend.js";
 import {projectScenarioToCanvas} from "../src/canvas/projection.js";
+import {buildTopologyFocusPage} from "../src/canvas/topology-navigation.ts";
 
 /** P4b1: explicitly consented original CSV 10000/10000 source row focus.
  * All 10000 nodes/links remain in canonical Builder; only a source-identity
@@ -12,30 +13,136 @@ const fail=code=>{const e=new Error(code);e.code=code;throw e;};
 const validId=x=>typeof x==="string"&&ID.test(x);
 const has=x=>Array.isArray(x);
 
-function boundedDeterministicLayout(model) {
+function boundedDeterministicLayout(model, rootId) {
   const resources = [...model.resources].sort((a,b) => a.id.localeCompare(b.id, "en"));
   const maxLabel = resources.reduce((max, resource) => Math.max(max, [...String(resource.label ?? resource.id)].length), 0);
-  const width = Math.max(180, Math.min(520, 24 + Math.max(22, maxLabel) * 7));
+  const width = Math.max(180, Math.min(260, 24 + Math.max(22, maxLabel) * 7));
   const height = 96;
-  const gapX = 48;
-  const gapY = 40;
-  const columns = Math.max(1, Math.min(12, Math.ceil(Math.sqrt(resources.length))));
+  const gapX = 56;
+  const gapY = 72;
+  const byId = new Map(resources.map((resource) => [resource.id, resource]));
+  const adjacency = new Map(resources.map((resource) => [resource.id, new Set()]));
+  for (const connection of model.connections) {
+    if (!byId.has(connection.from.resource) || !byId.has(connection.to.resource)) continue;
+    adjacency.get(connection.from.resource)?.add(connection.to.resource);
+    adjacency.get(connection.to.resource)?.add(connection.from.resource);
+  }
+  const anchor = rootId && byId.has(rootId)
+    ? rootId
+    : resources.slice().sort((a, b) => (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0) || a.id.localeCompare(b.id, "en"))[0]?.id;
+  const levels = new Map();
+  const queue = anchor ? [anchor] : [];
+  if (anchor) levels.set(anchor, 0);
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor];
+    for (const neighbor of [...(adjacency.get(current) ?? [])].sort((a, b) => a.localeCompare(b, "en"))) {
+      if (levels.has(neighbor)) continue;
+      levels.set(neighbor, (levels.get(current) ?? 0) + 1);
+      queue.push(neighbor);
+    }
+  }
+  const maxLevel = Math.max(0, ...levels.values());
+  for (const resource of resources) if (!levels.has(resource.id)) levels.set(resource.id, maxLevel + 1);
+  const grouped = new Map();
+  for (const resource of resources) {
+    const level = levels.get(resource.id) ?? 0;
+    const items = grouped.get(level) ?? [];
+    items.push(resource);
+    grouped.set(level, items);
+  }
+  const rowWidth = Math.max(1, Math.min(12, Math.ceil(Math.sqrt(resources.length))));
+  const positions = new Map();
+  for (const [level, items] of [...grouped.entries()].sort((a, b) => a[0] - b[0])) {
+    const ordered = items.slice().sort((a, b) => (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0) || a.id.localeCompare(b.id, "en"));
+    const rows = Math.max(1, Math.ceil(ordered.length / rowWidth));
+    ordered.forEach((resource, index) => {
+      const row = Math.floor(index / rowWidth);
+      const column = index % rowWidth;
+      const count = Math.min(rowWidth, ordered.length - row * rowWidth);
+      const x = (column - (count - 1) / 2) * (width + gapX) + 900;
+      const y = level * (height + gapY) + row * (height + gapY) + 40;
+      positions.set(resource.id, { x, y });
+    });
+    void rows;
+  }
   return {
     formatId: "infrastructure-cyber-lab.layout",
     schemaVersion: "0.1.0",
     scenarioId: model.scenarioId,
+    // LayoutDocument keeps the historical schema engine field for compatibility;
+    // callers must use layoutStrategy to distinguish this deterministic fallback
+    // from a document actually produced by ELK.
     engine: "elk.layered",
     nodes: resources.map((resource, index) => ({
       id: resource.id,
-      x: (index % columns) * (width + gapX),
-      y: Math.floor(index / columns) * (height + gapY),
+      x: positions.get(resource.id)?.x ?? (index % rowWidth) * (width + gapX),
+      y: positions.get(resource.id)?.y ?? Math.floor(index / rowWidth) * (height + gapY),
       width,
       height,
     })),
   };
 }
 
-export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page){
+function sourceSubset(model, page) {
+  const pageInfo = buildTopologyFocusPage({ resources: model.resources, connections: model.connections }, page.rootId, page.page, page.maxNodes, page.maxEdges);
+  const selected = new Set(pageInfo.nodeIds);
+  const selectedEdges = new Set(pageInfo.edgeIds);
+  const portsByResource = new Map(pageInfo.nodeIds.map((id) => [id, new Set()]));
+  for (const connection of model.connections) {
+    if (!selectedEdges.has(connection.id)) continue;
+    if (connection.from.port) portsByResource.get(connection.from.resource)?.add(connection.from.port);
+    if (connection.to.port) portsByResource.get(connection.to.resource)?.add(connection.to.port);
+  }
+  const resources = model.resources.filter((resource) => selected.has(resource.id)).map((resource) => ({
+    ...resource,
+    interfaces: resource.interfaces.filter((iface) => !portsByResource.get(resource.id)?.size || portsByResource.get(resource.id).has(iface.id)),
+  }));
+  const connections = model.connections.filter((connection) => selectedEdges.has(connection.id));
+  return { pageInfo, bounded: { ...model, zones: [], resources, connections } };
+}
+
+async function buildRootFocus(model, rootId, pageNumber) {
+  const { pageInfo, bounded } = sourceSubset(model, { rootId, page: pageNumber, maxNodes: 100, maxEdges: MAX_EDGES });
+  let layout;
+  let layoutDiagnostics = [];
+  let usedFallback = false;
+  try { layout = await runAutoLayout(bounded, new ElkLayoutBackend()); }
+  catch (cause) { layout = { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] }; }
+  if (!layout?.ok || !layout.document || layout.document.scenarioId !== model.scenarioId) {
+    usedFallback = true;
+    layoutDiagnostics = layout?.diagnostics ?? [];
+    layout = {
+      ok: true,
+      document: boundedDeterministicLayout(bounded, rootId),
+      diagnostics: [...layoutDiagnostics, { severity: "warning", code: "SCALE_P4B1_LAYOUT_FALLBACK", message: "ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links." }],
+    };
+  }
+  const focusCanvas = projectScenarioToCanvas(bounded, layout.document);
+  if (focusCanvas.nodes.length !== pageInfo.nodeIds.length || focusCanvas.edges.length !== pageInfo.edgeIds.length ||
+      focusCanvas.diagnostics?.some((diagnostic) => diagnostic.severity === "error") ||
+      focusCanvas.nodes.some((node) => !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y) || !(node.width > 0) || !(node.height > 0)) ||
+      focusCanvas.edges.some((edge) => !pageInfo.edgeIds.includes(edge.id))) fail("SCALE_P4B1_PROJECTION_BLOCKED");
+  return {
+    page: pageInfo.page,
+    pageCount: pageInfo.pageCount,
+    rowFirst: 1,
+    rowLast: NODES,
+    canonicalNodes: NODES,
+    canonicalLinks: LINKS,
+    focusedNodes: focusCanvas.nodes.length,
+    focusedEdges: focusCanvas.edges.length,
+    hiddenOriginalLinks: LINKS - pageInfo.totalVisibleLinks,
+    focusCanvas,
+    contextNodeIds: Object.freeze(pageInfo.nodeIds.filter((id) => id !== rootId)),
+    focusRoot: rootId,
+    focusPage: Object.freeze(pageInfo),
+    layoutStrategy: usedFallback ? "bounded-deterministic-topology" : "elk.layered",
+    layoutDiagnostics: Object.freeze((layoutDiagnostics ?? []).map((diagnostic) => Object.freeze({ ...diagnostic }))),
+    canActivate: false, engineVerified: false, physicalTopologyVerified: false,
+  };
+}
+
+export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page,options={}){
   if(!Number.isSafeInteger(page)||page<1||page>100)
     fail("SCALE_P4B1_SELECTION_BLOCKED");
   if(!model||typeof model!=="object"||!has(model.resources)||
@@ -75,6 +182,8 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
         fail("SCALE_P4B1_SOURCE_BLOCKED");
     }
   }
+
+  if (options?.rootId) return buildRootFocus(model, options.rootId, page);
 
   const first=(page-1)*ROW_SIZE,last=page*ROW_SIZE;
   const base=new Set(sourceRowIds.slice(first,last));
@@ -120,7 +229,7 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
   if(!layout?.ok||!layout.document||layout.document.scenarioId!==model.scenarioId){
     usedFallback=true;
     layoutDiagnostics=layout?.diagnostics??[];
-    layout={ok:true,document:boundedDeterministicLayout(bounded),diagnostics:[...layoutDiagnostics,{severity:"warning",code:"SCALE_P4B1_LAYOUT_FALLBACK",message:"ELK validation rejected this bounded projection; deterministic grid fallback retained all selected source nodes and links."}]};
+    layout={ok:true,document:boundedDeterministicLayout(bounded),diagnostics:[...layoutDiagnostics,{severity:"warning",code:"SCALE_P4B1_LAYOUT_FALLBACK",message:"ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links."}]};
   }
   let canvas;
   try{canvas=projectScenarioToCanvas(bounded,layout.document);}
@@ -141,7 +250,7 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
     focusedNodes:canvas.nodes.length,focusedEdges:canvas.edges.length,
     hiddenOriginalLinks:LINKS-visible.length,
     focusCanvas:canvas,contextNodeIds:Object.freeze(context),
-    layoutStrategy:usedFallback?"bounded-deterministic-grid":"elk.layered",
+    layoutStrategy:usedFallback?"bounded-deterministic-topology":"elk.layered",
     layoutDiagnostics:Object.freeze(layoutDiagnostics.map(d=>Object.freeze({...d}))),
     canActivate:false,engineVerified:false,physicalTopologyVerified:false
   });

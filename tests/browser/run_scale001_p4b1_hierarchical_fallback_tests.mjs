@@ -35,9 +35,21 @@ try {
   assert.equal(result.canonicalLinks, 10000);
   assert.equal(result.focusedNodes, 100);
   assert.equal(result.focusedEdges, 99);
-  assert.equal(result.layoutStrategy, "bounded-deterministic-grid");
+  assert.equal(result.layoutStrategy, "bounded-deterministic-topology");
+  const positions = new Map(result.focusCanvas.nodes.map((node) => [node.id, node.position]));
+  assert.ok(positions.get(id(0)).y < positions.get(id(1)).y, "fallback keeps the declared access-switch root above its clients");
   assert.ok(result.layoutDiagnostics.some((diagnostic) => diagnostic.code === "LAYOUT_UNREASONABLE_WHITESPACE" || diagnostic.code === "LAYOUT_LABEL_UNREADABLE"));
   assert.ok(result.focusCanvas.edges.every((edge) => model.connections.some((source) => source.id === edge.id && source.from.resource === edge.source && source.to.resource === edge.target)));
+  const focused = await buildScaledNetworkTenThousandFocus(model, resources.map((resource) => resource.id), 1, { rootId: id(0) });
+  assert.equal(focused.focusRoot, id(0));
+  assert.equal(focused.focusPage.totalRootLinks, 99);
+  assert.equal(focused.focusPage.visibleRootLinks, 99);
+  assert.equal(focused.focusPage.visibleNeighborLinks, 0);
+  assert.equal(focused.focusPage.totalVisibleLinks, 99);
+  assert.equal(focused.focusedNodes, 100);
+  assert.equal(focused.focusedEdges, 99);
+  const focusedPositions = new Map(focused.focusCanvas.nodes.map((node) => [node.id, node.position]));
+  assert.ok(focusedPositions.get(id(0)).y < focusedPositions.get(id(1)).y, "root focus preserves a branching hierarchy");
   console.log("PASS SCALE-001 hierarchical high-degree focus uses bounded deterministic fallback with source identity preserved");
 } finally {
   rmSync(folder, { recursive: true, force: true });

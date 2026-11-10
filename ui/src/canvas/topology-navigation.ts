@@ -37,6 +37,11 @@ export interface TopologyFocusPage {
   readonly totalLinks: number;
   readonly visibleLinks: number;
   readonly hiddenLinks: number;
+  readonly totalRootLinks: number;
+  readonly visibleRootLinks: number;
+  readonly hiddenRootLinks: number;
+  readonly visibleNeighborLinks: number;
+  readonly totalVisibleLinks: number;
 }
 const normalize = (value: unknown): string => String(value ?? "").trim().toLocaleLowerCase();
 const values = (value: unknown): readonly string[] => Array.isArray(value) ? value.flatMap((item) => typeof item === "string" || typeof item === "number" ? [String(item)] : []) : [];
@@ -97,11 +102,21 @@ export function buildTopologyFocusPage(network: TopologyCanonicalNetwork, rootId
   const safePage = Math.min(pageCount, Math.max(1, Math.floor(page)));
   const visibleNeighbors = neighbors.slice((safePage - 1) * safePageSize, safePage * safePageSize);
   const visible = new Set([rootId, ...visibleNeighbors]);
-  const visibleEdges = network.connections
-    .filter((connection) => visible.has(connection.from.resource) && visible.has(connection.to.resource))
-    .sort((a, b) => a.id.localeCompare(b.id, "en"))
-    .slice(0, Math.max(0, Math.floor(maxEdges)));
-  const totalRootLinks = network.connections.filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId).length;
+  const directRootEdges = network.connections
+    .filter((connection) => (connection.from.resource === rootId || connection.to.resource === rootId) && visible.has(connection.from.resource) && visible.has(connection.to.resource))
+    .sort((a, b) => a.id.localeCompare(b.id, "en"));
+  const neighborEdges = network.connections
+    .filter((connection) => visibleNeighbors.includes(connection.from.resource) && visibleNeighbors.includes(connection.to.resource))
+    .sort((a, b) => a.id.localeCompare(b.id, "en"));
+  // Root links are always prioritised over secondary links so a bounded page
+  // never silently hides the focused device's declared endpoints.
+  const budget = Math.max(0, Math.floor(maxEdges));
+  const visibleEdges = [...directRootEdges, ...neighborEdges]
+    .filter((connection, index, all) => all.findIndex((candidate) => candidate.id === connection.id) === index)
+    .slice(0, budget);
+  const visibleRootLinks = visibleEdges.filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId).length;
+  const visibleNeighborLinks = visibleEdges.length - visibleRootLinks;
+  const totalRootLinks = directRootEdges.length;
   return {
     rootId,
     page: safePage,
@@ -113,7 +128,12 @@ export function buildTopologyFocusPage(network: TopologyCanonicalNetwork, rootId
     hiddenNeighbors: neighbors.length - visibleNeighbors.length,
     totalLinks: totalRootLinks,
     visibleLinks: visibleEdges.length,
-    hiddenLinks: Math.max(0, totalRootLinks - visibleEdges.length),
+    hiddenLinks: Math.max(0, totalRootLinks - visibleRootLinks),
+    totalRootLinks,
+    visibleRootLinks,
+    hiddenRootLinks: Math.max(0, totalRootLinks - visibleRootLinks),
+    visibleNeighborLinks,
+    totalVisibleLinks: visibleEdges.length,
   };
 }
 export function filterTopologyNodes(nodes: readonly CanvasNode[], state: TopologyNavigationState): Readonly<Record<string, "match" | "dim">> { const query = normalize(state.query); const path = new Set(state.pathNodeIds); const matched = new Set(searchTopology(buildTopologySearchIndex(nodes), state.query).map((result) => result.nodeId)); const result: Record<string, "match" | "dim"> = {}; for (const node of nodes) { const data = node.data as unknown as Record<string, unknown>; const typeMatch = !state.nodeType || normalize(data.resourceType) === normalize(state.nodeType); const zoneMatch = !state.zone || normalize(data.zoneKind) === normalize(state.zone); const vlanValues = [...values(data.vlans), ...values(data.vlanIds), ...(Array.isArray(data.interfaces) ? data.interfaces.flatMap((iface) => values((iface as Record<string, unknown>).vlan)) : [])]; const vlanMatch = !state.vlan || vlanValues.some((vlan) => normalize(vlan) === normalize(state.vlan)); const queryMatch = !query || matched.has(node.id); const pathMatch = !path.size || path.has(node.id); result[node.id] = typeMatch && zoneMatch && vlanMatch && queryMatch && pathMatch ? "match" : "dim"; } return result; }

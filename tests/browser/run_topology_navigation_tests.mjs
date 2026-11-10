@@ -6,4 +6,12 @@ const canonical = { resources: Array.from({ length: 10000 }, (_, i) => ({ id: `d
 const globalIndex = buildTopologySearchIndexFromNetwork(canonical); const global = searchTopologyWithCount(globalIndex, "device 10000"); assert.equal(global.total, 1); assert.equal(global.results[0].nodeId, "device-10000");
 const focus = buildTopologyFocusPage({ resources: [{ id: "switch", label: "Access", type: "network.switch" }, ...Array.from({ length: 2050 }, (_, i) => ({ id: `pc-${String(i).padStart(4, "0")}`, label: `PC ${i}`, type: "endpoint.windows" }))], connections: Array.from({ length: 2050 }, (_, i) => ({ id: `edge-${String(i).padStart(4, "0")}`, from: { resource: "switch" }, to: { resource: `pc-${String(i).padStart(4, "0")}` } })) }, "switch", 2, 100, 250);
 assert.equal(focus.totalNeighbors, 2050); assert.equal(focus.pageCount, 21); assert.equal(focus.visibleNeighbors, 99); assert.equal(focus.hiddenNeighbors, 1951); assert.equal(focus.nodeIds.length, 100); assert.ok(focus.edgeIds.every((id) => id.startsWith("edge-")));
+assert.equal(focus.totalRootLinks, 2050); assert.equal(focus.visibleRootLinks, 99); assert.equal(focus.hiddenRootLinks, 1951); assert.equal(focus.visibleNeighborLinks, 0); assert.equal(focus.totalVisibleLinks, 99);
+const dense = buildTopologyFocusPage({ resources: [{ id: "root" }, { id: "a" }, { id: "b" }], connections: [
+  { id: "root-a-1", from: { resource: "root" }, to: { resource: "a" } },
+  { id: "root-a-2", from: { resource: "root" }, to: { resource: "a" } },
+  { id: "root-b", from: { resource: "root" }, to: { resource: "b" } },
+  { id: "a-b", from: { resource: "a" }, to: { resource: "b" } },
+] }, "root", 1, 3, 4);
+assert.deepEqual(dense.edgeIds, ["root-a-1", "root-a-2", "root-b", "a-b"]); assert.equal(dense.visibleRootLinks, 3); assert.equal(dense.visibleNeighborLinks, 1); assert.equal(dense.totalVisibleLinks, 4);
 console.log("PASS PROJECT-086 topology navigation: global canonical search, focus pagination and 7 base assertions");
