@@ -183,4 +183,3 @@ export function buildNetworkOverviewProjection(args: {
     diagnostics: [],
   };
 }
-

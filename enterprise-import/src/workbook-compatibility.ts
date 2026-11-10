@@ -190,4 +190,3 @@ export function documentationNotes(document: ImportDocument, profile: LegacyWork
 export function workbookCompatibilityInfo(document: ImportDocument): WorkbookCompatibility {
   return resolveWorkbookCompatibility(document);
 }
-
