@@ -39,6 +39,7 @@ export * from "./evidence-review.js";
 export * from "./remediation.js";
 
 export * from "./guided-troubleshooting.js";
+export * from "./troubleshooting-summary.js";
 
 export * from "./curriculum.js";
 export * from "./pedagogical-labs.js";

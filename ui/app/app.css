@@ -164,6 +164,14 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .notebook-entries li { display: grid; gap: 0.3rem; padding: 0.65rem; border: 1px solid var(--border, #334155); border-radius: 0.5rem; }
 .notebook-entries pre { max-height: 12rem; overflow: auto; white-space: pre-wrap; }
 .troubleshooting-notebook textarea { width: 100%; resize: vertical; }
+.troubleshooting-summary { border-color: #4b7893; background: rgba(8, 30, 45, .58); }
+.troubleshooting-summary .summary-section { display: grid; gap: .3rem; padding: .55rem; border: 1px solid rgba(91, 133, 160, .34); border-radius: .45rem; background: rgba(0, 0, 0, .12); }
+.troubleshooting-summary .summary-section h4 { margin: 0; color: #d9f2ff; }
+.troubleshooting-summary .summary-section p { margin: 0; overflow-wrap: anywhere; }
+.troubleshooting-summary .summary-copy-field { display: grid; gap: .3rem; font-weight: 700; }
+.troubleshooting-summary .summary-copy-field textarea { width: 100%; min-height: 12rem; resize: vertical; font: .75rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.troubleshooting-summary [data-troubleshooting-summary-status="VERIFIED_IMPROVEMENT"] { border-color: #3da77e; }
+.troubleshooting-summary [data-troubleshooting-summary-status="REGRESSION_DETECTED"], .troubleshooting-summary [data-troubleshooting-summary-status="NO_VERIFIED_IMPROVEMENT"] { border-color: #bd6b61; }
 
 .curriculum-select { display: flex; align-items: center; gap: .4rem; color: #b8c7d9; font-size: .85rem; }
 .curriculum-select select { max-width: 300px; border: 1px solid #36506d; border-radius: 8px; background: #0b1726; color: inherit; padding: .52rem .6rem; }
