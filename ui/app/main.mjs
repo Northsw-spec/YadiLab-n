@@ -2352,7 +2352,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       style: { position: "fixed", left: `${topologyContextMenu.x}px`, top: `${topologyContextMenu.y}px`, zIndex: 1000 },
     },
       topologyContextMenu.kind === "node" && contextResource ? [
-        e("strong", { key: "heading" }, contextResource.label ?? contextResource.id),
+        e("strong", { key: "heading" }, `${contextResource.label ?? contextResource.id} · ${contextResource.id}`),
         e("button", { key: "details", type: "button", role: "menuitem", "data-topology-context-action": "details", onClick: () => { setTopologyContextDetails({ kind: "node", id: contextResource.id, label: contextResource.label ?? contextResource.id, type: contextResource.type ?? "unknown", addresses: contextResource.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [], neighbors: contextNeighbors.map((resource) => resource.id) }); setTopologyContextMenu(null); } }, "Visa enhetsdetaljer"),
         e("button", { key: "focus", type: "button", role: "menuitem", "data-topology-context-action": "focus", onClick: () => focusTopologyNode(contextResource.id, contextResource.label ?? contextResource.id) }, "Öppna fokuserad topologi"),
         e("button", { key: "neighbors", type: "button", role: "menuitem", "data-topology-context-action": "neighbors", onClick: () => { focusTopologyNode(contextResource.id, contextResource.label ?? contextResource.id); setTopologyContextDetails({ kind: "neighbors", id: contextResource.id, neighbors: contextNeighbors.map((resource) => resource.id) }); } }, "Visa direkt anslutna enheter"),
