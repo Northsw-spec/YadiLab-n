@@ -3124,8 +3124,28 @@ function FaultInjectionPanel({ workspace, setWorkspace, setDiagnostics, onTopolo
 
 
 
-function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics }) {
+const guidedToolActions = {
+  COLLECT_EVIDENCE: [
+    { tool: "observations", label: "Öppna observationer" },
+    { tool: "probes", label: "Öppna aktiva prober" },
+  ],
+  REVIEW_EVIDENCE: [{ tool: "notebook", label: "Öppna evidensanteckningar" }],
+  FORM_HYPOTHESIS: [{ tool: "notebook", label: "Öppna hypotesanteckningar" }],
+  REMEDIATE: [{ tool: "notebook", label: "Öppna Typed Remediation" }],
+  COLLECT_AFTER_EVIDENCE: [
+    { tool: "observations", label: "Öppna observationer" },
+    { tool: "probes", label: "Öppna aktiva prober" },
+  ],
+  VERIFICATION_COMPLETE: [{ tool: "notebook", label: "Visa verifieringsresultat" }],
+  CONTINUE_INVESTIGATION: [
+    { tool: "observations", label: "Fortsätt med observationer" },
+    { tool: "probes", label: "Fortsätt med aktiva prober" },
+  ],
+};
+
+function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics, onOpenTool }) {
   const [workflow, setWorkflow] = useState(null);
+  const [navigationFeedback, setNavigationFeedback] = useState("");
   useEffect(() => {
     let active = true;
     buildGuidedTroubleshootingWorkflow(workspace, notebook ?? undefined).then((result) => {
@@ -3135,6 +3155,14 @@ function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics
     });
     return () => { active = false; };
   }, [workspace.scenario.sourceHash, workspace.engineState.stateRevision, notebook?.notebookIdentity]);
+  useEffect(() => { setNavigationFeedback(""); }, [workspace.scenario.sourceHash, workspace.engineState.stateRevision]);
+  const actions = workflow ? guidedToolActions[workflow.phase] ?? [] : [];
+  const navigateToTool = (action) => {
+    const opened = onOpenTool?.(action.tool);
+    setNavigationFeedback(opened
+      ? `${action.label} öppnades. Välj själv mål och kommando innan du kör något.`
+      : "Arbetsytan kunde inte öppnas i det aktuella körläget.");
+  };
   return e("details", { className: "observation-helper guided-troubleshooting", "data-guided-troubleshooting": "v0.77" },
     e("summary", null, "Guidad felsökning"),
     e("div", { className: "observation-helper-body" },
@@ -3147,6 +3175,14 @@ function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics
           e("span", null, "Obligatorisk evidens"), e("strong", null, workflow.requiredEvidenceStatus),
           e("span", null, "Arbetsflödesidentitet"), e("strong", null, `${workflow.workflowIdentity.slice(0, 12)}…`)),
         e("p", { className: "helper-note", "data-guided-next-action": workflow.phase }, workflow.nextAction),
+        e("div", { className: "helper-actions guided-next-actions", "data-guided-next-actions": workflow.phase },
+          ...actions.map((action) => e("button", {
+            key: action.tool,
+            type: "button",
+            "data-guided-next-tool": action.tool,
+            onClick: () => navigateToTool(action),
+          }, action.label))),
+        navigationFeedback ? e("p", { className: "helper-note", role: "status", "data-guided-navigation-feedback": "true" }, navigationFeedback) : null,
         e("ol", { className: "guided-troubleshooting-steps" }, ...workflow.steps.map((step) => e("li", { key: step.stepId, "data-guided-step": step.stepId, "data-guided-status": step.status },
           e("strong", null, `${step.label} · ${step.status}`),
           e("p", null, step.detail)))),
@@ -3502,6 +3538,21 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
     setDiagnostics(result.diagnostics);
     if (result.ok && result.notebook) setNotebook(result.notebook);
   };
+  const openGuidedTool = (tool) => {
+    if (workspace.mode !== "runtime") return false;
+    const selectors = {
+      observations: '[data-observation-engine="wave1"]',
+      probes: '[data-active-probe-engine="wave2"]',
+      notebook: '[data-troubleshooting-notebook="v0.75"]',
+    };
+    const panel = document.querySelector(selectors[tool]);
+    if (!panel) return false;
+    panel.open = true;
+    panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    const focusSelector = tool === "notebook" ? "textarea, select, button:not([disabled])" : "select, button:not([disabled])";
+    panel.querySelector(focusSelector)?.focus({ preventScroll: true });
+    return true;
+  };
 
   const applyOperation = () => {
     if (workspace.mode !== "runtime") return;
@@ -3576,7 +3627,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
         )
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
-          e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics }),
+          e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics, onOpenTool: openGuidedTool }),
           e(RuntimeObservationPanel, { workspace, setDiagnostics, onSaveEvidence: saveObservationEvidence, onTopologyState }),
           e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen }),
           e(RuntimeTroubleshootingNotebookPanel, { workspace, setWorkspace, notebook, setNotebook, setDiagnostics, onTopologyState }),
@@ -4112,6 +4163,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     event.currentTarget.value = ""; // allow selecting the same file again
     if (file) onImportNetworkFile(file);
   };
+  const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
   return e("section", { className: "main-actions", "aria-label": "Main actions" },
     e("div", { className: "main-actions-heading" },
       e("div", null, e("strong", null, "MAIN ACTIONS"), e("span", null, "Common workspace actions are grouped; current lab context stays visible.")),
@@ -4120,6 +4172,16 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         e("label", { className: "context-select" }, "Verifierad leverans", e("select", { value: verifiedDeliveryScenarioId, onChange: (event) => setVerifiedDeliveryScenarioId(event.target.value), "data-verified-delivery-scenario-selector": "true" }, ...verifiedDeliveryScenarios.map((scenario) => e("option", { key: scenario.scenarioId, value: scenario.scenarioId }, scenario.metadata.title)))),
         e("label", { className: "context-select" }, "Guidad labb", e("select", { value: guidedLabId, onChange: (event) => setGuidedLabId(event.target.value), disabled: !builtinGuidedLabs.length, "data-guided-lab-catalog": "wave1" }, ...builtinGuidedLabs.map((lab) => e("option", { key: lab.id, value: lab.id }, `${lab.sequence}. ${lab.title} · ${lab.focus}`)))),
       ),
+    ),
+    e("div", { className: "main-actions-guided-start", "data-guided-lab-entrypoint": "direct" },
+      e("button", {
+        type: "button",
+        className: "guided-lab-primary-button",
+        "data-guided-lab-start": "direct",
+        onClick: () => openGuidedLab(true),
+        disabled: busy || !guidedLabId,
+      }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
+      e("span", null, "Välj labb ovan och börja felsöka direkt; menyvägen finns kvar för övriga scenarieåtgärder."),
     ),
     e("div", { className: "main-actions-primary-import", "data-network-import-entrypoint": "always-visible" },
       e("button", { type: "button", className: "network-import-primary-button", "data-network-import-primary": "true", onClick: openNetworkPicker, disabled: busy, "aria-controls": "network-topology-import-panel" }, "Import JSON / Excel / CSV → Network Topology"),
