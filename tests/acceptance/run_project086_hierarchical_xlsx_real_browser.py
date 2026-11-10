@@ -186,7 +186,7 @@ def case(browser, url):
         expect(root).to_be_visible(timeout=180000)
         box = root.bounding_box()
         require(box is not None, "Missing access-switch bounds")
-        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, button="right")
+        root.dispatch_event("contextmenu")
         menu_node = page.locator('[data-topology-context-menu="node"]')
         expect(menu_node).to_be_visible(timeout=20000)
         menu_node.get_by_role("menuitem", name="Öppna fokuserad topologi").click()

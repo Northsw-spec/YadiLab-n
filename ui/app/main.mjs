@@ -1346,7 +1346,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   useEffect(() => {
     if (!validTenThousandFocus) return undefined;
     const onNativeContextMenu = (event) => {
-      const resourceNode = event.target?.closest?.(".react-flow__node-resource")?.closest?.(".react-flow__node[data-id]");
+      const resourceNode = event.target?.closest?.(".react-flow__node-resource, .react-flow__node[data-id]")?.closest?.(".react-flow__node[data-id]");
       const nodeId = resourceNode?.getAttribute?.("data-id");
       if (!nodeId || !canonicalResourceById.has(nodeId)) return;
       openTopologyContextMenu(event, { kind: "node", nodeId });
