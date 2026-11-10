@@ -157,6 +157,10 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .observation-helper { border: 1px solid var(--panel-border, #3a465a); border-radius: 8px; margin: 0.75rem 0; }
 .observation-helper > summary { cursor: pointer; font-weight: 700; padding: 0.65rem 0.75rem; }
 .observation-helper-body { display: grid; gap: 0.65rem; padding: 0 0.75rem 0.75rem; }
+.next-check-panel { display: grid; gap: .35rem; padding: .65rem; border: 1px solid #4d8b8c; border-radius: .55rem; background: rgba(20, 76, 77, .28); }
+.next-check-panel h3 { margin: 0; color: #d8fffb; font-size: .95rem; }
+.next-check-panel p, .next-check-panel small { margin: 0; overflow-wrap: anywhere; }
+.next-check-panel button { justify-self: start; min-height: 2.2rem; }
 .observation-transcript { display: grid; gap: 0.4rem; min-width: 0; }
 .observation-transcript pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; padding: 0.65rem; border-radius: 6px; background: rgba(0,0,0,0.18); }
 .observation-transcript small { overflow-wrap: anywhere; }

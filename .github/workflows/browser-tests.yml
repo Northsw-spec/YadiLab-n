@@ -86,6 +86,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project083_click_to_diagnose_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project083-click-to-diagnose"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project084_next_check_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project084-next-check"
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_package_export_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/package-draft-export"

@@ -10,6 +10,7 @@ import {
   type TroubleshootingNotebookEntry,
 } from "../../../observation-engine/src/index.js";
 import type { BrowserDiagnostic, BrowserWorkspace } from "./types.js";
+import { isCurrentRemediationState } from "./troubleshooting-summary.js";
 
 export const GUIDED_TROUBLESHOOTING_ID = "foundation.guided_troubleshooting" as const;
 export const GUIDED_TROUBLESHOOTING_VERSION = "0.1.0" as const;
@@ -100,12 +101,16 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
   const baselineEvidence = exactNotebook.entries.filter((entry) => isEvidence(entry) && entry.stateRevision === baselineRevision && (!latestRemediation || entry.sequence < latestRemediation.sequence));
   const hypothesisBeforeRemediation = exactNotebook.entries.some((entry) => entry.kind === "learner_note" && entry.noteKind === "hypothesis" && entry.stateRevision === baselineRevision && (!latestRemediation || entry.sequence < latestRemediation.sequence));
   const afterEvidence = latestRemediation ? exactNotebook.entries.filter((entry) => isEvidence(entry) && entry.stateRevision === latestRemediation.afterStateRevision && entry.sequence > latestRemediation.sequence) : [];
-  const hasMatchedAfterEvidence = remediationReview ? remediationReview.status !== "PENDING_AFTER_EVIDENCE" : false;
+  const historicalRemediation = latestRemediation ? !isCurrentRemediationState(workspace, latestRemediation) : false;
+  const hasMatchedAfterEvidence = remediationReview ? remediationReview.status !== "PENDING_AFTER_EVIDENCE" && !historicalRemediation : false;
 
   let phase: GuidedTroubleshootingPhase;
   let nextAction: string;
   if (latestRemediation) {
-    if (!hasMatchedAfterEvidence) {
+    if (historicalRemediation) {
+      phase = "COLLECT_AFTER_EVIDENCE";
+      nextAction = "Runtime-tillståndet har ändrats sedan den tidigare verifieringen. Kör och spara en jämförbar kontroll i aktuell revision.";
+    } else if (!hasMatchedAfterEvidence) {
       phase = "COLLECT_AFTER_EVIDENCE";
       nextAction = "Run and save the same relevant observation or probe after the remediation so the before/after evidence can be compared.";
     } else if (remediationReview?.status === "VERIFIED_IMPROVEMENT") {
@@ -159,13 +164,13 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
       stepId: "collect_after_evidence",
       label: "Collect matching after-evidence",
       status: !latestRemediation ? "WAITING" : hasMatchedAfterEvidence ? "COMPLETE" : afterEvidence.length > 0 ? "READY" : "READY",
-      detail: !latestRemediation ? "Available after a remediation is committed." : hasMatchedAfterEvidence ? "A matching before/after evidence pair is available." : `${afterEvidence.length} post-remediation evidence entr${afterEvidence.length === 1 ? "y" : "ies"} saved; run the same relevant check used before remediation.`,
+      detail: !latestRemediation ? "Available after a remediation is committed." : historicalRemediation ? "The previous verification is historical for the current Runtime state; collect new comparable after-evidence." : hasMatchedAfterEvidence ? "A matching before/after evidence pair is available." : `${afterEvidence.length} post-remediation evidence entr${afterEvidence.length === 1 ? "y" : "ies"} saved; run the same relevant check used before remediation.`,
     },
     {
       stepId: "verify_remediation",
       label: "Verify before/after result",
-      status: !latestRemediation || !remediationReview ? "WAITING" : remediationReview.status === "VERIFIED_IMPROVEMENT" ? "COMPLETE" : remediationReview.status === "PENDING_AFTER_EVIDENCE" ? "WAITING" : "ATTENTION",
-      detail: remediationReview ? `Remediation review status: ${remediationReview.status}.` : "Verification becomes available from notebook evidence after remediation.",
+      status: !latestRemediation || !remediationReview ? "WAITING" : historicalRemediation ? "ATTENTION" : remediationReview.status === "VERIFIED_IMPROVEMENT" ? "COMPLETE" : remediationReview.status === "PENDING_AFTER_EVIDENCE" ? "WAITING" : "ATTENTION",
+      detail: !remediationReview ? "Verification becomes available from notebook evidence after remediation." : historicalRemediation ? `Historical remediation review: ${remediationReview.status}. New comparable verification is required for the current Runtime state.` : `Remediation review status: ${remediationReview.status}.`,
     },
   ];
 

@@ -125,6 +125,7 @@ import networkFaultPack from "../../fault-packs/builtin/network-core.json";
 import windowsFaultPack from "../../fault-packs/builtin/windows-core.json";
 import linuxFaultPack from "../../fault-packs/builtin/linux-core.json";
 import { buildTroubleshootingSummary, createTroubleshootingSummaryDownload } from "../src/browser/troubleshooting-summary.js";
+import { buildNextBestCheck } from "../src/browser/next-check.js";
 
 const builtinFaultPacks = [networkFaultPack, windowsFaultPack, linuxFaultPack];
 const builtinFaultPackLabels = {
@@ -3162,8 +3163,9 @@ const guidedToolActions = {
   ],
 };
 
-function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics, onOpenTool }) {
+function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics, onOpenTool, onPrepareNextCheck }) {
   const [workflow, setWorkflow] = useState(null);
+  const [nextCheck, setNextCheck] = useState(null);
   const [navigationFeedback, setNavigationFeedback] = useState("");
   useEffect(() => {
     let active = true;
@@ -3171,6 +3173,11 @@ function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics
       if (!active) return;
       if (result.diagnostics.length) setDiagnostics(result.diagnostics);
       setWorkflow(result.ok ? result.workflow ?? null : null);
+    });
+    buildNextBestCheck(workspace, notebook ?? undefined).then((result) => {
+      if (!active) return;
+      if (result.diagnostics.length) setDiagnostics(result.diagnostics);
+      setNextCheck(result.ok ? result.nextCheck ?? null : null);
     });
     return () => { active = false; };
   }, [workspace.scenario.sourceHash, workspace.engineState.stateRevision, notebook?.notebookIdentity]);
@@ -3186,6 +3193,15 @@ function RuntimeGuidedTroubleshootingPanel({ workspace, notebook, setDiagnostics
     e("summary", null, "Guidad felsökning"),
     e("div", { className: "observation-helper-body" },
       e("p", { className: "helper-note" }, "Endast processvägledning. Arbetsflödet ordnar din evidens → hypotes → typad åtgärd → efterevidens. Det väljer aldrig mål, kommando, probe, diagnos, åtgärd eller värde åt dig."),
+      nextCheck ? e("section", { className: "next-check-panel", "data-next-check": nextCheck.kind },
+        e("h3", null, "Nästa kontroll"),
+        e("strong", { "data-next-check-title": "true" }, nextCheck.title),
+        e("p", { className: "helper-note", "data-next-check-reason": "true" }, nextCheck.reason),
+        nextCheck.progress.total > 0 ? e("small", { "data-next-check-progress": "true" }, `${nextCheck.progress.completed} av ${nextCheck.progress.total} obligatoriska kontroller dokumenterade.`) : null,
+        nextCheck.requirementStatus === "OUT_OF_ORDER" ? e("p", { className: "helper-note", "data-next-check-order": "OUT_OF_ORDER" }, "Evidensen finns ännu inte i rätt ordning; samla den här kontrollen utan att markera kedjan som klar.") : null,
+        nextCheck.preparation?.options?.length ? e("p", { className: "helper-note", "data-next-check-options": "true" }, `Flera stödda alternativ finns: ${nextCheck.preparation.options.map((option) => option.label).join(" eller ")}. Välj själv i verktyget.`) : null,
+        e("button", { type: "button", "data-next-check-open": "true", onClick: () => onPrepareNextCheck?.(nextCheck) }, nextCheck.actionLabel),
+      ) : null,
       workflow ? e(React.Fragment, null,
         e("div", { className: "status-grid" },
           e("span", null, "Aktuell fas"), e("strong", { "data-guided-phase": workflow.phase }, workflow.phase),
@@ -3282,7 +3298,11 @@ function RuntimeTroubleshootingSummaryPanel({ workspace, notebook, setDiagnostic
   );
 }
 
-function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, onTopologyState }) {
+function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, onTopologyState, nextCheckPreparation = null, onNextCheckPreparationHandled }) {
+  const observationDisclosureRef = useRef(null);
+  const observationTargetRef = useRef(null);
+  const observationCommandRef = useRef(null);
+  const preparedObservationCommandRef = useRef(null);
   const initialModel = buildRuntimeObservationModel(workspace, workspace.selection.primary);
   const [targetId, setTargetId] = useState(initialModel.targetId ?? "");
   const [commandId, setCommandId] = useState(initialModel.commands[0]?.commandId ?? "");
@@ -3299,9 +3319,26 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
 
   useEffect(() => {
     const next = buildRuntimeObservationModel(workspace, targetId);
-    if (!next.commands.some((command) => command.commandId === commandId)) setCommandId(next.commands[0]?.commandId ?? "");
+    const preparedCommandId = preparedObservationCommandRef.current;
+    preparedObservationCommandRef.current = null;
+    if (preparedCommandId && next.commands.some((command) => command.commandId === preparedCommandId)) setCommandId(preparedCommandId);
+    else if (!next.commands.some((command) => command.commandId === commandId)) setCommandId(next.commands[0]?.commandId ?? "");
     setTranscript(null);
   }, [targetId]);
+
+  useEffect(() => {
+    if (!nextCheckPreparation || nextCheckPreparation.tool !== "observations" || nextCheckPreparation.scenarioHash !== workspace.scenario.sourceHash) return;
+    const next = buildRuntimeObservationModel(workspace, nextCheckPreparation.targetId);
+    if (next.targetId) setTargetId(next.targetId);
+    if (nextCheckPreparation.commandId && next.commands.some((command) => command.commandId === nextCheckPreparation.commandId)) {
+      preparedObservationCommandRef.current = nextCheckPreparation.commandId;
+      setCommandId(nextCheckPreparation.commandId);
+    }
+    setTranscript(null);
+    if (observationDisclosureRef.current) observationDisclosureRef.current.open = true;
+    globalThis.requestAnimationFrame?.(() => (nextCheckPreparation.commandId ? observationCommandRef.current : observationTargetRef.current)?.focus({ preventScroll: true }));
+    onNextCheckPreparationHandled?.(nextCheckPreparation.requestId);
+  }, [nextCheckPreparation?.requestId, workspace.scenario.sourceHash]);
 
   const run = () => {
     if (!targetId || !commandId) return;
@@ -3314,16 +3351,16 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
     onTopologyState?.(visual?.ok ? visual.model ?? null : null);
   };
 
-  return e("details", { className: "observation-helper", "data-observation-engine": "wave1" },
+  return e("details", { ref: observationDisclosureRef, className: "observation-helper", "data-observation-engine": "wave1" },
     e("summary", null, "Diagnostik / observationsmotor"),
     e("div", { className: "observation-helper-body" },
       e("p", { className: "helper-note" }, "Kör deterministiska modellerade observationer mot aktuellt Engine-tillstånd. Välkända Windows-/Linux-kommandon är endast ett pedagogiskt gränssnitt; inget gäst-OS-, PowerShell-, shell-, systemctl- eller kärnkommando körs."),
       model.targets.length ? e(React.Fragment, null,
         e("label", { className: "inspector-field" }, "Mål",
-          e("select", { value: targetId, onChange: (event) => setTargetId(event.target.value) },
+          e("select", { ref: observationTargetRef, value: targetId, onChange: (event) => setTargetId(event.target.value) },
             ...model.targets.map((target) => e("option", { key: target.id, value: target.id }, `${target.label} · ${target.id} · ${target.os}`)))),
         e("label", { className: "inspector-field" }, "Modellerat kommando",
-          e("select", { value: commandId, onChange: (event) => { setCommandId(event.target.value); setTranscript(null); } },
+          e("select", { ref: observationCommandRef, value: commandId, onChange: (event) => { setCommandId(event.target.value); setTranscript(null); } },
             ...commands.map((command) => e("option", { key: command.commandId, value: command.commandId }, `${command.command} · ${command.label}`)))),
         commands.find((command) => command.commandId === commandId) ? e("p", { className: "helper-note" }, commands.find((command) => command.commandId === commandId).description) : null,
         e("button", { type: "button", onClick: run, disabled: !commandId }, "Kör modellerad observation"),
@@ -3341,7 +3378,7 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
 }
 
 
-function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled }) {
+function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled, nextCheckPreparation = null, onNextCheckPreparationHandled }) {
   const probeDisclosureRef = useRef(null);
   const sourceSelectRef = useRef(null);
   useEffect(() => { if (autoOpen && probeDisclosureRef.current) probeDisclosureRef.current.open = true; }, [autoOpen, workspace.scenario.sourceHash, scenarioLoadKey]);
@@ -3401,6 +3438,26 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
     globalThis.requestAnimationFrame?.(() => sourceSelectRef.current?.focus({ preventScroll: true }));
     onDiagnosticSourceRequestHandled?.(diagnosticSourceRequest.requestId);
   }, [diagnosticSourceRequest?.requestId, workspace.scenario.sourceHash]);
+
+  useEffect(() => {
+    if (!nextCheckPreparation || nextCheckPreparation.tool !== "probes" || nextCheckPreparation.scenarioHash !== workspace.scenario.sourceHash) return;
+    const requested = buildRuntimeActiveProbeModel(workspace, nextCheckPreparation.sourceId, nextCheckPreparation.destinationId);
+    if (requested.sourceId !== nextCheckPreparation.sourceId) {
+      onNextCheckPreparationHandled?.(nextCheckPreparation.requestId);
+      return;
+    }
+    setSourceId(nextCheckPreparation.sourceId);
+    if (nextCheckPreparation.probeId && requested.probes.some((item) => item.probeId === nextCheckPreparation.probeId)) setProbeId(nextCheckPreparation.probeId);
+    if (nextCheckPreparation.destinationId && requested.destinations.some((item) => item.id === nextCheckPreparation.destinationId)) setDestinationId(nextCheckPreparation.destinationId);
+    if (nextCheckPreparation.port !== undefined) setPort(String(nextCheckPreparation.port));
+    if (nextCheckPreparation.queryName !== undefined) setQueryName(nextCheckPreparation.queryName);
+    setTranscript(null);
+    onVisualJourney?.(null);
+    onTopologyState?.(null);
+    if (probeDisclosureRef.current) probeDisclosureRef.current.open = true;
+    globalThis.requestAnimationFrame?.(() => sourceSelectRef.current?.focus({ preventScroll: true }));
+    onNextCheckPreparationHandled?.(nextCheckPreparation.requestId);
+  }, [nextCheckPreparation?.requestId, workspace.scenario.sourceHash]);
 
   useEffect(() => {
     const next = buildRuntimeActiveProbeModel(workspace, sourceId, destinationId);
@@ -3498,7 +3555,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   const [noteText, setNoteText] = useState("");
   const [evidenceReview, setEvidenceReview] = useState(null);
   const [remTarget, setRemTarget] = useState(workspace.scenario.resources.find((r) => r.type.startsWith("windows.") || r.type.startsWith("linux."))?.id ?? "");
-  const [remActionId, setRemActionId] = useState("change_default_gateway");
+  const [remActionId, setRemActionId] = useState("");
   const [remGateway, setRemGateway] = useState("");
   const [remDnsServers, setRemDnsServers] = useState("");
   const [remFirewallAction, setRemFirewallAction] = useState("allow");
@@ -3521,7 +3578,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   };
 
   const typedRemediation = runtimeTypedRemediationContext(workspace, remTarget);
-  const effectiveRemActionId = typedRemediation.actions.some((action) => action.actionId === remActionId) ? remActionId : (typedRemediation.actions[0]?.actionId ?? "");
+  const effectiveRemActionId = remActionId === "" ? "" : typedRemediation.actions.some((action) => action.actionId === remActionId) ? remActionId : (typedRemediation.actions[0]?.actionId ?? "");
   const remediationRequest = () => {
     if (!remTarget || !effectiveRemActionId) throw new Error("Select a Windows or Linux target and a typed remediation action.");
     if (effectiveRemActionId === "change_default_gateway") return { actionId: effectiveRemActionId, targetId: remTarget, parameters: { gateway: remGateway.trim() } };
@@ -3581,7 +3638,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
         e("p", { className: "helper-note" }, "Enter a modeled remediation yourself, preview the exact state change, then commit it as one Runtime history step. The workflow never reads canonical solution or hidden fault truth. Save current evidence before remediation, then re-run the same observations/probes afterward to verify improvement."),
         e("p", { className: "helper-note" }, "Typed remediation action: choose a learner-facing safe operation such as Change default gateway, Change DNS servers, Enable or disable service, Set interface addresses or Change firewall default policy. Internal Engine paths are not editable here."),
         e("label", { className: "inspector-field" }, "Target", e("select", { value: remTarget, onChange: (event) => { setRemTarget(event.target.value); setRemService(""); setRemPreview(null); } }, ...workspace.scenario.resources.filter((r) => r.type.startsWith("windows.") || r.type.startsWith("linux.")).map((r) => e("option", { key: r.id, value: r.id }, `${r.label} (${r.id})`)))),
-        e("label", { className: "inspector-field" }, "Typed remediation action", e("select", { value: effectiveRemActionId, onChange: (event) => { setRemActionId(event.target.value); setRemService(""); setRemPreview(null); } }, ...typedRemediation.actions.map((action) => e("option", { key: action.actionId, value: action.actionId }, action.label)))),
+        e("label", { className: "inspector-field" }, "Typed remediation action", e("select", { value: effectiveRemActionId, onChange: (event) => { setRemActionId(event.target.value); setRemService(""); setRemPreview(null); } }, e("option", { value: "", disabled: true }, "Välj åtgärd…"), ...typedRemediation.actions.map((action) => e("option", { key: action.actionId, value: action.actionId }, action.label)))),
         typedRemediation.actions.find((action) => action.actionId === effectiveRemActionId)?.description ? e("p", { className: "helper-note" }, typedRemediation.actions.find((action) => action.actionId === effectiveRemActionId).description) : null,
         effectiveRemActionId === "change_default_gateway" ? e("label", { className: "inspector-field" }, "Gateway IPv4 address", e("input", { value: remGateway, onChange: (event) => { setRemGateway(event.target.value); setRemPreview(null); }, placeholder: "10.0.0.1" })) : null,
         effectiveRemActionId === "change_dns_servers" ? e("label", { className: "inspector-field" }, "DNS servers (comma-separated IPv4)", e("input", { value: remDnsServers, onChange: (event) => { setRemDnsServers(event.target.value); setRemPreview(null); }, placeholder: "10.0.0.53, 10.0.0.54" })) : null,
@@ -3637,7 +3694,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   );
 }
 
-function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraftChange, getPendingDraftChanges, getOtherPendingDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled, onDiagnoseFromSource }) {
+function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraftChange, getPendingDraftChanges, getOtherPendingDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, onVisualJourney, onTopologyState, scenarioLoadKey = 0, probeAutoOpen = false, diagnosticSourceRequest = null, onDiagnosticSourceRequestHandled, onDiagnoseFromSource, nextCheckPreparation = null, onNextCheckPreparationHandled, onPrepareNextCheck }) {
   const selected = workspace.selection.primary;
   const semantic = workspace.mode === "builder"
     ? [...workspace.source.zones, ...workspace.source.resources, ...workspace.source.connections].find((x) => x.id === selected)
@@ -3666,6 +3723,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
       probes: '[data-active-probe-engine="wave2"]',
       notebook: '[data-troubleshooting-notebook="v0.75"]',
       remediation: '[data-troubleshooting-notebook="v0.75"]',
+      summary: '[data-troubleshooting-summary="v0.82"]',
     };
     const panel = document.querySelector(selectors[tool]);
     if (!panel) return false;
@@ -3674,6 +3732,10 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
     const focusSelector = tool === "notebook" ? "textarea, select, button:not([disabled])" : "select, button:not([disabled])";
     panel.querySelector(focusSelector)?.focus({ preventScroll: true });
     return true;
+  };
+  const prepareNextCheck = (nextCheck) => {
+    if (nextCheck.preparation) return onPrepareNextCheck?.(nextCheck);
+    return openGuidedTool(nextCheck.tool);
   };
 
   const applyOperation = () => {
@@ -3754,10 +3816,10 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
         )
       : e(React.Fragment, null,
           e(FaultInjectionPanel, { workspace, setWorkspace, setDiagnostics, onTopologyState }),
-          e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics, onOpenTool: openGuidedTool }),
+          e(RuntimeGuidedTroubleshootingPanel, { workspace, notebook, setDiagnostics, onOpenTool: openGuidedTool, onPrepareNextCheck: prepareNextCheck }),
           e(RuntimeTroubleshootingSummaryPanel, { workspace, notebook, setDiagnostics }),
-          e(RuntimeObservationPanel, { workspace, setDiagnostics, onSaveEvidence: saveObservationEvidence, onTopologyState }),
-          e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled }),
+          e(RuntimeObservationPanel, { workspace, setDiagnostics, onSaveEvidence: saveObservationEvidence, onTopologyState, nextCheckPreparation, onNextCheckPreparationHandled }),
+          e(RuntimeActiveProbePanel, { workspace, setDiagnostics, onSaveEvidence: saveProbeEvidence, onVisualJourney, onTopologyState, scenarioLoadKey, autoOpen: probeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled, nextCheckPreparation, onNextCheckPreparationHandled }),
           e(RuntimeTroubleshootingNotebookPanel, { workspace, setWorkspace, notebook, setNotebook, setDiagnostics, onTopologyState }),
           e("details", { className: "inspector-disclosure" }, e("summary", null, "Inspektör"), e("pre", { className: "inspector" }, semantic ? pretty(semantic) : "Select a topology object."))),
     workspace.mode === "runtime" ? e("section", { className: "operation-editor" },
@@ -4602,6 +4664,8 @@ function App() {
   const [importedProbeAutoOpen, setImportedProbeAutoOpen] = useState(false);
   const [diagnosticSourceRequest, setDiagnosticSourceRequest] = useState(null);
   const diagnosticSourceRequestIdRef = useRef(0);
+  const [nextCheckPreparation, setNextCheckPreparation] = useState(null);
+  const nextCheckRequestIdRef = useRef(0);
   const [diagnostics, setDiagnostics] = useState([]);
   const [busy, setBusy] = useState(false);
   const [guidedLabId, setGuidedLabId] = useState(() => builtinGuidedLabs[0]?.id ?? "");
@@ -5003,6 +5067,7 @@ function App() {
     setActiveJourney(null);
     setTopologyStateFocus(null);
     setDiagnosticSourceRequest(null);
+    setNextCheckPreparation(null);
     return transitionId;
   };
   const isCurrentScenarioTransition = (transitionId) => scenarioTransitionRef.current === transitionId;
@@ -5019,6 +5084,19 @@ function App() {
   };
   const handleDiagnosticSourceRequest = (requestId) => {
     setDiagnosticSourceRequest((current) => current?.requestId === requestId ? null : current);
+  };
+  const prepareNextCheck = (nextCheck) => {
+    const active = latestDrawioWorkspaceRef.current;
+    if (active.mode !== "runtime" || !nextCheck?.preparation || nextCheck.scenarioHash !== active.scenario.sourceHash) return false;
+    setNextCheckPreparation({
+      ...nextCheck.preparation,
+      requestId: ++nextCheckRequestIdRef.current,
+      scenarioHash: active.scenario.sourceHash,
+    });
+    return true;
+  };
+  const handleNextCheckPreparation = (requestId) => {
+    setNextCheckPreparation((current) => current?.requestId === requestId ? null : current);
   };
   const reserveGuardedScenarioLaunch = () => {
     const launchToken = ++scenarioLaunchRequestRef.current;
@@ -7330,7 +7408,7 @@ function App() {
         onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
         onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
         onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
-        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled: handleDiagnosticSourceRequest, onDiagnoseFromSource: requestDiagnoseFromSource, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
+        workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled: handleDiagnosticSourceRequest, onDiagnoseFromSource: requestDiagnoseFromSource, nextCheckPreparation, onNextCheckPreparationHandled: handleNextCheckPreparation, onPrepareNextCheck: prepareNextCheck, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,
         troubleshootingTimeline ? e("details", { className: "troubleshooting-timeline", "aria-label": "Troubleshooting timeline", "data-troubleshooting-timeline": "ready" }, e("summary", null, "Troubleshooting timeline"), e("small", null, `Session ${troubleshootingTimeline.sessionId}`), e("ol", null, ...troubleshootingTimeline.entries.slice(0, 24).map((entry) => e("li", { key: `${entry.sequence}-${entry.eventId ?? entry.action}` }, e("span", null, `${entry.sequence}. ${entry.category} · ${entry.action}`), e("small", null, entry.detail ?? entry.outcome ?? "Actual event"))))) : null,
