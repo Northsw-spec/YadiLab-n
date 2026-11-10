@@ -1184,8 +1184,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onNodeDoubleClick = (event, node) => {
     event.preventDefault();
     event.stopPropagation();
-    const resource = canonicalResourceById.get(node.id);
-    focusTopologyNode(node.id, resource?.label ?? node.id);
+    const domNodeId = event.target?.closest?.("[data-id]")?.getAttribute?.("data-id");
+    const resolvedId = canonicalResourceById.has(domNodeId) ? domNodeId : node.id;
+    const resource = canonicalResourceById.get(resolvedId);
+    focusTopologyNode(resolvedId, resource?.label ?? resolvedId);
   };
   const onEdgeClick = (_event, edge) => {
     const active = liveTopologyWorkspace();
