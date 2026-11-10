@@ -3555,7 +3555,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   const [noteText, setNoteText] = useState("");
   const [evidenceReview, setEvidenceReview] = useState(null);
   const [remTarget, setRemTarget] = useState(workspace.scenario.resources.find((r) => r.type.startsWith("windows.") || r.type.startsWith("linux."))?.id ?? "");
-  const [remActionId, setRemActionId] = useState("change_default_gateway");
+  const [remActionId, setRemActionId] = useState("");
   const [remGateway, setRemGateway] = useState("");
   const [remDnsServers, setRemDnsServers] = useState("");
   const [remFirewallAction, setRemFirewallAction] = useState("allow");
@@ -3578,7 +3578,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
   };
 
   const typedRemediation = runtimeTypedRemediationContext(workspace, remTarget);
-  const effectiveRemActionId = typedRemediation.actions.some((action) => action.actionId === remActionId) ? remActionId : (typedRemediation.actions[0]?.actionId ?? "");
+  const effectiveRemActionId = remActionId === "" ? "" : typedRemediation.actions.some((action) => action.actionId === remActionId) ? remActionId : (typedRemediation.actions[0]?.actionId ?? "");
   const remediationRequest = () => {
     if (!remTarget || !effectiveRemActionId) throw new Error("Select a Windows or Linux target and a typed remediation action.");
     if (effectiveRemActionId === "change_default_gateway") return { actionId: effectiveRemActionId, targetId: remTarget, parameters: { gateway: remGateway.trim() } };
@@ -3638,7 +3638,7 @@ function RuntimeTroubleshootingNotebookPanel({ workspace, setWorkspace, notebook
         e("p", { className: "helper-note" }, "Enter a modeled remediation yourself, preview the exact state change, then commit it as one Runtime history step. The workflow never reads canonical solution or hidden fault truth. Save current evidence before remediation, then re-run the same observations/probes afterward to verify improvement."),
         e("p", { className: "helper-note" }, "Typed remediation action: choose a learner-facing safe operation such as Change default gateway, Change DNS servers, Enable or disable service, Set interface addresses or Change firewall default policy. Internal Engine paths are not editable here."),
         e("label", { className: "inspector-field" }, "Target", e("select", { value: remTarget, onChange: (event) => { setRemTarget(event.target.value); setRemService(""); setRemPreview(null); } }, ...workspace.scenario.resources.filter((r) => r.type.startsWith("windows.") || r.type.startsWith("linux.")).map((r) => e("option", { key: r.id, value: r.id }, `${r.label} (${r.id})`)))),
-        e("label", { className: "inspector-field" }, "Typed remediation action", e("select", { value: effectiveRemActionId, onChange: (event) => { setRemActionId(event.target.value); setRemService(""); setRemPreview(null); } }, ...typedRemediation.actions.map((action) => e("option", { key: action.actionId, value: action.actionId }, action.label)))),
+        e("label", { className: "inspector-field" }, "Typed remediation action", e("select", { value: effectiveRemActionId, onChange: (event) => { setRemActionId(event.target.value); setRemService(""); setRemPreview(null); } }, e("option", { value: "", disabled: true }, "Välj åtgärd…"), ...typedRemediation.actions.map((action) => e("option", { key: action.actionId, value: action.actionId }, action.label)))),
         typedRemediation.actions.find((action) => action.actionId === effectiveRemActionId)?.description ? e("p", { className: "helper-note" }, typedRemediation.actions.find((action) => action.actionId === effectiveRemActionId).description) : null,
         effectiveRemActionId === "change_default_gateway" ? e("label", { className: "inspector-field" }, "Gateway IPv4 address", e("input", { value: remGateway, onChange: (event) => { setRemGateway(event.target.value); setRemPreview(null); }, placeholder: "10.0.0.1" })) : null,
         effectiveRemActionId === "change_dns_servers" ? e("label", { className: "inspector-field" }, "DNS servers (comma-separated IPv4)", e("input", { value: remDnsServers, onChange: (event) => { setRemDnsServers(event.target.value); setRemPreview(null); }, placeholder: "10.0.0.53, 10.0.0.54" })) : null,
@@ -3723,6 +3723,7 @@ function Sidebar({ workspace, getWorkspace, projectGeneration = 0, onPendingDraf
       probes: '[data-active-probe-engine="wave2"]',
       notebook: '[data-troubleshooting-notebook="v0.75"]',
       remediation: '[data-troubleshooting-notebook="v0.75"]',
+      summary: '[data-troubleshooting-summary="v0.82"]',
     };
     const panel = document.querySelector(selectors[tool]);
     if (!panel) return false;

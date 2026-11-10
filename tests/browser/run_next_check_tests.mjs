@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import gatewaySource from "../../curriculum/builtin/wave1/windows-gateway.json" with { type: "json" };
 import dnsSource from "../../curriculum/builtin/wave1/windows-dns.json" with { type: "json" };
+import linuxSource from "../../curriculum/builtin/wave1/linux-ssh.json" with { type: "json" };
 import {
   addRuntimeTroubleshootingNote,
   buildNextBestCheck,
@@ -63,6 +64,35 @@ await check("saving routing evidence moves next check to the ICMP requirement", 
   assert.equal(result.nextCheck.preparation.probeId, "windows.ping");
 });
 
+await check("a saved hypothesis leads to Typed Remediation review", async () => {
+  const probe = runRuntimeActiveProbe(runtime, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  notebook = (await captureRuntimeActiveProbeEvidence(runtime, notebook, probe.transcript)).notebook;
+  notebook = (await addRuntimeTroubleshootingNote(runtime, notebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const result = await buildNextBestCheck(runtime, notebook);
+  assert.equal(result.nextCheck.title, "Granska hypotes och eventuell åtgärd");
+  assert.equal(result.nextCheck.tool, "remediation");
+  assert.equal(result.nextCheck.actionLabel, "Öppna Typed Remediation");
+  assert.equal(JSON.stringify(result.nextCheck).includes("canonicalSolution"), false);
+});
+
+await check("current verified improvement leads to the summary instead of a generic fallback", async () => {
+  let current = runtimeFor(gatewaySource, "e".repeat(64));
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  let currentNotebook = (await captureRuntimeActiveProbeEvidence(current, undefined, before.transcript)).notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const request = { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.1.1" } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa gatewayen.");
+  current = committed.workspace;
+  currentNotebook = committed.notebook;
+  const after = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  currentNotebook = (await captureRuntimeActiveProbeEvidence(current, currentNotebook, after.transcript)).notebook;
+  const result = await buildNextBestCheck(current, currentNotebook);
+  assert.equal(result.nextCheck.title, "Granska verifieringsresultatet");
+  assert.equal(result.nextCheck.tool, "summary");
+  assert.equal(result.nextCheck.actionLabel, "Visa felsökningssammanfattning");
+});
+
 await check("out-of-order evidence remains visible and is not promoted to complete", async () => {
   const fresh = runtimeFor(gatewaySource, "9".repeat(64));
   const probe = runRuntimeActiveProbe(fresh, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
@@ -121,10 +151,74 @@ await check("a same-revision history branch cannot retain an old verified recomm
   const undone = undoRuntime(current).workspace;
   const guidedAfterUndo = await buildGuidedTroubleshootingWorkflow(undone, currentNotebook);
   assert.equal(guidedAfterUndo.workflow.phase, "COLLECT_AFTER_EVIDENCE");
+  assert.notEqual(guidedAfterUndo.workflow.steps.find((step) => step.stepId === "verify_remediation").status, "COMPLETE");
+  assert.match(guidedAfterUndo.workflow.steps.find((step) => step.stepId === "verify_remediation").detail, /historical|current Runtime/i);
   const branched = applyRuntimeOperationWithHistory(undone, { op: "set", target: "client1", path: "properties.networkProfile", value: "public" }).workspace;
   const result = await buildNextBestCheck(branched, currentNotebook);
   assert.equal(result.nextCheck.title, "Ny verifiering behövs");
   assert.equal(result.nextCheck.preparation, undefined);
 });
 
-console.log(`PASS Next Best Check logic: ${pass}/7 assertions.`);
+await check("a later routing observation does not hide the earlier comparable ping", async () => {
+  let current = runtimeFor(gatewaySource, "f".repeat(64));
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.ping", destinationId: "server1" });
+  let currentNotebook = (await captureRuntimeActiveProbeEvidence(current, undefined, before.transcript)).notebook;
+  const route = runRuntimeObservation(current, "client1", "windows.route_print");
+  currentNotebook = (await captureRuntimeObservationEvidence(current, currentNotebook, route.transcript)).notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const request = { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.1.1" } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa gatewayen.");
+  const result = await buildNextBestCheck(committed.workspace, committed.notebook);
+  assert.equal(result.nextCheck.actionLabel, "Förbered samma ping igen");
+  assert.equal(result.nextCheck.preparation.probeId, "windows.ping");
+  assert.equal(result.nextCheck.preparation.destinationId, "server1");
+});
+
+await check("TCP remediation retest preserves TCP/22", async () => {
+  let current = runtimeFor(linuxSource, "1".repeat(64));
+  const service = runRuntimeObservation(current, "server1", "linux.systemctl_status");
+  let currentNotebook = (await captureRuntimeObservationEvidence(current, undefined, service.transcript)).notebook;
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "linux.nc_tcp", destinationId: "server1", port: 22 });
+  currentNotebook = (await captureRuntimeActiveProbeEvidence(current, currentNotebook, before.transcript)).notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "SSH-tjänsten behöver undersökas.")).notebook;
+  const request = { actionId: "set_service_enabled", targetId: "server1", parameters: { service: "ssh", enabled: true } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa tjänsten.");
+  const result = await buildNextBestCheck(committed.workspace, committed.notebook);
+  assert.equal(result.nextCheck.actionLabel, "Förbered samma TCP-test igen");
+  assert.equal(result.nextCheck.preparation.probeId, "linux.nc_tcp");
+  assert.equal(result.nextCheck.preparation.port, 22);
+});
+
+await check("DNS remediation retest preserves the DNS question", async () => {
+  let current = runtimeFor(dnsSource, "2".repeat(64));
+  const observation = runRuntimeObservation(current, "client1", "windows.ipconfig_all");
+  let currentNotebook = (await captureRuntimeObservationEvidence(current, undefined, observation.transcript)).notebook;
+  const before = runRuntimeActiveProbe(current, { sourceId: "client1", probeId: "windows.resolve_dnsname", queryName: "app.lab.test" });
+  currentNotebook = (await captureRuntimeActiveProbeEvidence(current, currentNotebook, before.transcript)).notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Resolvern behöver undersökas vidare.")).notebook;
+  const request = { actionId: "change_dns_servers", targetId: "client1", parameters: { servers: ["10.78.102.53"] } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa resolvern.");
+  const result = await buildNextBestCheck(committed.workspace, committed.notebook);
+  assert.equal(result.nextCheck.actionLabel, "Förbered samma DNS-fråga igen");
+  assert.equal(result.nextCheck.preparation.probeId, "windows.resolve_dnsname");
+  assert.equal(result.nextCheck.preparation.queryName, "app.lab.test");
+});
+
+await check("a remediation without a comparable probe stays explicitly unverified", async () => {
+  let current = runtimeFor(gatewaySource, "3".repeat(64));
+  const observation = runRuntimeObservation(current, "client1", "windows.route_print");
+  let currentNotebook = (await captureRuntimeObservationEvidence(current, undefined, observation.transcript)).notebook;
+  currentNotebook = (await addRuntimeTroubleshootingNote(current, currentNotebook, "hypothesis", "Gatewayen kan vara felaktig.")).notebook;
+  const request = { actionId: "change_default_gateway", targetId: "client1", parameters: { gateway: "10.78.1.1" } };
+  const preview = await previewRuntimeTypedRemediation(current, currentNotebook, request);
+  const committed = await commitRuntimeTypedRemediation(current, currentNotebook, request, preview.preview.token, "Testa gatewayen.");
+  const result = await buildNextBestCheck(committed.workspace, committed.notebook);
+  assert.equal(result.nextCheck.title, "Jämförbart omtest saknas");
+  assert.equal(result.nextCheck.preparation, undefined);
+  assert.match(result.nextCheck.reason, /ingen giltig, jämförbar sparad probe/i);
+});
+
+console.log(`PASS Next Best Check logic: ${pass}/13 assertions.`);

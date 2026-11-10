@@ -13,7 +13,7 @@ import { buildRuntimeActiveProbeModel, buildRuntimeObservationModel } from "./ob
 import { isCurrentRemediationState } from "./troubleshooting-summary.js";
 import type { BrowserDiagnostic, BrowserWorkspace, RuntimeWorkspace } from "./types.js";
 
-export type NextCheckTool = "observations" | "probes" | "notebook";
+export type NextCheckTool = "observations" | "probes" | "notebook" | "remediation" | "summary";
 export type NextCheckKind = "observation" | "active_probe" | "repeat_active_probe" | "process" | "general";
 
 export interface NextCheckPreparation {
@@ -58,11 +58,9 @@ export interface NextCheckResult {
 }
 
 type Requirement = Normalizedscenariotroubleshootingevidencerequirement;
-type EvidenceEntry = Extract<TroubleshootingNotebookEntry, { readonly kind: "observation" | "active_probe" }>;
 type RemediationEntry = Extract<TroubleshootingNotebookEntry, { readonly kind: "remediation_action" }>;
 
 function error(code: string, message: string): BrowserDiagnostic { return { severity: "error", code, message }; }
-function isEvidence(entry: TroubleshootingNotebookEntry): entry is EvidenceEntry { return entry.kind === "observation" || entry.kind === "active_probe"; }
 function categoryTitle(category: string | undefined): string {
   return category === "routing" ? "Kontrollera routing"
     : category === "dns" ? "Kontrollera DNS"
@@ -130,6 +128,35 @@ function repeatProbePreparation(workspace: RuntimeWorkspace, entry: Troubleshoot
   };
 }
 
+function repeatActionLabel(entry: TroubleshootingActiveProbeEntry): string {
+  if (entry.category === "dns") return "Förbered samma DNS-fråga igen";
+  if (entry.protocol === "tcp") return "Förbered samma TCP-test igen";
+  if (entry.protocol === "icmp") return "Förbered samma ping igen";
+  return "Förbered samma probe igen";
+}
+
+function matchesProbeRequirement(requirement: Extract<Requirement, { readonly kind: "active_probe" }>, entry: TroubleshootingActiveProbeEntry): boolean {
+  return (requirement.category === undefined || requirement.category === entry.category)
+    && (requirement.sourceId === undefined || requirement.sourceId === entry.sourceId)
+    && (requirement.destinationId === undefined || requirement.destinationId === entry.destinationId)
+    && (requirement.protocol === undefined || requirement.protocol === entry.protocol)
+    && (requirement.port === undefined || requirement.port === entry.port)
+    && (requirement.queryName === undefined || requirement.queryName === entry.queryName)
+    && (requirement.truth === undefined || requirement.truth === entry.truth);
+}
+
+function chooseBaselineProbe(workspace: RuntimeWorkspace, entries: readonly TroubleshootingNotebookEntry[], remediation: RemediationEntry): TroubleshootingActiveProbeEntry | undefined {
+  const candidates = entries.filter((entry): entry is TroubleshootingActiveProbeEntry =>
+    entry.kind === "active_probe" && entry.sequence < remediation.sequence && repeatProbePreparation(workspace, entry) !== undefined);
+  if (!candidates.length) return undefined;
+  const requiredProbeRequirements = (workspace.scenario.troubleshootingObjectives ?? [])
+    .filter((objective) => objective.required)
+    .flatMap((objective) => objective.requirements)
+    .filter((requirement): requirement is Extract<Requirement, { readonly kind: "active_probe" }> => requirement.kind === "active_probe");
+  const relevant = candidates.filter((entry) => requiredProbeRequirements.some((requirement) => matchesProbeRequirement(requirement, entry)));
+  return (relevant.length ? relevant : candidates).at(-1);
+}
+
 function success(nextCheck: NextCheck, review: TroubleshootingEvidenceReview): NextCheckResult {
   return { ok: true, nextCheck, review, diagnostics: [] };
 }
@@ -174,16 +201,26 @@ export async function buildNextBestCheck(workspace: BrowserWorkspace, notebook?:
     const remediationReview = remediationReviewResult.review;
     const historical = !isCurrentRemediationState(runtime, latestRemediation);
     if (!historical && remediationReview.status === "PENDING_AFTER_EVIDENCE") {
-      const baseline = entries.filter((entry): entry is EvidenceEntry => isEvidence(entry) && entry.sequence < latestRemediation.sequence).at(-1);
-      if (baseline?.kind === "active_probe") {
+      const baseline = chooseBaselineProbe(runtime, entries, latestRemediation);
+      if (baseline) {
         const preparation = repeatProbePreparation(runtime, baseline);
         if (preparation) return success({
           scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
-          title: "Verifiera ändringen", reason: `Du testade tidigare ${sourceLabel(runtime, baseline.sourceId)} mot ${sourceLabel(runtime, baseline.destinationId)}. Kör samma kontroll igen för att se om resultatet förändrats.`, actionLabel: "Förbered samma ping igen", tool: "probes", preparation, progress,
-          remediationReviewStatus: remediationReview.status, workflowIdentity: `${runtime.scenario.sourceHash}:${latestRemediation.entryId}:${runtime.engineState.stateRevision}:repeat`,
+          title: "Verifiera ändringen", reason: "Du testade tidigare " + sourceLabel(runtime, baseline.sourceId) + (baseline.destinationId ? " mot " + sourceLabel(runtime, baseline.destinationId) : "") + ". Kör samma " + (baseline.category === "dns" ? "DNS-fråga" : baseline.protocol === "tcp" ? "TCP-test" : baseline.protocol === "icmp" ? "ping" : "probe") + " igen för att se om resultatet förändrats.", actionLabel: repeatActionLabel(baseline), tool: "probes", preparation, progress,
+          remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":repeat:" + baseline.entryId,
         }, review);
       }
     }
+    if (!historical && remediationReview.status === "PENDING_AFTER_EVIDENCE") return success({
+      scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
+      title: "Jämförbart omtest saknas", reason: "Den tidigare evidenskedjan innehåller ingen giltig, jämförbar sparad probe som kan förberedas i aktuell Runtime. Välj själv en stödd probe och dokumentera ett nytt test.", actionLabel: "Öppna aktiva prober", tool: "probes", progress,
+      remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":repeat-unavailable",
+    }, review);
+    if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT") return success({
+      scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process",
+      title: "Granska verifieringsresultatet", reason: "En förbättring har verifierats med jämförbar före-/efterevidens. Granska resultatet och dokumentera din slutsats.", actionLabel: "Visa felsökningssammanfattning", tool: "summary", progress,
+      remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":verified",
+    }, review);
     if (historical) return success({
       scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
       title: "Ny verifiering behövs", reason: "Runtime-tillståndet har ändrats sedan den tidigare förbättringen verifierades. Samla ny, jämförbar evidens i aktuell revision.", actionLabel: "Öppna aktiva prober", tool: "probes", progress,
@@ -208,6 +245,9 @@ export async function buildNextBestCheck(workspace: BrowserWorkspace, notebook?:
   const hasHypothesis = entries.some((entry) => entry.kind === "learner_note" && entry.noteKind === "hypothesis" && entry.stateRevision === runtime.engineState.stateRevision);
   if (!hasHypothesis && progress.total > 0 && completed === progress.total) return success({
     scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process", title: "Formulera egen hypotes", reason: "Den synliga evidenskedjan är samlad. Skriv vad evidensen stödjer innan du väljer en åtgärd.", actionLabel: "Öppna hypotesanteckningar", tool: "notebook", progress, workflowIdentity: `${runtime.scenario.sourceHash}:hypothesis:${runtime.engineState.stateRevision}`,
+  }, review);
+  if (hasHypothesis && progress.total > 0 && completed === progress.total) return success({
+    scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process", title: "Granska hypotes och eventuell åtgärd", reason: "Du har dokumenterat evidens och en hypotes. Granska om hypotesen motiverar en ändring. Du väljer själv mål, åtgärd och värde.", actionLabel: "Öppna Typed Remediation", tool: "remediation", progress, workflowIdentity: runtime.scenario.sourceHash + ":remediation:" + runtime.engineState.stateRevision + ":" + (exactNotebook?.notebookIdentity ?? "empty"),
   }, review);
   return success({
     scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "general", title: "Välj nästa kontroll", reason: "Scenariot saknar tillräckliga synliga evidenskrav för en specifik rekommendation. Välj själv en stödd observation eller probe.", actionLabel: "Öppna observationer", tool: "observations", progress, workflowIdentity: `${runtime.scenario.sourceHash}:general:${runtime.engineState.stateRevision}`,

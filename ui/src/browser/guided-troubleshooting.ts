@@ -164,13 +164,13 @@ export async function buildGuidedTroubleshootingWorkflow(workspace: BrowserWorks
       stepId: "collect_after_evidence",
       label: "Collect matching after-evidence",
       status: !latestRemediation ? "WAITING" : hasMatchedAfterEvidence ? "COMPLETE" : afterEvidence.length > 0 ? "READY" : "READY",
-      detail: !latestRemediation ? "Available after a remediation is committed." : hasMatchedAfterEvidence ? "A matching before/after evidence pair is available." : `${afterEvidence.length} post-remediation evidence entr${afterEvidence.length === 1 ? "y" : "ies"} saved; run the same relevant check used before remediation.`,
+      detail: !latestRemediation ? "Available after a remediation is committed." : historicalRemediation ? "The previous verification is historical for the current Runtime state; collect new comparable after-evidence." : hasMatchedAfterEvidence ? "A matching before/after evidence pair is available." : `${afterEvidence.length} post-remediation evidence entr${afterEvidence.length === 1 ? "y" : "ies"} saved; run the same relevant check used before remediation.`,
     },
     {
       stepId: "verify_remediation",
       label: "Verify before/after result",
-      status: !latestRemediation || !remediationReview ? "WAITING" : remediationReview.status === "VERIFIED_IMPROVEMENT" ? "COMPLETE" : remediationReview.status === "PENDING_AFTER_EVIDENCE" ? "WAITING" : "ATTENTION",
-      detail: remediationReview ? `Remediation review status: ${remediationReview.status}.` : "Verification becomes available from notebook evidence after remediation.",
+      status: !latestRemediation || !remediationReview ? "WAITING" : historicalRemediation ? "ATTENTION" : remediationReview.status === "VERIFIED_IMPROVEMENT" ? "COMPLETE" : remediationReview.status === "PENDING_AFTER_EVIDENCE" ? "WAITING" : "ATTENTION",
+      detail: !remediationReview ? "Verification becomes available from notebook evidence after remediation." : historicalRemediation ? `Historical remediation review: ${remediationReview.status}. New comparable verification is required for the current Runtime state.` : `Remediation review status: ${remediationReview.status}.`,
     },
   ];
 
