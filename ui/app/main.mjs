@@ -1343,6 +1343,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     setTopologyContextMenu({ ...menu, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 300)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 280)) });
   };
+  useEffect(() => {
+    if (!validTenThousandFocus) return undefined;
+    const onNativeContextMenu = (event) => {
+      const resourceNode = event.target?.closest?.(".react-flow__node-resource")?.closest?.(".react-flow__node[data-id]");
+      const nodeId = resourceNode?.getAttribute?.("data-id");
+      if (!nodeId || !canonicalResourceById.has(nodeId)) return;
+      openTopologyContextMenu(event, { kind: "node", nodeId });
+    };
+    document.addEventListener("contextmenu", onNativeContextMenu, true);
+    return () => document.removeEventListener("contextmenu", onNativeContextMenu, true);
+  }, [validTenThousandFocus, canonicalResourceById]);
   const selectedCanonicalResource = workspace.selection.primary ? canonicalResourceById.get(workspace.selection.primary) : undefined;
   const selectedCanonicalLinkCount = selectedCanonicalResource
     ? canonicalNetwork.connections.filter((connection) => connection.from.resource === selectedCanonicalResource.id || connection.to.resource === selectedCanonicalResource.id).length
