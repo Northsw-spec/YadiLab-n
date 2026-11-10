@@ -148,7 +148,7 @@ def case(browser, url):
 
         search = page.get_by_role("textbox", name="Sök i topology")
         search.fill("access-0002")
-        result = page.get_by_role("option").filter(has_text="access-0002").first
+        result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text="access-0002").first
         expect(result).to_be_visible(timeout=30000)
         result.click()
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
