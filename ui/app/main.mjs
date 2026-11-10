@@ -3213,6 +3213,34 @@ function RuntimeObservationPanel({ workspace, setDiagnostics, onSaveEvidence, on
 }
 
 
+function modeledTcpProbeInterpretation(transcript) {
+  if (transcript?.protocol !== "tcp") return null;
+  const listener = transcript.listenerServiceDecision;
+  if (transcript.truth === "FALSE" && (listener?.disposition === "SERVICE_DISABLED" || listener?.serviceState === "DISABLED")) {
+    return {
+      code: "SERVICE_DISABLED",
+      text: "Engine-evidens: nätväg och policy passerade, men destinationens modellerade tjänst är avstängd. Kontrollera tjänstestatus på målservern innan du ändrar nätverkspolicy.",
+    };
+  }
+  const blockedPolicy = transcript.policyDecisions?.find((decision) => decision.truth === "FALSE");
+  if (transcript.truth === "FALSE" && blockedPolicy) {
+    return {
+      code: "POLICY_BLOCKED",
+      text: `Engine-evidens: trafikpolicyn blockerade på ${blockedPolicy.resourceId} innan målserverns listener prövades. Kontrollera klientens brandvägg/policy; TCP-felet bevisar inte att SSH-tjänsten är avstängd.`,
+    };
+  }
+  if (transcript.truth === "TRUE") {
+    return {
+      code: "REACHABLE_LISTENER",
+      text: "Engine-evidens: TCP/porten nådde en aktiv listener på målservern. Det verifierar tjänstetillgänglighet för den modellerade vägen.",
+    };
+  }
+  return {
+    code: "CAUSE_NOT_PROVEN",
+    text: "Tolkning: TCP-resultatet ensamt skiljer inte mellan tjänst och policy. Kör en tjänsteobservation och en policyobservation innan du väljer remediation.",
+  };
+}
+
 function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, onVisualJourney, onTopologyState, scenarioLoadKey = 0, autoOpen = false }) {
   const probeDisclosureRef = useRef(null);
   useEffect(() => { if (autoOpen && probeDisclosureRef.current) probeDisclosureRef.current.open = true; }, [autoOpen, workspace.scenario.sourceHash, scenarioLoadKey]);
@@ -3228,6 +3256,7 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
   const visualRunSequenceRef = useRef(0);
   const model = buildRuntimeActiveProbeModel(workspace, sourceId || workspace.selection.primary, destinationId);
   const probe = model.probes.find((item) => item.probeId === probeId) ?? model.probes[0];
+  const tcpInterpretation = modeledTcpProbeInterpretation(transcript);
 
   const applyAcceptancePreset = (preset) => {
     if (!preset) return;
@@ -3314,6 +3343,10 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
           e("strong", null, `${transcript.command} · ${transcript.sourceLabel}`),
           e("small", null, `Engine ${transcript.engineId}@${transcript.engineVersion} · Runtime revision ${transcript.stateRevision} · ${transcript.boundary} · verdict ${transcript.truth}`),
           e("pre", null, transcript.lines.join("\n")),
+          tcpInterpretation ? e("p", {
+            className: "helper-note tcp-probe-interpretation",
+            "data-tcp-probe-interpretation": tcpInterpretation.code,
+          }, tcpInterpretation.text) : null,
           probe?.category === "dns" ? e("p", {
             className: "helper-note dns-probe-interpretation",
             "data-dns-probe-interpretation": transcript.truth,

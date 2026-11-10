@@ -73,6 +73,9 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project079_dns_troubleshooting_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project079-dns-troubleshooting"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project080_root_cause_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project080-root-cause"
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_package_export_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/package-draft-export"
