@@ -118,7 +118,6 @@ def viewport(page):
 
 def case(browser, url):
     page, errors, outside = setup(browser, url)
-    page.on("console", lambda message: print(f"BROWSER CONSOLE: {message.text}", flush=True) if "PROJECT-086" in message.text else None)
     try:
         source, devices, links = hierarchical_xlsx()
         source_sha = hashlib.sha256(source).hexdigest()
@@ -148,12 +147,10 @@ def case(browser, url):
         require([(row[1], row[2]) for row in links] == [(row["from"]["resource"], row["to"]["resource"]) for row in exported["connections"]], "Canonical link endpoints changed")
 
         search = page.get_by_role("textbox", name="Sök i topology")
-        print("PROJECT-086: canonical search", flush=True)
         search.fill("access-0002")
         result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text="access-0002").first
         expect(result).to_be_visible(timeout=30000)
         result.click()
-        print("PROJECT-086: focused access switch", flush=True)
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
         expect(page.locator('[data-topology-focus-counts]')).to_contain_text("38")
         expected_clients = [client_id(index) for index in range(38, 75)]
@@ -164,22 +161,16 @@ def case(browser, url):
         require(page.locator('[data-topology-focus-root="access-0002"]').count() == 1, "Search did not open the real focused graph")
         require(page.locator('[data-topology-total-root-links="38"]').count() == 1, "Root link count is not exact")
         require(page.locator('[data-topology-total-visible-links="38"]').count() == 1, "Visible link count is not exact")
-        print("PROJECT-086: access graph verified", flush=True)
         client_node = page.locator(f'.react-flow__node[data-id="{client_id(38)}"]')
         client_box = client_node.bounding_box()
         require(client_box is not None, "Missing focused client bounds")
-        print(f"PROJECT-086: client box={client_box}", flush=True)
-        print(f"PROJECT-086: client hit={page.evaluate('(p) => document.elementFromPoint(p.x, p.y)?.outerHTML.slice(0, 180)', {'x': client_box['x'] + client_box['width'] / 2, 'y': client_box['y'] + client_box['height'] / 2})}", flush=True)
         page.mouse.dblclick(client_box["x"] + client_box["width"] / 2, client_box["y"] + client_box["height"] / 2)
-        print("PROJECT-086: client double click", flush=True)
         page.wait_for_timeout(5000)
         client_focus_root = page.locator('.topology-panel').get_attribute('data-topology-focus-root')
-        print(f"PROJECT-086: client focus root={client_focus_root}", flush=True)
         require(client_focus_root == client_id(38), "Double-click did not open the client's canonical focused graph")
         page.locator('[data-topology-back="true"]').click()
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
         page.locator('[data-topology-overview="true"]').click()
-        print("PROJECT-086: breadcrumb back overview", flush=True)
         expect(page.locator('[data-topology-focus-root]')).to_have_count(0, timeout=180000)
 
         root = page.locator('.react-flow__node[data-id="access-0002"]')
@@ -190,7 +181,6 @@ def case(browser, url):
         menu_node = page.locator('[data-topology-context-menu="node"]')
         expect(menu_node).to_be_visible(timeout=20000)
         menu_node.get_by_role("menuitem", name="Öppna fokuserad topologi").dispatch_event("click")
-        print("PROJECT-086: context focus", flush=True)
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
 
         surface = page.locator(".react-flow__pane")
@@ -214,7 +204,6 @@ def case(browser, url):
         page.mouse.up(button="right")
         require(viewport(page) == after_wheel, "Right drag panned")
         page.keyboard.press("Escape")
-        print("PROJECT-086: mouse contract", flush=True)
 
         topology_box = page.locator(".topology-panel").bounding_box()
         explorer_box = page.locator('[data-topology-explorer="true"]').bounding_box()
@@ -225,7 +214,6 @@ def case(browser, url):
         mobile_explorer = page.locator('[data-topology-explorer="true"]').bounding_box()
         require(mobile_topology and mobile_explorer and mobile_explorer["y"] >= mobile_topology["y"] + mobile_topology["height"] - 1, "Mobile Explorer is not below topology")
         require(page.evaluate("document.documentElement.scrollWidth") <= 392, "Mobile layout overflows horizontally")
-        print("PROJECT-086: mobile placement", flush=True)
         require(not errors and not outside, f"Chromium errors or outside requests: {errors!r} {outside!r}")
         return {"status": "PASS", "devices": N, "links": N, "sourceSha256": source_sha,
                 "focusedRoot": "access-0002", "focusedNeighbors": len(expected_clients),

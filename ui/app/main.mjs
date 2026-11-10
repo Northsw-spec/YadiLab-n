@@ -853,14 +853,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       setTopologyFocusProjection(null);
       return undefined;
     }
-    console.debug("PROJECT-086 focus effect", rootId);
     const request = ++topologyFocusRequestRef.current;
     const generation = projectGeneration;
     const transition = getScenarioTransitionId();
     setTopologyFocusProjection(null);
     void buildScaledNetworkTenThousandFocus(model, validTenThousandFocus.nodeOrder, topologyFocusPage, { rootId })
       .then((focus) => {
-        console.debug("PROJECT-086 focus result", rootId, focus.focusedNodes, focus.focusedEdges);
         const active = liveTopologyWorkspace();
         if (request !== topologyFocusRequestRef.current || generation !== projectGeneration || transition !== getScenarioTransitionId() ||
             !active || active.mode !== "builder" || active.source !== source || active.compile.model !== model) return;
@@ -1285,7 +1283,6 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     flowApi.current?.fitView?.({ duration: 220, padding: 0.1 });
   };
   const focusTopologyNode = (nodeId, label = nodeId) => {
-    console.debug("PROJECT-086 focus request", nodeId, Boolean(validTenThousandFocus));
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;

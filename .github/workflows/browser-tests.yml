@@ -95,6 +95,16 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_package_export_draft_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/package-draft-export"
+          # PROJECT-086: topology navigation semantics plus real 10k/10k XLSX Chromium proof.
+          npm run test:topology-navigation
+          npm run test:scale001-p0-source
+          npm run test:scale001-p4b1-hierarchical
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project086_topology_explorer_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project086-topology-explorer"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project086_hierarchical_xlsx_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project086-hierarchical-xlsx"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
