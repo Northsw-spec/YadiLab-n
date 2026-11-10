@@ -1184,8 +1184,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onNodeDoubleClick = (event, node) => {
     event.preventDefault();
     event.stopPropagation();
-    const domNodeId = event.target?.closest?.("[data-id]")?.getAttribute?.("data-id");
-    const resolvedId = canonicalResourceById.has(domNodeId) ? domNodeId : node.id;
+    const target = event.target;
+    const domResource = target?.closest?.(".react-flow__node-resource[data-id]");
+    const domHandle = target?.closest?.("[data-nodeid]");
+    const domNode = target?.closest?.("[data-id]");
+    const candidates = [
+      domHandle?.getAttribute?.("data-nodeid"),
+      domResource?.getAttribute?.("data-id"),
+      domNode?.getAttribute?.("data-id"),
+      node.id,
+    ];
+    const resolvedId = candidates.find((candidate) => canonicalResourceById.has(candidate)) ?? node.id;
     const resource = canonicalResourceById.get(resolvedId);
     focusTopologyNode(resolvedId, resource?.label ?? resolvedId);
   };
