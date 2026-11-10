@@ -1194,6 +1194,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       domNode?.getAttribute?.("data-id"),
       node.id,
     ];
+    if (typeof document !== "undefined" && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      const pointResource = document.elementsFromPoint(event.clientX, event.clientY)
+        .map((element) => element.closest?.(".react-flow__node-resource[data-id]")?.getAttribute?.("data-id"))
+        .find((candidate) => canonicalResourceById.has(candidate));
+      if (pointResource) candidates.unshift(pointResource);
+    }
     const resolvedId = candidates.find((candidate) => canonicalResourceById.has(candidate)) ?? node.id;
     const resource = canonicalResourceById.get(resolvedId);
     focusTopologyNode(resolvedId, resource?.label ?? resolvedId);
