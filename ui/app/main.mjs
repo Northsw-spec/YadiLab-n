@@ -3415,7 +3415,7 @@ function RuntimeActiveProbePanel({ workspace, setDiagnostics, onSaveEvidence, on
     if (!next.probes.some((item) => item.probeId === probeId)) setProbeId(next.probes[0]?.probeId ?? "");
     if (next.destinationId && !next.destinations.some((item) => item.id === destinationId)) setDestinationId(next.destinationId);
     setTranscript(null);
-  }, [sourceId, workspace.engineState.stateRevision]);
+  }, [sourceId, workspace.engineState]);
 
   const run = () => {
     if (!sourceId || !probe) return;
