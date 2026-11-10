@@ -1,5 +1,6 @@
 import {runAutoLayout} from "../../layout/src/auto-layout.js";
 import {ElkLayoutBackend} from "../../layout/src/elk-backend.js";
+import {validateVisualLayout} from "../../layout/src/visual-validation.js";
 import {projectScenarioToCanvas} from "../src/canvas/projection.js";
 import {buildTopologyFocusPage} from "../src/canvas/topology-navigation.ts";
 
@@ -9,17 +10,18 @@ import {buildTopologyFocusPage} from "../src/canvas/topology-navigation.ts";
  */
 const NODES=10000,LINKS=10000,ROW_SIZE=100,MAX_PEERS=16,MAX_EDGES=250;
 const ID=/^[a-z][a-z0-9_-]{0,63}$/;
-const fail=code=>{const e=new Error(code);e.code=code;throw e;};
+const fail=(code,diagnostics)=>{const e=new Error(code);e.code=code;if(diagnostics)e.diagnostics=diagnostics;throw e;};
 const validId=x=>typeof x==="string"&&ID.test(x);
 const has=x=>Array.isArray(x);
 
 function boundedDeterministicLayout(model, rootId) {
   const resources = [...model.resources].sort((a,b) => a.id.localeCompare(b.id, "en"));
   const maxLabel = resources.reduce((max, resource) => Math.max(max, [...String(resource.label ?? resource.id)].length), 0);
-  const width = Math.max(180, Math.min(260, 24 + Math.max(22, maxLabel) * 7));
+  const width = Math.max(180, Math.min(520, 24 + Math.max(22, maxLabel) * 7));
   const height = 96;
   const gapX = 56;
   const gapY = 72;
+  const rowStep = width + gapX;
   const byId = new Map(resources.map((resource) => [resource.id, resource]));
   const adjacency = new Map(resources.map((resource) => [resource.id, new Set()]));
   for (const connection of model.connections) {
@@ -52,6 +54,7 @@ function boundedDeterministicLayout(model, rootId) {
   }
   const rowWidth = Math.max(1, Math.min(12, Math.ceil(Math.sqrt(resources.length))));
   const positions = new Map();
+  let nextLevelY = 40;
   for (const [level, items] of [...grouped.entries()].sort((a, b) => a[0] - b[0])) {
     const ordered = items.slice().sort((a, b) => (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0) || a.id.localeCompare(b.id, "en"));
     const rows = Math.max(1, Math.ceil(ordered.length / rowWidth));
@@ -59,11 +62,15 @@ function boundedDeterministicLayout(model, rootId) {
       const row = Math.floor(index / rowWidth);
       const column = index % rowWidth;
       const count = Math.min(rowWidth, ordered.length - row * rowWidth);
-      const x = (column - (count - 1) / 2) * (width + gapX) + 900;
-      const y = level * (height + gapY) + row * (height + gapY) + 40;
+      const centerX = 40 + ((rowWidth - 1) / 2) * rowStep;
+      const x = (column - (count - 1) / 2) * rowStep + centerX;
+      const y = nextLevelY + row * (height + gapY);
       positions.set(resource.id, { x, y });
     });
-    void rows;
+    // Every level receives a real vertical band. The next level starts after
+    // the last row's bottom edge plus a deterministic safety margin, so a
+    // multi-row level can never collide with the level below it.
+    nextLevelY += rows * height + Math.max(0, rows - 1) * gapY + gapY;
   }
   return {
     formatId: "infrastructure-cyber-lab.layout",
@@ -81,6 +88,34 @@ function boundedDeterministicLayout(model, rootId) {
       height,
     })),
   };
+}
+
+function maxParallelEdges(model) {
+  const counts = new Map();
+  for (const connection of model.connections) {
+    const pair = [connection.from.resource, connection.to.resource].sort((a, b) => a.localeCompare(b, "en")).join("\u0000");
+    counts.set(pair, (counts.get(pair) ?? 0) + 1);
+  }
+  return Math.max(0, ...counts.values());
+}
+
+function validateFallbackLayout(model, document) {
+  // Node overlap, finite/positive geometry, label fit and canvas invariants
+  // remain enforced by the shared validator. Parallel source-declared links
+  // are intentionally allowed to share endpoints because their individual IDs
+  // are navigated separately under the edge budget.
+  const diagnostics = validateVisualLayout(model, document, {
+    maxCoincidentEdges: Math.max(2, maxParallelEdges(model)),
+  });
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+  if (errors.length) fail("SCALE_P4B1_LAYOUT_VALIDATION_FAILED", errors);
+  return diagnostics;
+}
+
+function fallbackCauseDiagnostics(diagnostics) {
+  return (diagnostics ?? []).map((diagnostic) => diagnostic.severity === "error"
+    ? { ...diagnostic, severity: "warning", message: `ELK fallback trigger (not fallback geometry): ${diagnostic.message}` }
+    : diagnostic);
 }
 
 function sourceSubset(model, page) {
@@ -102,6 +137,9 @@ function sourceSubset(model, page) {
 }
 
 async function buildRootFocus(model, rootId, pageNumber) {
+  if (!Number.isSafeInteger(pageNumber) || pageNumber < 1) fail("SCALE_P4B1_SELECTION_BLOCKED");
+  const pageProbe = buildTopologyFocusPage({ resources: model.resources, connections: model.connections }, rootId, 1, 100, MAX_EDGES);
+  if (pageNumber > pageProbe.pageCount) fail("SCALE_P4B1_SELECTION_BLOCKED");
   const { pageInfo, bounded } = sourceSubset(model, { rootId, page: pageNumber, maxNodes: 100, maxEdges: MAX_EDGES });
   let layout;
   let layoutDiagnostics = [];
@@ -119,12 +157,15 @@ async function buildRootFocus(model, rootId, pageNumber) {
   }
   if (!layout?.ok || !layout.document || layout.document.scenarioId !== model.scenarioId) {
     usedFallback = true;
-    layoutDiagnostics = layout?.diagnostics ?? [];
+    layoutDiagnostics = fallbackCauseDiagnostics(layout?.diagnostics);
+    const document = boundedDeterministicLayout(bounded, rootId);
+    const visualDiagnostics = validateFallbackLayout(bounded, document);
     layout = {
       ok: true,
-      document: boundedDeterministicLayout(bounded, rootId),
-      diagnostics: [...layoutDiagnostics, { severity: "warning", code: "SCALE_P4B1_LAYOUT_FALLBACK", message: "ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links." }],
+      document,
+      diagnostics: [...layoutDiagnostics, ...visualDiagnostics, { severity: "warning", code: "SCALE_P4B1_LAYOUT_FALLBACK", message: "ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links." }],
     };
+    layoutDiagnostics = layout.diagnostics;
   }
   const focusCanvas = projectScenarioToCanvas(bounded, layout.document);
   if (focusCanvas.nodes.length !== pageInfo.nodeIds.length || focusCanvas.edges.length !== pageInfo.edgeIds.length ||
@@ -152,7 +193,8 @@ async function buildRootFocus(model, rootId, pageNumber) {
 }
 
 export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page,options={}){
-  if(!Number.isSafeInteger(page)||page<1||page>100)
+  const focusRequest = Boolean(options?.rootId);
+  if(!Number.isSafeInteger(page)||page<1||(!focusRequest&&page>100))
     fail("SCALE_P4B1_SELECTION_BLOCKED");
   if(!model||typeof model!=="object"||!has(model.resources)||
      !has(model.connections)||!has(sourceRowIds)||
@@ -237,8 +279,11 @@ export async function buildScaledNetworkTenThousandFocus(model,sourceRowIds,page
   catch(cause){layout={ok:false,diagnostics:[{severity:"error",code:"LAYOUT_BACKEND_FAILED",message:cause instanceof Error?cause.message:String(cause)}]};}
   if(!layout?.ok||!layout.document||layout.document.scenarioId!==model.scenarioId){
     usedFallback=true;
-    layoutDiagnostics=layout?.diagnostics??[];
-    layout={ok:true,document:boundedDeterministicLayout(bounded),diagnostics:[...layoutDiagnostics,{severity:"warning",code:"SCALE_P4B1_LAYOUT_FALLBACK",message:"ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links."}]};
+    layoutDiagnostics=fallbackCauseDiagnostics(layout?.diagnostics);
+    const document = boundedDeterministicLayout(bounded);
+    const visualDiagnostics = validateFallbackLayout(bounded, document);
+    layout={ok:true,document,diagnostics:[...layoutDiagnostics,...visualDiagnostics,{severity:"warning",code:"SCALE_P4B1_LAYOUT_FALLBACK",message:"ELK validation rejected this bounded projection; deterministic topology-aware fallback retained all selected source nodes and links."}]};
+    layoutDiagnostics = layout.diagnostics;
   }
   let canvas;
   try{canvas=projectScenarioToCanvas(bounded,layout.document);}

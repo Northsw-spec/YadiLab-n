@@ -91,34 +91,77 @@ export function searchTopologyWithCount(index: readonly TopologySearchResult[], 
 export function buildTopologyFocusPage(network: TopologyCanonicalNetwork, rootId: string, page = 1, maxNodes = 100, maxEdges = 250): TopologyFocusPage {
   const resources = new Set(network.resources.map((resource) => resource.id));
   if (!resources.has(rootId)) throw new Error("TOPOLOGY_FOCUS_UNKNOWN_NODE");
-  const adjacency = new Set<string>();
-  for (const connection of network.connections) {
-    if (connection.from.resource === rootId && resources.has(connection.to.resource)) adjacency.add(connection.to.resource);
-    if (connection.to.resource === rootId && resources.has(connection.from.resource)) adjacency.add(connection.from.resource);
-  }
-  const neighbors = [...adjacency].sort((a, b) => a.localeCompare(b, "en"));
+  const rootEdges = network.connections
+    .filter((connection) => {
+      if (connection.from.resource !== rootId && connection.to.resource !== rootId) return false;
+      const other = connection.from.resource === rootId ? connection.to.resource : connection.from.resource;
+      return resources.has(other);
+    })
+    .sort((a, b) => a.id.localeCompare(b.id, "en"));
+  const neighbors = [...new Set(rootEdges.map((connection) => connection.from.resource === rootId ? connection.to.resource : connection.from.resource))]
+    .sort((a, b) => a.localeCompare(b, "en"));
   const safePageSize = Math.max(1, Math.min(Math.floor(maxNodes) - 1, neighbors.length || 1));
-  const pageCount = Math.max(1, Math.ceil(neighbors.length / safePageSize));
+  const budget = Math.max(1, Math.floor(maxEdges));
+  const edgesByNeighbor = new Map<string, TopologyCanonicalConnection[]>();
+  for (const connection of rootEdges) {
+    const neighbor = connection.from.resource === rootId ? connection.to.resource : connection.from.resource;
+    const list = edgesByNeighbor.get(neighbor) ?? [];
+    list.push(connection);
+    edgesByNeighbor.set(neighbor, list);
+  }
+  type PageDescriptor = { readonly neighbors: readonly string[]; readonly rootEdges: readonly TopologyCanonicalConnection[] };
+  const pages: PageDescriptor[] = [];
+  let currentNeighbors: string[] = [];
+  let currentRootEdges: TopologyCanonicalConnection[] = [];
+  const flush = () => {
+    if (currentRootEdges.length || currentNeighbors.length || !pages.length) {
+      pages.push({ neighbors: currentNeighbors, rootEdges: currentRootEdges });
+    }
+    currentNeighbors = [];
+    currentRootEdges = [];
+  };
+  // Build pages from declared root-edge IDs rather than unique neighbors alone.
+  // A high-degree parallel-link fan therefore receives additional pages while
+  // retaining the node and edge budgets for every individual projection.
+  for (const neighbor of neighbors) {
+    const edges = edgesByNeighbor.get(neighbor) ?? [];
+    let offset = 0;
+    while (offset < edges.length) {
+      if (currentRootEdges.length >= budget ||
+          (!currentNeighbors.includes(neighbor) && currentNeighbors.length >= safePageSize)) flush();
+      if (!currentNeighbors.includes(neighbor)) currentNeighbors.push(neighbor);
+      const available = budget - currentRootEdges.length;
+      if (available <= 0) {
+        flush();
+        continue;
+      }
+      const chunk = edges.slice(offset, offset + available);
+      currentRootEdges.push(...chunk);
+      offset += chunk.length;
+      if (offset < edges.length) flush();
+    }
+  }
+  if (!pages.length || currentRootEdges.length || currentNeighbors.length) flush();
+  const pageCount = Math.max(1, pages.length);
   const safePage = Math.min(pageCount, Math.max(1, Math.floor(page)));
-  const visibleNeighbors = neighbors.slice((safePage - 1) * safePageSize, safePage * safePageSize);
+  const descriptor = pages[safePage - 1] ?? { neighbors: [], rootEdges: [] };
+  const visibleNeighbors = [...descriptor.neighbors];
   const visible = new Set([rootId, ...visibleNeighbors]);
-  const directRootEdges = network.connections
-    .filter((connection) => (connection.from.resource === rootId || connection.to.resource === rootId) && visible.has(connection.from.resource) && visible.has(connection.to.resource))
-    .sort((a, b) => a.id.localeCompare(b.id, "en"));
-  const allRootEdges = network.connections
-    .filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId);
+  const selectedIds = new Set(descriptor.rootEdges.map((connection) => connection.id));
   const neighborEdges = network.connections
-    .filter((connection) => visibleNeighbors.includes(connection.from.resource) && visibleNeighbors.includes(connection.to.resource))
+    .filter((connection) => visibleNeighbors.includes(connection.from.resource) && visibleNeighbors.includes(connection.to.resource) && !selectedIds.has(connection.id))
     .sort((a, b) => a.id.localeCompare(b.id, "en"));
-  // Root links are always prioritised over secondary links so a bounded page
-  // never silently hides the focused device's declared endpoints.
-  const budget = Math.max(0, Math.floor(maxEdges));
-  const visibleEdges = [...directRootEdges, ...neighborEdges]
-    .filter((connection, index, all) => all.findIndex((candidate) => candidate.id === connection.id) === index)
-    .slice(0, budget);
-  const visibleRootLinks = visibleEdges.filter((connection) => connection.from.resource === rootId || connection.to.resource === rootId).length;
+  // Root links are always placed first. Secondary links may use remaining
+  // budget, but can never evict a declared root link from the current page.
+  const visibleEdges = [...descriptor.rootEdges];
+  for (const connection of neighborEdges) {
+    if (visibleEdges.length >= budget) break;
+    visibleEdges.push(connection);
+    selectedIds.add(connection.id);
+  }
+  const visibleRootLinks = descriptor.rootEdges.length;
   const visibleNeighborLinks = visibleEdges.length - visibleRootLinks;
-  const totalRootLinks = allRootEdges.length;
+  const totalRootLinks = rootEdges.length;
   return {
     rootId,
     page: safePage,
