@@ -51,6 +51,7 @@ jobs:
           node tests/browser/run_topology_workspace_guard_tests.mjs
           npm run test:release-identity
           npm run test:troubleshooting-summary
+          npm run test:layered-incident
           node tests/browser/run_project_document_tests.mjs
           ./node_modules/.bin/tsc -p tests/tsconfig.persistence.json
           node tests/persistence/run_indexeddb_commit_tests.mjs

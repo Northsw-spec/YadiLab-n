@@ -10,7 +10,7 @@ import {
 } from "../../../observation-engine/src/index.js";
 import type { Normalizedscenariotroubleshootingevidencerequirement } from "../../../core-model/src/generated/contracts.js";
 import { buildRuntimeActiveProbeModel, buildRuntimeObservationModel } from "./observations.js";
-import { isCurrentRemediationState } from "./troubleshooting-summary.js";
+import { currentFinalVerificationRequirements, isCurrentRemediationState } from "./troubleshooting-summary.js";
 import type { BrowserDiagnostic, BrowserWorkspace, RuntimeWorkspace } from "./types.js";
 
 export type NextCheckTool = "observations" | "probes" | "notebook" | "remediation" | "summary";
@@ -157,6 +157,23 @@ function chooseBaselineProbe(workspace: RuntimeWorkspace, entries: readonly Trou
   return (relevant.length ? relevant : candidates).at(-1);
 }
 
+function chooseUnresolvedProbe(workspace: RuntimeWorkspace, entries: readonly TroubleshootingNotebookEntry[], remediation: RemediationEntry): TroubleshootingActiveProbeEntry | undefined {
+  const currentAfter = entries.filter((entry): entry is TroubleshootingActiveProbeEntry =>
+    entry.kind === "active_probe"
+    && entry.stateRevision === remediation.afterStateRevision
+    && entry.sequence > remediation.sequence
+    && entry.truth === "FALSE"
+    && repeatProbePreparation(workspace, entry) !== undefined);
+  if (currentAfter.length) return currentAfter.at(-1);
+  const baseline = entries.filter((entry): entry is TroubleshootingActiveProbeEntry =>
+    entry.kind === "active_probe"
+    && entry.stateRevision === remediation.beforeStateRevision
+    && entry.sequence < remediation.sequence
+    && entry.truth === "FALSE"
+    && repeatProbePreparation(workspace, entry) !== undefined);
+  return baseline.at(-1);
+}
+
 function success(nextCheck: NextCheck, review: TroubleshootingEvidenceReview): NextCheckResult {
   return { ok: true, nextCheck, review, diagnostics: [] };
 }
@@ -216,9 +233,37 @@ export async function buildNextBestCheck(workspace: BrowserWorkspace, notebook?:
       title: "Jämförbart omtest saknas", reason: "Den tidigare evidenskedjan innehåller ingen giltig, jämförbar sparad probe som kan förberedas i aktuell Runtime. Välj själv en stödd probe och dokumentera ett nytt test.", actionLabel: "Öppna aktiva prober", tool: "probes", progress,
       remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":repeat-unavailable",
     }, review);
+    const completionConfigured = runtime.scenario.completion.op === "all" ? runtime.scenario.completion.rules.length > 0 : true;
+    if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT" && completionConfigured && runtime.evaluation.completion.truth !== "TRUE") {
+      const unresolved = chooseUnresolvedProbe(runtime, entries, latestRemediation);
+      const preparation = unresolved ? repeatProbePreparation(runtime, unresolved) : undefined;
+      if (unresolved && preparation) return success({
+        scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
+        title: "Fortsätt med återstående kontroll", reason: "En del av incidenten förbättrades, men labbets completion är ännu inte TRUE. Kör en sparad kontroll som fortfarande visar FALSE för att undersöka nästa lager.", actionLabel: repeatActionLabel(unresolved), tool: "probes", preparation, progress,
+        remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":partial:" + unresolved.entryId,
+      }, review);
+      return success({
+        scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process",
+        title: "Fortsätt undersöka incidenten", reason: "En del av incidenten förbättrades, men labbets completion är ännu inte TRUE. Samla ny, jämförbar evidens för den återstående felbilden.", actionLabel: "Öppna aktiva prober", tool: "probes", progress,
+        remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":partial-unavailable",
+      }, review);
+    }
+    if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT" && runtime.evaluation.completion.truth === "TRUE") {
+      const finalVerification = currentFinalVerificationRequirements(runtime, exactNotebook!, latestRemediation);
+      const missing = finalVerification.missing[0];
+      if (missing) {
+        const preparation = probePreparation(runtime, missing);
+        const label = missing.protocol === "icmp" ? "ICMP-kontroll" : missing.protocol === "tcp" ? "TCP-test" : "slutlig probe";
+        return success({
+          scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "repeat_active_probe",
+          title: "Verifiera återstående funktion", reason: "Konfigurationen uppfyller labbets mål, men all aktuell slutlig probe-evidens är ännu inte dokumenterad.", actionLabel: `Förbered ${label}`, tool: "probes", ...(preparation ? { preparation } : {}), progress,
+          remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":final:" + missing.id,
+        }, review);
+      }
+    }
     if (!historical && remediationReview.status === "VERIFIED_IMPROVEMENT") return success({
       scenarioId: runtime.scenario.scenarioId, scenarioHash: runtime.scenario.sourceHash, kind: "process",
-      title: "Granska verifieringsresultatet", reason: "En förbättring har verifierats med jämförbar före-/efterevidens. Granska resultatet och dokumentera din slutsats.", actionLabel: "Visa felsökningssammanfattning", tool: "summary", progress,
+      title: "Granska verifieringsresultatet", reason: "En förbättring har verifierats med jämförbar före-/efterevidens och scenariots completion är TRUE. Granska resultatet och dokumentera din slutsats.", actionLabel: "Visa felsökningssammanfattning", tool: "summary", progress,
       remediationReviewStatus: remediationReview.status, workflowIdentity: runtime.scenario.sourceHash + ":" + latestRemediation.entryId + ":" + runtime.engineState.stateRevision + ":verified",
     }, review);
     if (historical) return success({

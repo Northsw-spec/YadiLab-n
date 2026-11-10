@@ -3,7 +3,7 @@
   "schemaVersion": "0.1.0",
   "waveId": "guided_troubleshooting_wave1",
   "title": "Guided troubleshooting · Wave 1",
-  "description": "Åtta deterministiska Windows/Linux-labb som använder observationer, aktiva probes, Evidence Notebook, guided workflow och typed remediation.",
+  "description": "Nio deterministiska Windows/Linux-labb som använder observationer, aktiva probes, Evidence Notebook, guided workflow och typed remediation.",
   "labs": [
     {
       "id": "guided_win_gateway",
@@ -131,6 +131,22 @@
         "dependencyDepth": 2,
         "evidenceVisibility": 1,
         "remediationConstraints": 1
+      }
+    },
+    {
+      "id": "guided_linux_layered_ssh",
+      "scenarioId": "guided_linux_layered_ssh",
+      "path": "curriculum/builtin/wave1/linux-layered-ssh.json",
+      "title": "Linux · SSH fungerar inte — felsök hela anslutningen",
+      "platform": "linux",
+      "focus": "service",
+      "summary": "Linux-klienten kan inte ansluta till serverns SSH-tjänst. Undersök orsaken och verifiera återställningen.",
+      "sequence": 9,
+      "difficulty": {
+        "layers": 4,
+        "dependencyDepth": 3,
+        "evidenceVisibility": 3,
+        "remediationConstraints": 2
       }
     }
   ]
