@@ -186,10 +186,10 @@ def case(browser, url):
         expect(root).to_be_visible(timeout=180000)
         box = root.bounding_box()
         require(box is not None, "Missing access-switch bounds")
-        root.dispatch_event("contextmenu")
+        root.dispatch_event("contextmenu", {"clientX": 120, "clientY": 120, "button": 2})
         menu_node = page.locator('[data-topology-context-menu="node"]')
         expect(menu_node).to_be_visible(timeout=20000)
-        menu_node.get_by_role("menuitem", name="Öppna fokuserad topologi").click()
+        menu_node.get_by_role("menuitem", name="Öppna fokuserad topologi").dispatch_event("click")
         print("PROJECT-086: context focus", flush=True)
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
 

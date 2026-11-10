@@ -1377,6 +1377,19 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     ? canonicalNetwork.connections.filter((connection) => connection.from.resource === contextResource.id || connection.to.resource === contextResource.id).length
     : 0;
   const selectedResourceAddresses = selectedCanonicalResource?.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [];
+  const topologyExplorer = e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
+    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
+    e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
+    e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
+    localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
+    selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
+      e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
+      e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
+      selectedResourceAddresses.length ? e("small", null, selectedResourceAddresses.join(", ")) : null,
+      e("small", null, `${selectedCanonicalLinkCount} deklarerade länkar`),
+      e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
+    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer."),
+  );
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
       e("nav", { className: "topology-breadcrumbs", "data-topology-breadcrumbs": "true", "aria-label": "Topology breadcrumb" },
@@ -1390,18 +1403,6 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           } }, item.label))),
         e("button", { type: "button", onClick: goTopologyBack, disabled: topologyViewHistory.length <= 1, "data-topology-back": "true" }, "Tillbaka"),
         e("button", { type: "button", onClick: navigateOverview, disabled: topologyViewHistory.length <= 1, "data-topology-overview": "true" }, "Nätverksöversikt")),
-      e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
-        e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
-        e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
-        e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
-        localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
-        selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
-          e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
-          e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
-          selectedResourceAddresses.length ? e("small", null, selectedResourceAddresses.join(", ")) : null,
-          e("small", null, `${selectedCanonicalLinkCount} deklarerade länkar`),
-          e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
-        ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer.")),
       validThousandFocus ? e("div",{"data-scale-p2b1-focus-view":"SOURCE_ROW_NOT_SITE"},
         e("p",{"data-scale-p2b1-source-counts":"true"},
           validThousandFocus.canonicalNodes+" original Builder devices and "+
@@ -1698,6 +1699,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         ),
       ) : null),
     ),
+    topologyExplorer,
     journey ? e("section", {
       className: `journey-player truth-${journey.truth.toLowerCase()}`,
       "data-visual-journey": "ready",
