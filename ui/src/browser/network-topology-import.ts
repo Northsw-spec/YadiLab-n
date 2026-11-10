@@ -15,6 +15,10 @@ export interface NetworkTopologyImportPreview {
   readonly linkSourceConflict?: NetworkLinkSourceConflict;
   readonly linkSourceChoice?: NetworkLinkSourceDecision;
   readonly sheets: readonly string[];
+  readonly workbookProfile?: string;
+  readonly authoritativeSheets?: readonly string[];
+  readonly documentationSheets?: readonly string[];
+  readonly preservedDocumentation?: readonly { readonly sheet: string; readonly rows: number; readonly populatedCells: number }[];
   readonly devices: number;
   readonly links: number;
   readonly diagnostics: readonly ImportDiagnostic[];
@@ -100,6 +104,10 @@ export async function previewNetworkTopologyFile(
   return { ok, ...(source ? { source } : {}), filename: file.name,
     sourceSha256, sourceByteSize: input.bytes.byteLength,
     unmappedColumnCount: normalized.unmappedColumnCount,
+    ...(mapped.preview.profile ? { workbookProfile: mapped.preview.profile } : {}),
+    ...(mapped.preview.authoritativeSheets ? { authoritativeSheets: mapped.preview.authoritativeSheets } : {}),
+    ...(mapped.preview.documentationSheets ? { documentationSheets: mapped.preview.documentationSheets } : {}),
+    ...(mapped.preview.preservedDocumentation ? { preservedDocumentation: mapped.preview.preservedDocumentation } : {}),
     ...(normalized.linkSourceConflict ? { linkSourceConflict: normalized.linkSourceConflict } : {}),
     ...(normalized.linkSourceChoice ? { linkSourceChoice: normalized.linkSourceChoice } : {}),
     sheets: parsed.document.tables.map((x) => x.tableId), devices: source?.resources.length ?? normalized.document.tables.find((t) => t.tableId === "Nodes")?.records.length ?? 0,

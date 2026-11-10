@@ -1,5 +1,6 @@
 import type { ScenarioSource, Scenariosourceconnection, Scenariosourceresource } from "../../core-model/src/generated/contracts.js";
 import type { ImportDiagnostic, ImportDocument, ImportRecord } from "./types.js";
+import { documentationNotes, resolveWorkbookCompatibility, type LegacyWorkbookProfile } from "./workbook-compatibility.js";
 
 export const YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION = "1.0.0" as const;
 export const standardWorkbookSheets = ["Metadata", "Zones", "Nodes", "Interfaces", "Links", "Routes", "VLANs", "STP", "Services", "Firewall", "NAT", "Flows", "Layout"] as const;
@@ -9,12 +10,12 @@ export type StandardWorkbookSheet = typeof standardWorkbookSheets[number];
 // NAT/Flows) are not executable source imports in this mapping profile.
 // A nonblank declaration outside this contract cannot be called "mapped".
 const projectedWorkbookFields: Readonly<Record<string, ReadonlySet<string>>> = {
-  Metadata: new Set(["schemaVersion", "scenarioId", "title", "description"]),
-  Zones: new Set(["zoneId", "displayName", "kind"]),
-  Nodes: new Set(["nodeId", "displayName", "type", "zoneId", "gateway", "Default Gateway"]),
+  Metadata: new Set(["schemaVersion", "scenarioId", "title", "description", "notice", "sourceUrl", "scope"]),
+  Zones: new Set(["zoneId", "displayName", "kind", "Illustrative Subnet", "Segmentation Note"]),
+  Nodes: new Set(["nodeId", "displayName", "type", "zoneId", "gateway", "Default Gateway", "Floor / Area", "Department", "Function", "Training Note"]),
   Interfaces: new Set(["nodeId", "interfaceId", "name", "IPv4", "prefix",
-    "IPv6", "IPv6Prefix", "MAC", "MTU"]),
-  Links: new Set(["linkId", "nodeA", "nodeB", "interfaceA", "interfaceB", "kind"]),
+    "IPv6", "IPv6Prefix", "MAC", "MTU", "Addressing Note"]),
+  Links: new Set(["linkId", "nodeA", "nodeB", "interfaceA", "interfaceB", "kind", "Medium", "Training Note"]),
   Layout: new Set(["nodeId", "rank"]),
 };
 // These optional *projected* text fields used to become fallback labels/IDs
@@ -29,7 +30,7 @@ const optionalProjectedTextFields: Readonly<Record<string, readonly string[]>> =
 };
 
 export interface WorkbookImportResult { readonly ok: boolean; readonly source?: ScenarioSource; readonly diagnostics: readonly ImportDiagnostic[]; readonly preview: WorkbookPreview; }
-export interface WorkbookPreview { readonly mode: "PREVIEW"; readonly sheetsFound: readonly string[]; readonly sheetsRequired: readonly string[]; readonly sheetsOptional: readonly string[]; readonly rowsPerSheet: Readonly<Record<string, number>>; readonly mappedRows: Readonly<Record<string, number>>; readonly rejectedRows: Readonly<Record<string, number>>; readonly errors: number; readonly warnings: number; }
+export interface WorkbookPreview { readonly mode: "PREVIEW"; readonly profile?: LegacyWorkbookProfile; readonly sheetsFound: readonly string[]; readonly authoritativeSheets?: readonly string[]; readonly documentationSheets?: readonly string[]; readonly preservedDocumentation?: readonly { readonly sheet: string; readonly rows: number; readonly populatedCells: number }[]; readonly sheetsRequired: readonly string[]; readonly sheetsOptional: readonly string[]; readonly rowsPerSheet: Readonly<Record<string, number>>; readonly mappedRows: Readonly<Record<string, number>>; readonly rejectedRows: Readonly<Record<string, number>>; readonly errors: number; readonly warnings: number; }
 
 const ID = /^[a-z][a-z0-9_-]{0,63}$/;
 const KINDS = new Set(["internet", "wan", "dmz", "lan", "server", "management", "security", "backup", "guest", "custom"]);
@@ -92,15 +93,18 @@ function diagnostic(code: string, message: string, table: string, row: number, f
 function rows(table: ReturnType<typeof byTable>, name: string): readonly ImportRecord[] { return table.get(name)?.records ?? []; }
 
 export function validateNetworkWorkbook(document: ImportDocument): readonly ImportDiagnostic[] {
-  const diagnostics: ImportDiagnostic[] = [];
-  const tables = byTable(document);
-  for (const table of document.tables) if (!standardWorkbookSheets.includes(table.tableId as StandardWorkbookSheet)) diagnostics.push({ code: "WORKBOOK_UNSUPPORTED_SHEET", severity: "warning", message: `Sheet '${table.tableId}' is not part of the Network Workbook Schema v${YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION}.`, table: table.tableId });
+  const compatibility = resolveWorkbookCompatibility(document);
+  const diagnostics: ImportDiagnostic[] = [...compatibility.diagnostics];
+  const tables = byTable(compatibility.document);
+  const documentationSheets = new Set(compatibility.documentationSheets);
+  for (const table of compatibility.document.tables) if (!documentationSheets.has(table.tableId) && !standardWorkbookSheets.includes(table.tableId as StandardWorkbookSheet)) diagnostics.push({ code: "WORKBOOK_UNSUPPORTED_SHEET", severity: "warning", message: `Sheet '${table.tableId}' is not part of the Network Workbook Schema v${YADILAB_NETWORK_WORKBOOK_SCHEMA_VERSION}.`, table: table.tableId });
   // A "READY" preview must never silently discard populated source facts.
   // In particular Routes, VLANs, STP, Firewall, NAT, Services and Flows are
   // recognized workbook sheets but NOT projected by this topology mapper.
   // Inspect each actual row so the preview reports physical rejected rows,
   // without treating empty optional template cells as declarations.
-  for (const table of document.tables) {
+  for (const table of compatibility.document.tables) {
+    if (documentationSheets.has(table.tableId)) continue;
     const projected = projectedWorkbookFields[table.tableId];
     for (const record of table.records) {
       if (!projected) {
@@ -121,7 +125,8 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
   // Do not transform a populated but unrepresentable declaration into a
   // seemingly blank field. A boolean metadata title, for example, was
   // silently replaced with scenarioId while preview still reported READY.
-  for (const table of document.tables) {
+  for (const table of compatibility.document.tables) {
+    if (documentationSheets.has(table.tableId)) continue;
     const optionalFields = optionalProjectedTextFields[table.tableId] ?? [];
     for (const record of table.records) {
       for (const field of optionalFields) {
@@ -362,29 +367,33 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
 }
 
 export function previewNetworkWorkbook(document: ImportDocument, diagnostics: readonly ImportDiagnostic[] = validateNetworkWorkbook(document)): WorkbookPreview {
+  const compatibility = resolveWorkbookCompatibility(document);
   const rowsPerSheet: Record<string, number> = {}; const mappedRows: Record<string, number> = {}; const rejectedRows: Record<string, number> = {};
-  for (const table of document.tables) {
+  const sourceTables = compatibility.profile === "legacy-src-22" ? document.tables : document.tables;
+  for (const table of sourceTables) {
+    const canonicalName = compatibility.profile === "legacy-src-22" && table.tableId.startsWith("SRC ") ? table.tableId.slice(4) : table.tableId;
     // A physical row can contain several bad fields: count it once in
     // rejectedRows, while preview.errors still counts every diagnostic.
     // Table-level errors without a row are not fictional rejected source rows.
     const invalidRowIds = new Set(diagnostics
-      .filter((x) => x.table === table.tableId && x.severity === "error" && Number.isInteger(x.row))
+      .filter((x) => (x.table === table.tableId || x.table === canonicalName) && x.severity === "error" && Number.isInteger(x.row))
       .map((x) => x.row));
     const rejected = table.records.filter((record) => invalidRowIds.has(record.recordIndex)).length;
     rowsPerSheet[table.tableId] = (rowsPerSheet[table.tableId] ?? 0) + table.records.length;
     rejectedRows[table.tableId] = (rejectedRows[table.tableId] ?? 0) + rejected;
     // A row in a review-only or unknown sheet is never projected, even when
     // it contains only empty template cells. Do not inflate mappedRows.
-    mappedRows[table.tableId] = projectedWorkbookFields[table.tableId]
+    mappedRows[table.tableId] = projectedWorkbookFields[canonicalName]
       ? (rowsPerSheet[table.tableId] ?? 0) - (rejectedRows[table.tableId] ?? 0)
       : 0;
   }
-  return { mode: "PREVIEW", sheetsFound: document.tables.map((x) => x.tableId), sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
+  return { mode: "PREVIEW", profile: compatibility.profile, sheetsFound: document.tables.map((x) => x.tableId), authoritativeSheets: compatibility.authoritativeSheets, documentationSheets: compatibility.documentationSheets, preservedDocumentation: compatibility.preservedDocumentation, sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
 }
 
 export function mapNetworkWorkbookToScenario(document: ImportDocument): WorkbookImportResult {
+  const compatibility = resolveWorkbookCompatibility(document);
   const diagnostics = [...validateNetworkWorkbook(document)]; const preview = previewNetworkWorkbook(document, diagnostics); if (diagnostics.some((x) => x.severity === "error")) return { ok: false, diagnostics, preview };
-  const tables = byTable(document); const metadata = rows(tables, "Metadata")[0]; const scenarioId = text(metadata ?? { recordIndex: 1, fields: {} }, "scenarioId") ?? "workbook_scenario"; const title = text(metadata ?? { recordIndex: 1, fields: {} }, "title") ?? scenarioId; const description = text(metadata ?? { recordIndex: 1, fields: {} }, "description");
+  const tables = byTable(compatibility.document); const metadata = rows(tables, "Metadata")[0]; const scenarioId = text(metadata ?? { recordIndex: 1, fields: {} }, "scenarioId") ?? "workbook_scenario"; const title = text(metadata ?? { recordIndex: 1, fields: {} }, "title") ?? scenarioId; const description = text(metadata ?? { recordIndex: 1, fields: {} }, "description");
   const zones = rows(tables, "Zones").map((record) => ({ id: text(record, "zoneId")!, label: text(record, "displayName") ?? text(record, "zoneId")!, ...(text(record, "kind") ? { kind: text(record, "kind") as never } : {}) }));
   const resourceMap = new Map<string, Scenariosourceresource>();
   for (const record of rows(tables, "Nodes")) { const id = text(record, "nodeId")!; const zone = text(record, "zoneId"); resourceMap.set(id, { id, type: text(record, "type")!, label: text(record, "displayName")!, ...(zone ? { zone } : {}), properties: {} }); }
@@ -399,7 +408,7 @@ export function mapNetworkWorkbookToScenario(document: ImportDocument): Workbook
     ...connections.map(connection => connection.id),
   ]);
   const generatedId = (base: string): string => {
-    let id = base;
+    let id = base.slice(0, 64);
     let suffix = 0;
     while (occupiedIds.has(id)) {
       suffix++;
@@ -420,11 +429,17 @@ export function mapNetworkWorkbookToScenario(document: ImportDocument): Workbook
     condition: { op: "equals" as const, target: [...resourceMap.values()][0]!.id,
       path: "imported_topology_manual_verification", value: "VERIFIED" },
   };
+  const documentationSourceNotes = documentationNotes(document, compatibility.profile).map(({ table, record, field, cell }) => {
+    const target = table === "Nodes" || table === "Interfaces" ? text(record, "nodeId") : table === "Links" ? text(record, "linkId") : table === "Zones" ? text(record, "zoneId") : undefined;
+    const rendered = typeof cell.value === "string" ? cell.value : JSON.stringify(cell.value);
+    const tableSlug = table.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "sheet";
+    return { id: generatedId(`source_doc_${tableSlug}_${record.recordIndex}_${field.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`), title: `Source documentation · ${table}.${field}`, text: `${table}.${field} = ${rendered ?? ""}`, ...(target ? { target } : {}) };
+  });
   const source: ScenarioSource = { formatId: "infrastructure-cyber-lab.scenario-source", schemaVersion: "0.1.0", scenarioId, metadata: { title, ...(description ? { description } : {}), language: "en" }, requires: { capabilities: [{ id: "core.network", version: "^1.0.0" }], profiles: [] }, zones, resources: [...resourceMap.values()], connections, tests: [], findings: [], objectives: [objective], completion: objective.condition,
-    notes: rows(tables, "Nodes").flatMap((record) => {
+    notes: [...documentationSourceNotes, ...rows(tables, "Nodes").flatMap((record) => {
       const gw = text(record, "gateway") ?? text(record, "Default Gateway");
       const nodeId = text(record, "nodeId");
       return gw && nodeId ? [{ id: generatedId(`gateway_note_${record.recordIndex}`), title: "Declared default gateway", text: `Source declares gateway ${gw} for ${nodeId}. Inventory-only: no cable, route or tested reachability is inferred.`, target: nodeId }] : [];
-    }), layoutHints: rows(tables, "Layout").flatMap((record) => { const target = text(record, "nodeId"); const rank = integer(record, "rank"); return target ? [{ target, ...(rank !== undefined ? { rank } : {}) }] : []; }) };
+    })], layoutHints: rows(tables, "Layout").flatMap((record) => { const target = text(record, "nodeId"); const rank = integer(record, "rank"); return target ? [{ target, ...(rank !== undefined ? { rank } : {}) }] : []; }) };
   return { ok: true, source, diagnostics, preview };
 }

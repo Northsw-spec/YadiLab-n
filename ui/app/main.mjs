@@ -317,6 +317,7 @@ import { ElkLayoutBackend } from "../../layout/src/elk-backend.ts";
 import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
+import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 
 const e = React.createElement;
@@ -394,6 +395,20 @@ function DeviceChassis({ family, active }) {
 }
 
 function ResourceNode({ data, selected }) {
+  if (data.overviewGroup) {
+    const members = Array.isArray(data.overviewMembers) ? data.overviewMembers : [];
+    return e("div", {
+      className: `overview-group-node${selected ? " selected" : ""}`,
+      "data-overview-group": data.overviewGroupId ?? "true",
+      "data-overview-role": data.overviewRole ?? "documented-type",
+      title: members.join("\n"),
+    },
+      e("strong", null, data.label ?? data.overviewGroupId),
+      e("span", { className: "overview-group-role" }, data.deviceRoleLabel ?? "DOCUMENTED TYPE · NEUTRAL VIEW"),
+      e("span", { className: "overview-group-summary" }, data.overviewSummary ?? "Visual summary of declared source data; not a physical link or resource."),
+      e("small", null, members.length ? `${members.length} source IDs · click to open a real device` : "No source members"),
+    );
+  }
   const family = data.deviceFamily ?? "generic";
   const modeledStateFocus = Boolean(data.modeledStateFocus);
   const active = modeledStateFocus || ["current", "arrived", "dropped", "uncertain", "no_path"].includes(data.journeyState) || (data.activeInterfaceIds?.length ?? 0) > 0;
@@ -516,7 +531,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       fill: "none",
       markerEnd: visual.direction === "forward" || visual.direction === "bidirectional" ? `url(#${semanticMarkerId})` : undefined,
       markerStart: visual.direction === "reverse" || visual.direction === "bidirectional" ? `url(#${semanticMarkerId})` : undefined,
-      className: `react-flow__edge-path semantic-edge tone-${visual.tone}${visual.enabled ? "" : " disabled"}${selected ? " selected" : ""}`,
+      className: `react-flow__edge-path semantic-edge tone-${visual.tone}${data?.summaryOnly ? " summary-edge" : ""}${visual.enabled ? "" : " disabled"}${selected ? " selected" : ""}`,
       "data-connection-kind": data?.connectionKind ?? "network",
       // Auditable ACTUAL rendered ReactFlow endpoints. Never infer these from
       // a document label, edge ID, IP, layout order or imported source cache.
@@ -526,6 +541,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       "data-connection-source-port": sourceHandleId?.startsWith("out:") ? sourceHandleId.slice(4) : undefined,
       "data-connection-target-port": targetHandleId?.startsWith("in:") ? targetHandleId.slice(3) : undefined,
       "data-link-enabled": visual.enabled ? "true" : "false",
+      ...(data?.summaryOnly ? { "data-overview-summary-edge": "true" } : {}),
     }),
     e("text", { x: labelX, y: labelY - 7, className: `semantic-edge-label tone-${visual.tone}`, textAnchor: "middle", "aria-hidden": "true" }, visual.accessibleLabel),
     pathComparison?.forward ? e("path", {
@@ -889,6 +905,18 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     declaredOfficeFocus?.model===workspace.compile.model &&
     declaredOfficeFocus?.sourceRevision===workspace.sourceRevision
       ? declaredOfficeFocus:null;
+  // PROJECT-087: large and documented enterprise workbooks open on a bounded
+  // logical overview instead of the first source-row page. The overview is a
+  // read-only visual projection of canonical resources/connections; summary
+  // cards and summary edges never enter Builder or Engine state.
+  const topologyOverview = !topologyFocusRoot && canonicalNetwork.resources.length >= 32
+    ? buildNetworkOverviewProjection({
+        scenarioId: workspace.mode === "builder" ? workspace.source.scenarioId : workspace.scenario.scenarioId,
+        sourceHash: workspace.mode === "builder" ? workspace.compile.model?.sourceHash : workspace.scenario.sourceHash,
+        resources: canonicalNetwork.resources,
+        connections: canonicalNetwork.connections,
+      })
+    : null;
   // An edited 5000 model with stale focus must never fall back to unbounded layout.
   const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
@@ -896,7 +924,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
     ? topologyFocusProjection
     : null;
-  const projection = tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
+  const projection = topologyOverview ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? vm?.canvas;
@@ -910,7 +938,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // switches, a same-count previous edge set must never survive under the
   // newly approved scope label while the controlled store catches up.
   // Remount only when the exact reviewed hierarchy page identity changes.
-  const hierarchyCanvasKey = validHierarchyFocus
+  const hierarchyCanvasKey = topologyOverview
+    ? `network-overview:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
+    : validHierarchyFocus
     ? `scale001-p2b2c:${validHierarchyFocus.sourceModelHash}:${validHierarchyFocus.scopeKind}:${validHierarchyFocus.scopeId}:${validHierarchyFocus.page}`
     : validTenThousandFocus
       ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
@@ -965,7 +995,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const rect = topologyPanelRef.current?.getBoundingClientRect();
       const instance = flowApi.current;
       if (rect && rect.width > 0 && rect.height > 0 && instance) {
-        instance.fitView?.({ duration: 0, padding: 0.1 });
+        instance.fitView?.({ duration: 0, padding: topologyOverview ? 0.16 : 0.12, minZoom: topologyOverview ? 0.58 : 0.45, maxZoom: topologyOverview ? 1.25 : 1.35 });
         setTopologyGeometryRevision((value) => value + 1);
       }
     };
@@ -987,7 +1017,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (initialFitSecondFrame !== undefined) globalThis.cancelAnimationFrame?.(initialFitSecondFrame);
       if (initialFitTimer !== undefined) globalThis.clearTimeout(initialFitTimer);
     };
-  }, [topologyGeometryIdentity, journeyKey]);
+  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks]);
   const topologyIndex = useMemo(() => buildTopologySearchIndexFromNetwork(canonicalNetwork), [canonicalNetwork]);
   const topologySearch = useMemo(() => searchTopologyWithCount(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
   const topologySearchResults = topologySearch.results;
@@ -1212,6 +1242,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onNodeClick = (_event, node) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `node-click:${node.id}`)) return;
+    const overviewMember = Array.isArray(node.data?.overviewMembers) ? node.data.overviewMembers[0] : undefined;
+    if (overviewMember) {
+      focusTopologyNode(overviewMember, node.data?.label ?? overviewMember);
+      return;
+    }
     if (validTenThousandFocus) return;
     if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
@@ -1230,6 +1265,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       domNode?.getAttribute?.("data-id"),
       node.id,
     ];
+    const overviewMember = Array.isArray(node.data?.overviewMembers) ? node.data.overviewMembers[0] : undefined;
+    if (overviewMember) {
+      const resource = canonicalResourceById.get(overviewMember);
+      focusTopologyNode(overviewMember, resource?.label ?? overviewMember);
+      return;
+    }
     if (typeof document !== "undefined" && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
       const pointResource = document.elementsFromPoint(event.clientX, event.clientY)
         .map((element) => element.closest?.(".react-flow__node-resource[data-id]")?.getAttribute?.("data-id"))
@@ -1246,7 +1287,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.selection?.primary === edge.id && active.selection?.ids?.length === 1) return;
     setWorkspace(setRuntimeSelection(active, [edge.id], edge.id));
   };
-  const onNodeContextMenu = (event, node) => openTopologyContextMenu(event, { kind: "node", nodeId: node.id });
+  const onNodeContextMenu = (event, node) => openTopologyContextMenu(event, { kind: "node", nodeId: Array.isArray(node.data?.overviewMembers) ? node.data.overviewMembers[0] ?? node.id : node.id });
   const onEdgeContextMenu = (event, edge) => openTopologyContextMenu(event, { kind: "edge", edgeId: edge.id });
   const onPaneContextMenu = (event) => openTopologyContextMenu(event, { kind: "pane" });
   const onNodeDragStop = (_event, node) => {
@@ -1378,6 +1419,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
     e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
     e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
+    topologyOverview ? e("section", { "data-topology-overview": topologyOverview.strategy },
+      e("strong", null, "Logisk nätverksöversikt"),
+      e("p", null, `${topologyOverview.canonicalNodes} canonical devices · ${topologyOverview.canonicalLinks} declared links · ${topologyOverview.groups.length} bounded visual groups`),
+      e("small", null, topologyOverview.strategy === "documented-role-bands"
+        ? "Core / Distribution / Access / Client order is used only because the source declared those roles."
+        : "Neutral type bands are used because the source does not prove Core / Distribution / Access roles."),
+      e("small", null, "Group cards and dashed summary edges are visual summaries; click a group to open a real source device."),
+    ) : null,
     localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
     selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
       e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
@@ -4192,6 +4241,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [selectedLinkSource, setSelectedLinkSource] = useState(null);
+  const [legacyWorkbookConsent, setLegacyWorkbookConsent] = useState(false);
   const [tenThousandBoundedConsent,setTenThousandBoundedConsent]=useState(false);
   const [reimportReview, setReimportReview] = useState(null);
   const [reimportApproved, setReimportApproved] = useState(false);
@@ -4241,6 +4291,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     selectedOriginal.current = null;
     setPreview(null); setFailure(""); setBusy(false); setSelectedLinkSource(null);
     setTenThousandBoundedConsent(false);
+    setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
     setDiagnostics([]);
   };
@@ -4250,6 +4301,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     selectedOriginal.current = file ?? null;
     setFailure(""); setPreview(null); setDiagnostics([]); setSelectedLinkSource(null);
     setTenThousandBoundedConsent(false);
+    setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
     if (!file) { setBusy(false); return; }
     setBusy(true);
@@ -4279,6 +4331,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     const current = ++requestId.current;
     setBusy(true); setFailure(""); setPreview(null); setDiagnostics([]);
     setTenThousandBoundedConsent(false);
+    setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
     try {
       const next = await previewNetworkTopologyFile(original, { linkSourceChoice: choice });
@@ -4399,6 +4452,14 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       setFailure("IC020_P2A_REVIEW_REQUIRED");
       return;
     }
+    if (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent) {
+      setFailure("WORKBOOK_DOCUMENTATION_REVIEW_REQUIRED");
+      return;
+    }
+    if (preview.workbookProfile === "legacy-src-22" && mode === "runtime") {
+      setFailure("WORKBOOK_DOCUMENTATION_RUNTIME_BLOCKED");
+      return;
+    }
     const isCurrent = () => Boolean(original) &&
       requestId.current === activationEpoch &&
       selectedOriginal.current === original &&
@@ -4490,6 +4551,15 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     preview ? e("div", { className: "network-import-preview", "data-network-import-preview": preview.ok ? "READY" : "BLOCKED" },
       e("h3", null, "Preview – ", preview.filename),
       e("p", null, `Found tables: ${preview.sheets.join(", ") || "none"} · Devices: ${preview.devices} · Explicit links: ${preview.links}`),
+      preview.workbookProfile === "legacy-src-22" ? e("section", { "data-legacy-workbook-profile": "SRC_22_REVIEW_REQUIRED" },
+        e("strong", null, "Workbook detected: 22 populated sheets"),
+        e("p", null, `Authoritative topology: ${preview.authoritativeSheets?.length ?? 0} SRC sheets · documentation: ${preview.documentationSheets?.length ?? 0} sheets`),
+        e("p", null, `Canonical resources: ${preview.devices} · canonical links: ${preview.links}`),
+        e("p", null, "Documentation sheets are preserved as source documentation only. They are not converted into Builder resources, links, routes, VLANs, firewall rules or Engine evidence."),
+        e("label", null,
+          e("input", { type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
+          " I have reviewed the six SRC sheets and the 16 documentation sheets; activate only the canonical source model."),
+      ) : null,
       e("p", { "data-network-import-sha": "true", "data-network-import-byte-size": preview.sourceByteSize }, `Original SHA-256: ${preview.sourceSha256} · Bytes: ${preview.sourceByteSize}`),
       e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Populated unsupported Devices columns BLOCK activation with original sheet, row and field; genuinely blank extra template columns are allowed. Populated supplementary Devices workbook sheets, unsupported selected Links fields and nonprojected canonical workbook sheets/columns also BLOCK activation instead of silently disappearing.`),
       preview.linkSourceConflict ? e("div", { "data-network-import-link-review": preview.linkSourceChoice ? "REVIEWED" : "REVIEW_REQUIRED" },
@@ -4581,10 +4651,11 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         ) : null
       ) : null,
       e("div", { className: "network-import-actions" },
-        e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
+        e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
         e("button", { type: "button", disabled: !preview.ok || busy ||
           (largeNetworkPreview(preview)&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
             !tenThousandBoundedConsent))||
+          (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent)||
           (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-activate": "true", onClick: () => activate("builder") }, busy ? "Validating…" : "Create topology in Builder (edit only)")),
       e("p", { className: "helper-note", "data-import-probe-boundary": "true" }, "Modeled probes use declared Windows/Linux source hosts and existing Engine evidence. A topology inventory alone cannot prove connectivity, routing, DNS or open ports: UNKNOWN is expected when required facts are absent. No real traffic is sent."),
     ) : null,

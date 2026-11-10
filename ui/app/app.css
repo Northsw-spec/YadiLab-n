@@ -193,6 +193,14 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .journey-outcome-overlay > .journey-node-badge { left: 0; right: auto; top: 0; }
 .semantic-edge { stroke: #4f6781; stroke-width: 2; opacity: .72; transition: stroke .2s ease, opacity .2s ease; }
 .semantic-edge.selected { stroke: #a8cdf5; opacity: 1; }
+.semantic-edge.summary-edge { stroke: #70a9c9; stroke-width: 2.5; stroke-dasharray: 9 7; opacity: .9; }
+.overview-group-node { width: 100%; height: 100%; display: grid; align-content: center; gap: .28rem; padding: .72rem .86rem; border: 2px solid #5ebfe7; border-radius: 12px; background: linear-gradient(145deg, rgba(22,67,96,.98), rgba(8,26,43,.98)); box-shadow: 0 10px 28px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.08); color: #effbff; cursor: pointer; }
+.overview-group-node:hover, .overview-group-node.selected { border-color: #f6cf72; box-shadow: 0 0 0 3px rgba(246,207,114,.22), 0 12px 30px rgba(0,0,0,.32); }
+.overview-group-node strong { font-size: 1.05rem; letter-spacing: .02em; }
+.overview-group-node small, .overview-group-summary, .overview-group-role { color: #b9d8e9; font-size: .68rem; line-height: 1.25; }
+.overview-group-role { color: #f6cf72; font-weight: 800; letter-spacing: .07em; }
+.overview-group-summary { color: #e4f4fb; }
+.overview-group-node[data-overview-role="documented-type"] { border-color: #7aa2bd; background: linear-gradient(145deg, rgba(34,59,78,.98), rgba(11,27,42,.98)); }
 
 /* Phase C — engine-backed Routing X-Ray. The UI renders the trace verbatim and
    never recomputes candidates or the selected route. */
