@@ -316,7 +316,7 @@ import { SafePackageIO, ZipJsArchiveBackend } from "../../package-io/src/index.t
 import { ElkLayoutBackend } from "../../layout/src/elk-backend.ts";
 import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
-import { buildTopologySearchIndex, filterTopologyNodes, searchTopology } from "../src/canvas/topology-navigation.ts";
+import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 
 const e = React.createElement;
@@ -399,7 +399,7 @@ function ResourceNode({ data, selected }) {
   const active = modeledStateFocus || ["current", "arrived", "dropped", "uncertain", "no_path"].includes(data.journeyState) || (data.activeInterfaceIds?.length ?? 0) > 0;
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
+  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
       e(DeviceChassis, { family, active }),
@@ -646,6 +646,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     liveBuilderCanvasMutationWorkspace(workspace, getWorkspace(), projectGeneration, getScenarioTransitionId());
   const flowApi = useRef(null);
   const topologyPanelRef = useRef(null);
+  const topologyContextMenuRef = useRef(null);
   const topologyViewportRef = useRef(null);
   const topologyResizeFrameRef = useRef(null);
   const topologyInitialFitIdentityRef = useRef("");
@@ -662,6 +663,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyType, setTopologyType] = useState("");
   const [topologyZone, setTopologyZone] = useState("");
   const [topologyVlan, setTopologyVlan] = useState("");
+  const [topologyFocusRoot, setTopologyFocusRoot] = useState(null);
+  const [topologyFocusPage, setTopologyFocusPage] = useState(1);
+  const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
+  const topologyFocusRequestRef = useRef(0);
+  const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
+  const [topologyContextMenu, setTopologyContextMenu] = useState(null);
+  const [topologyContextDetails, setTopologyContextDetails] = useState(null);
   const [topologyPathFocus, setTopologyPathFocus] = useState(false);
   const [journeyMode, setJourneyMode] = useState("pdu");
   const [journeyCursor, setJourneyCursor] = useState(0);
@@ -675,6 +683,32 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [showDropMarker, setShowDropMarker] = useState(true);
   const reducedMotion = useMemo(() => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true, []);
   const journeyKey = journey ? `${journey.scenarioHash}:${journey.stateRevision}:${journey.playbackIdentity ?? journey.flowId}` : "";
+  const canonicalNetwork = useMemo(() => workspace.mode === "builder"
+    ? { resources: workspace.source.resources, connections: workspace.source.connections }
+    : { resources: workspace.scenario.resources, connections: workspace.scenario.connections }, [workspace.mode, workspace.mode === "builder" ? workspace.source : workspace.scenario]);
+  const canonicalResourceById = useMemo(() => new Map(canonicalNetwork.resources.map((resource) => [resource.id, resource])), [canonicalNetwork]);
+  const canonicalConnectionById = useMemo(() => new Map(canonicalNetwork.connections.map((connection) => [connection.id, connection])), [canonicalNetwork]);
+  const sourceIdentity = workspace.mode === "builder" ? `${workspace.sourceRevision}:${workspace.source.scenarioId}` : workspace.scenario.sourceHash;
+  useEffect(() => {
+    setTopologyFocusRoot(null);
+    setTopologyFocusPage(1);
+    setTopologyFocusProjection(null);
+    topologyFocusRequestRef.current += 1;
+    setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
+    setTopologyContextMenu(null);
+    setTopologyContextDetails(null);
+    setTopologyQuery("");
+  }, [projectGeneration, getScenarioTransitionId(), sourceIdentity]);
+  useEffect(() => {
+    if (!topologyContextMenu) return undefined;
+    const onKeyDown = (event) => { if (event.key === "Escape") setTopologyContextMenu(null); };
+    const onPointerDown = (event) => {
+      if (!topologyContextMenuRef.current?.contains(event.target)) setTopologyContextMenu(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => { document.removeEventListener("keydown", onKeyDown); document.removeEventListener("pointerdown", onPointerDown); };
+  }, [topologyContextMenu]);
   const clearJourneyLoopTimer = () => {
     if (journeyLoopTimerRef.current !== null) globalThis.clearTimeout(journeyLoopTimerRef.current);
     journeyLoopTimerRef.current = null;
@@ -810,6 +844,34 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     scaledTenThousandFocus?.source===workspace.source&&
     scaledTenThousandFocus?.model===workspace.compile.model
       ?scaledTenThousandFocus:null;
+  useEffect(() => {
+    const source = validTenThousandFocus?.source;
+    const model = validTenThousandFocus?.model;
+    const rootId = topologyFocusRoot;
+    if (!source || !model || !rootId) {
+      topologyFocusRequestRef.current += 1;
+      setTopologyFocusProjection(null);
+      return undefined;
+    }
+    const request = ++topologyFocusRequestRef.current;
+    const generation = projectGeneration;
+    const transition = getScenarioTransitionId();
+    setTopologyFocusProjection(null);
+    void buildScaledNetworkTenThousandFocus(model, validTenThousandFocus.nodeOrder, topologyFocusPage, { rootId })
+      .then((focus) => {
+        const active = liveTopologyWorkspace();
+        if (request !== topologyFocusRequestRef.current || generation !== projectGeneration || transition !== getScenarioTransitionId() ||
+            !active || active.mode !== "builder" || active.source !== source || active.compile.model !== model) return;
+        setTopologyFocusProjection(focus);
+      })
+      .catch((error) => {
+        if (request === topologyFocusRequestRef.current) {
+          setTopologyFocusProjection(null);
+          setDiagnostics([{ severity: "error", code: typeof error?.code === "string" ? error.code : "SCALE_P4B1_FOCUS_BLOCKED", message: "Fokuserad topologiprojektion blockerades; den kanoniska Builder-källan ändrades inte." }]);
+        }
+      });
+    return () => { topologyFocusRequestRef.current += 1; };
+  }, [validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
   const tenThousandGuard=workspace.mode==="builder"&&(
     workspace.source.resources.length>=5000||
     (scaledTenThousandSessionActive&&
@@ -831,10 +893,19 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
-  const projection = validHierarchyFocus?.focusCanvas ??
+  const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
+    ? topologyFocusProjection
+    : null;
+  const projection = tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? vm?.canvas;
+  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
+    ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
+    : null);
+  const visibleProjection = localFocusPage && projection
+    ? { ...projection, nodes: projection.nodes.filter((node) => localFocusPage.nodeIds.includes(node.id)), edges: projection.edges.filter((edge) => localFocusPage.edgeIds.includes(edge.id)) }
+    : projection;
   // ReactFlow maintains an internal node/edge store. On site/building/floor
   // switches, a same-count previous edge set must never survive under the
   // newly approved scope label while the controlled store catches up.
@@ -842,11 +913,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const hierarchyCanvasKey = validHierarchyFocus
     ? `scale001-p2b2c:${validHierarchyFocus.sourceModelHash}:${validHierarchyFocus.scopeKind}:${validHierarchyFocus.scopeId}:${validHierarchyFocus.page}`
     : validTenThousandFocus
-      ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}`
+      ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
     : validFiveThousandFocus
       ? `scale001-p3c2:${validFiveThousandFocus.sourceModelHash}:${validFiveThousandFocus.page}`
       : "regular-topology";
-  const baseFlow = useMemo(() => projection ? toReactFlowProjection(projection) : { nodes: [], edges: [] }, [projection]);
+  const baseFlow = useMemo(() => visibleProjection ? toReactFlowProjection(visibleProjection) : { nodes: [], edges: [] }, [visibleProjection]);
   void topologyGeometryRevision;
   const topologyGeometryIdentity = `${baseFlow.nodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}:${node.width ?? ""}:${node.height ?? ""}`).join("|")}::${baseFlow.edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}`).join("|")}`;
   useEffect(() => {
@@ -917,8 +988,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (initialFitTimer !== undefined) globalThis.clearTimeout(initialFitTimer);
     };
   }, [topologyGeometryIdentity, journeyKey]);
-  const topologyIndex = useMemo(() => buildTopologySearchIndex(projection?.nodes ?? []), [projection]);
-  const topologySearchResults = useMemo(() => searchTopology(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
+  const topologyIndex = useMemo(() => buildTopologySearchIndexFromNetwork(canonicalNetwork), [canonicalNetwork]);
+  const topologySearch = useMemo(() => searchTopologyWithCount(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
+  const topologySearchResults = topologySearch.results;
   const journeyPathNodeIds = useMemo(() => [...new Set((journey?.events ?? []).flatMap((event) => [event.resourceId, event.targetResourceId].filter(Boolean)))], [journey]);
   const topologyMarks = useMemo(() => filterTopologyNodes(projection?.nodes ?? [], { query: topologyQuery, nodeType: topologyType || undefined, zone: topologyZone || undefined, vlan: topologyVlan || undefined, pathNodeIds: topologyPathFocus ? journeyPathNodeIds : [] }), [projection, topologyQuery, topologyType, topologyZone, topologyVlan, topologyPathFocus, journeyPathNodeIds]);
   const selectedIds = new Set(workspace.selection.ids);
@@ -1140,9 +1212,33 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onNodeClick = (_event, node) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `node-click:${node.id}`)) return;
+    if (validTenThousandFocus) return;
     if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
     else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
+  };
+  const onNodeDoubleClick = (event, node) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target;
+    const domResource = target?.closest?.(".react-flow__node-resource[data-id]");
+    const domHandle = target?.closest?.("[data-nodeid]");
+    const domNode = target?.closest?.("[data-id]");
+    const candidates = [
+      domHandle?.getAttribute?.("data-nodeid"),
+      domResource?.getAttribute?.("data-id"),
+      domNode?.getAttribute?.("data-id"),
+      node.id,
+    ];
+    if (typeof document !== "undefined" && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      const pointResource = document.elementsFromPoint(event.clientX, event.clientY)
+        .map((element) => element.closest?.(".react-flow__node-resource[data-id]")?.getAttribute?.("data-id"))
+        .find((candidate) => canonicalResourceById.has(candidate));
+      if (pointResource) candidates.unshift(pointResource);
+    }
+    const resolvedId = candidates.find((candidate) => canonicalResourceById.has(candidate)) ?? node.id;
+    const resource = canonicalResourceById.get(resolvedId);
+    focusTopologyNode(resolvedId, resource?.label ?? resolvedId);
   };
   const onEdgeClick = (_event, edge) => {
     const active = liveTopologyWorkspace();
@@ -1150,6 +1246,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.selection?.primary === edge.id && active.selection?.ids?.length === 1) return;
     setWorkspace(setRuntimeSelection(active, [edge.id], edge.id));
   };
+  const onNodeContextMenu = (event, node) => openTopologyContextMenu(event, { kind: "node", nodeId: node.id });
+  const onEdgeContextMenu = (event, edge) => openTopologyContextMenu(event, { kind: "edge", edgeId: edge.id });
+  const onPaneContextMenu = (event) => openTopologyContextMenu(event, { kind: "pane" });
   const onNodeDragStop = (_event, node) => {
     const active = liveTopologyMutationWorkspace();
     if (!active || denyUnappliedCanvasChange(active) ||
@@ -1176,24 +1275,131 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, {}));
     else setWorkspace(setRuntimeSelection(active, []));
   };
+  const navigateOverview = () => {
+    setTopologyFocusRoot(null);
+    setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
+    setTopologyContextMenu(null);
+    setTopologyContextDetails(null);
+    flowApi.current?.fitView?.({ duration: 220, padding: 0.1 });
+  };
+  const focusTopologyNode = (nodeId, label = nodeId) => {
+    const active = liveTopologyWorkspace();
+    if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
+    const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
+    if (validTenThousandFocus) {
+      setTopologyFocusRoot(nodeId);
+      setTopologyFocusPage(1);
+      setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: `Fokuserad enhet: ${label}`, page: 1 }]);
+    } else if (nodeOrder?.includes(nodeId) && onScaledTenThousandFocusPage && !baseFlow.nodes.some((node) => node.id === nodeId)) {
+      void onScaledTenThousandFocusPage(Math.floor(nodeOrder.indexOf(nodeId) / 100) + 1);
+    } else {
+      setTopologyFocusRoot(nodeId);
+      setTopologyFocusPage(1);
+      setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: `Fokuserad enhet: ${label}`, page: 1 }]);
+      const target = baseFlow.nodes.find((node) => node.id === nodeId);
+      if (target) flowApi.current?.setCenter?.(target.position.x + (target.width ?? 160) / 2, target.position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 260 });
+    }
+    // The bounded 10k explorer is a read-only visual projection. Avoid
+    // rebuilding the 10,000-row Builder selection map during navigation.
+    if (!validTenThousandFocus) {
+      if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [nodeId], nodeId));
+      else setWorkspace(setRuntimeSelection(active, [nodeId], nodeId));
+    }
+    setTopologyContextMenu(null);
+  };
+  useEffect(() => {
+    if (!validTenThousandFocus) return undefined;
+    const panel = topologyPanelRef.current;
+    if (!panel) return undefined;
+    const onNativeDoubleClick = (event) => {
+      const resourceNode = event.target?.closest?.(".react-flow__node-resource, .react-flow__node[data-id]")?.closest?.(".react-flow__node[data-id]");
+      const nodeId = resourceNode?.getAttribute?.("data-id");
+      if (!nodeId || !canonicalResourceById.has(nodeId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const resource = canonicalResourceById.get(nodeId);
+      focusTopologyNode(nodeId, resource?.label ?? nodeId);
+    };
+    document.addEventListener("dblclick", onNativeDoubleClick, true);
+    return () => document.removeEventListener("dblclick", onNativeDoubleClick, true);
+  }, [validTenThousandFocus, canonicalResourceById, topologyFocusRoot]);
+  const goTopologyBack = () => {
+    setTopologyViewHistory((history) => {
+      if (history.length <= 1) return history;
+      const next = history.slice(0, -1);
+      const previous = next.at(-1);
+      setTopologyFocusRoot(previous?.rootId ?? null);
+      setTopologyFocusPage(previous?.page ?? 1);
+      return next;
+    });
+    setTopologyContextMenu(null);
+  };
+  const openTopologyContextMenu = (event, menu) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTopologyContextDetails(null);
+    setTopologyContextMenu({ ...menu, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 300)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 280)) });
+  };
+  useEffect(() => {
+    if (!validTenThousandFocus) return undefined;
+    const onNativeContextMenu = (event) => {
+      const resourceNode = event.target?.closest?.(".react-flow__node-resource, .react-flow__node[data-id]")?.closest?.(".react-flow__node[data-id]");
+      const nodeId = resourceNode?.getAttribute?.("data-id");
+      if (!nodeId || !canonicalResourceById.has(nodeId)) return;
+      openTopologyContextMenu(event, { kind: "node", nodeId });
+    };
+    document.addEventListener("contextmenu", onNativeContextMenu, true);
+    return () => document.removeEventListener("contextmenu", onNativeContextMenu, true);
+  }, [validTenThousandFocus, canonicalResourceById]);
+  const selectedCanonicalResource = workspace.selection.primary ? canonicalResourceById.get(workspace.selection.primary) : undefined;
+  const selectedCanonicalLinkCount = selectedCanonicalResource
+    ? canonicalNetwork.connections.filter((connection) => connection.from.resource === selectedCanonicalResource.id || connection.to.resource === selectedCanonicalResource.id).length
+    : 0;
+  const contextResource = topologyContextMenu?.nodeId ? canonicalResourceById.get(topologyContextMenu.nodeId) : undefined;
+  const contextConnection = topologyContextMenu?.edgeId ? canonicalConnectionById.get(topologyContextMenu.edgeId) : undefined;
   const focusTopologyResult = (result) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active)) return;
-    const target = baseFlow.nodes.find((node) => node.id === result.nodeId);
-    if (!target) return;
-    const known = active.mode === "builder"
-      ? active.source.resources.some((item) => item.id === target.id) ||
-        active.source.zones.some((item) => item.id === target.id)
-      : active.scenario.resources.some((item) => item.id === target.id) ||
-        active.scenario.zones.some((item) => item.id === target.id);
-    if (!known) return;
-    const position = target.position ?? { x: 0, y: 0 };
-    flowApi.current?.setCenter?.(position.x + (target.width ?? 160) / 2, position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 260 });
-    if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [result.nodeId], result.nodeId));
-    else setWorkspace(setRuntimeSelection(active, [result.nodeId], result.nodeId));
+    if (!canonicalResourceById.has(result.nodeId) && !baseFlow.nodes.some((node) => node.id === result.nodeId)) return;
+    focusTopologyNode(result.nodeId, result.nodeLabel ?? result.nodeId);
   };
+  const contextNeighbors = contextResource
+    ? canonicalNetwork.connections.flatMap((connection) => connection.from.resource === contextResource.id
+      ? [canonicalResourceById.get(connection.to.resource)].filter(Boolean)
+      : connection.to.resource === contextResource.id
+        ? [canonicalResourceById.get(connection.from.resource)].filter(Boolean)
+        : []).filter((resource, index, all) => all.findIndex((candidate) => candidate.id === resource.id) === index)
+    : [];
+  const contextLinkCount = contextResource
+    ? canonicalNetwork.connections.filter((connection) => connection.from.resource === contextResource.id || connection.to.resource === contextResource.id).length
+    : 0;
+  const selectedResourceAddresses = selectedCanonicalResource?.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [];
+  const topologyExplorer = e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
+    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
+    e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
+    e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
+    localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
+    selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
+      e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
+      e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
+      selectedResourceAddresses.length ? e("small", null, selectedResourceAddresses.join(", ")) : null,
+      e("small", null, `${selectedCanonicalLinkCount} deklarerade länkar`),
+      e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
+    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer."),
+  );
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
+      e("nav", { className: "topology-breadcrumbs", "data-topology-breadcrumbs": "true", "aria-label": "Topology breadcrumb" },
+        ...topologyViewHistory.map((item, index) => e(React.Fragment, { key: `${item.kind}:${item.rootId ?? "overview"}:${index}` },
+          index > 0 ? e("span", { "aria-hidden": "true" }, " › ") : null,
+          e("button", { type: "button", "data-topology-breadcrumb": item.kind, onClick: () => {
+            setTopologyViewHistory((history) => history.slice(0, index + 1));
+            setTopologyFocusRoot(item.rootId ?? null);
+            setTopologyFocusPage(item.page ?? 1);
+            setTopologyContextMenu(null);
+          } }, item.label))),
+        e("button", { type: "button", onClick: goTopologyBack, disabled: topologyViewHistory.length <= 1, "data-topology-back": "true" }, "Tillbaka"),
+        e("button", { type: "button", onClick: navigateOverview, disabled: topologyViewHistory.length <= 1, "data-topology-overview": "true" }, "Nätverksöversikt")),
       validThousandFocus ? e("div",{"data-scale-p2b1-focus-view":"SOURCE_ROW_NOT_SITE"},
         e("p",{"data-scale-p2b1-source-counts":"true"},
           validThousandFocus.canonicalNodes+" original Builder devices and "+
@@ -1275,6 +1481,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("p",{[validTenThousandFocus.sourceKind==="office-p4c3b"?"data-scale-p4c3b-active-page":validTenThousandFocus.sourceKind==="ods-p4f2"?"data-scale-p4f2-active-page":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"data-scale-p4e1-active-page":"data-scale-p4b1-active-page"]:String(validTenThousandFocus.page)},
           "Original "+(validTenThousandFocus.sourceKind==="office-p4c3b"?"DOCX/ODT":validTenThousandFocus.sourceKind==="ods-p4f2"?"ODS":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"XLSX":"CSV")+" source rows "+validTenThousandFocus.rowFirst+"–"+
           validTenThousandFocus.rowLast+". NOT sites, discovered physical cables or Engine evidence."),
+        validTenThousandFocus.layoutStrategy === "bounded-deterministic-topology" || validTenThousandFocus.layoutStrategy === "bounded-deterministic-grid" ? e("p", { "data-scale-p4b1-layout-diagnostic": "FALLBACK", role: "status" }, "ELK-layouten validerade inte denna begränsade vy; en deterministisk, topologimedveten och bunden layout används och behåller alla valda källnoder och länkar.") : null,
+        tenThousandTopologyProjection ? e("p", { "data-scale-p4b1-focused-subgraph": "true", role: "status" }, `Fokuserad kanonisk delgraf: ${tenThousandTopologyProjection.focusPage.visibleNeighbors} grannar på sida ${tenThousandTopologyProjection.focusPage.page}/${tenThousandTopologyProjection.focusPage.pageCount}; ${tenThousandTopologyProjection.layoutStrategy === "elk.layered" ? "ELK" : "topologimedveten fallback"}-layout.`) : null,
         e("label",null,"Original "+(validTenThousandFocus.sourceKind==="office-p4c3b"?"Office":validTenThousandFocus.sourceKind==="ods-p4f2"?"ODS":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"XLSX":"CSV")+" device row page",
           e("select",{[validTenThousandFocus.sourceKind==="office-p4c3b"?"data-scale-p4c3b-focus-page":validTenThousandFocus.sourceKind==="ods-p4f2"?"data-scale-p4f2-focus-page":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"data-scale-p4e1-focus-page":"data-scale-p4b1-focus-page"]:"true",
             value:String(validTenThousandFocus.page),disabled:scaledTenThousandFocusBusy,
@@ -1402,23 +1610,28 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           :null
       ):null,
       e("label", null, "Sök i topology", e("input", { value: topologyQuery, onChange: (event) => setTopologyQuery(event.target.value), placeholder: "Node, ID, IP, interface eller service", "aria-label": "Sök i topology" })),
+      topologyQuery ? e("small", { "data-topology-search-count": String(topologySearch.total) }, `${topologySearch.total} träffar i hela den kanoniska importen`) : null,
       e("label", null, "Typ", e("select", { value: topologyType, onChange: (event) => setTopologyType(event.target.value), "aria-label": "Filtrera topology efter typ" }, e("option", { value: "" }, "Alla typer"), ...[...new Set((projection?.nodes ?? []).map((node) => node.type === "resource" ? node.data.resourceType : "zone"))].sort().map((value) => e("option", { key: value, value }, value)))),
       e("label", null, "Zon", e("select", { value: topologyZone, onChange: (event) => setTopologyZone(event.target.value), "aria-label": "Filtrera topology efter zon" }, e("option", { value: "" }, "Alla zoner"), ...[...new Set((projection?.nodes ?? []).map((node) => node.data.zoneKind).filter(Boolean))].sort().map((value) => e("option", { key: value, value }, value)))),
       e("label", null, "VLAN", e("input", { value: topologyVlan, onChange: (event) => setTopologyVlan(event.target.value), placeholder: "VLAN", "aria-label": "Filtrera topology efter VLAN" })),
       e("button", { type: "button", onClick: () => { setTopologyQuery(""); setTopologyType(""); setTopologyZone(""); setTopologyVlan(""); setTopologyPathFocus(false); }, disabled: !topologyQuery && !topologyType && !topologyZone && !topologyVlan && !topologyPathFocus }, "Återställ filter"),
       e("button", { type: "button", onClick: () => setTopologyPathFocus((value) => !value), disabled: !journeyPathNodeIds.length, "aria-pressed": topologyPathFocus }, topologyPathFocus ? "Visa hela topology" : "Fokusera väg"),
       stateFocus ? e("div", { className: "topology-state-focus", "data-modeled-state-visual": "ready", "data-modeled-state-target": stateFocus.targetResourceId, "data-modeled-state-category": stateFocus.category, "aria-live": "polite" }, e("strong", null, "Engine state focus"), e("span", null, `${stateFocus.label} · ${stateFocus.category}`), e("small", null, "CLASS B · node.state · ingen packet journey fabricerad")) : null,
-      topologyQuery ? e("div", { className: "topology-search-results", role: "listbox", "aria-label": "Sökresultat" }, topologySearchResults.map((result) => e("button", { type: "button", key: `${result.entity}:${result.nodeId}:${result.field}:${result.value}`, onClick: () => focusTopologyResult(result), role: "option" }, e("strong", null, result.value), e("small", null, `${result.detail} · ${result.nodeId}`)))) : null
+      topologyQuery ? e("div", { className: "topology-search-results", role: "listbox", "aria-label": "Sökresultat" }, topologySearchResults.map((result) => e("button", { type: "button", key: `${result.entity}:${result.nodeId}:${result.field}:${result.value}`, onClick: () => focusTopologyResult(result), role: "option" }, e("strong", null, result.value), e("small", null, `${result.detail} · ${result.nodeId}`)))) : null,
+      localFocusPage && localFocusPage.pageCount > 1 ? e("div", { className: "topology-focus-pagination", "data-topology-focus-pagination": "true" },
+        e("button", { type: "button", disabled: topologyFocusPage <= 1, onClick: () => { const page = Math.max(1, topologyFocusPage - 1); setTopologyFocusPage(page); setTopologyViewHistory((history) => history.map((item, index) => index === history.length - 1 ? { ...item, page } : item)); } }, "Föregående fokusvy"),
+        e("span", null, `Sida ${topologyFocusPage}/${localFocusPage.pageCount}`),
+        e("button", { type: "button", disabled: topologyFocusPage >= localFocusPage.pageCount, onClick: () => { const page = Math.min(localFocusPage.pageCount, topologyFocusPage + 1); setTopologyFocusPage(page); setTopologyViewHistory((history) => history.map((item, index) => index === history.length - 1 ? { ...item, page } : item)); } }, "Nästa fokusvy")) : null
     ),
     e("section", {
       ref: topologyPanelRef,
       className: "topology-panel",
       "aria-label": "Topology",
-      onContextMenu: (event) => event.preventDefault(),
-      "data-topology-pan-button": "right",
+      "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      ...(topologyFocusRoot ? { "data-topology-focus-root": topologyFocusRoot, "data-topology-focus-page": String(topologyFocusPage) } : {}),
       "data-topology-last-valid-size": topologyViewportState.lastValidSize ? `${topologyViewportState.lastValidSize.width}x${topologyViewportState.lastValidSize.height}` : "UNMEASURED",
       "data-topology-preserve-canonical-geometry": String(topologyViewportState.preserveCanonicalGeometry),
       "data-topology-rebuild-visual-geometry": String(topologyViewportState.rebuildVisualGeometry),
@@ -1435,15 +1648,21 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       nodesDraggable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       nodesConnectable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       elementsSelectable: true,
-      panOnDrag: [2],
+      panOnDrag: [1],
+      zoomOnScroll: true,
+      zoomOnDoubleClick: false,
+      panOnScroll: false,
       selectionOnDrag: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       multiSelectionKeyCode: "Shift",
       selectionKeyCode: "Shift",
       onNodeClick,
+      onNodeDoubleClick,
+      onNodeContextMenu,
       onEdgeClick,
+      onEdgeContextMenu,
       onSelectionChange,
       onPaneClick: clearSelection,
-      onPaneContextMenu: (event) => event.preventDefault(),
+      onPaneContextMenu,
       onNodeDragStop,
       onConnect,
       onInit: (instance) => { flowApi.current = instance; topologyViewportRef.current = instance.getViewport?.() ?? null; setTopologyZoom(instance.getZoom?.() ?? 1); setTopologyGeometryRevision((value) => value + 1); },
@@ -1477,6 +1696,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         ),
       ) : null),
     ),
+    topologyExplorer,
     journey ? e("section", {
       className: `journey-player truth-${journey.truth.toLowerCase()}`,
       "data-visual-journey": "ready",
@@ -2215,6 +2435,44 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
               : [e("tr", { key: "no-policy-rows" }, e("td", { colSpan: 15 }, activePolicyDecision.usedDefault ? "No ordered rule matched; Engine used the declared default action." : "No authoritative ordered rule rows are available."))])))),
         e("small", { className: "policy-xray-proof" }, "ENGINE TRACE · policy location (network vs local host), rule order, packet match components, conntrack-state match, terminal selection and default use are projected exactly; the UI performs no firewall/ACL or session-state evaluation."),
       ) : null,
+    ) : null,
+    topologyContextMenu ? e("div", {
+      ref: topologyContextMenuRef,
+      className: "topology-context-menu",
+      role: "menu",
+      "data-topology-context-menu": topologyContextMenu.kind,
+      style: { position: "fixed", left: `${topologyContextMenu.x}px`, top: `${topologyContextMenu.y}px`, zIndex: 1000 },
+    },
+      topologyContextMenu.kind === "node" && contextResource ? [
+        e("strong", { key: "heading" }, `${contextResource.label ?? contextResource.id} · ${contextResource.id}`),
+        e("button", { key: "details", type: "button", role: "menuitem", "data-topology-context-action": "details", onClick: () => { setTopologyContextDetails({ kind: "node", id: contextResource.id, label: contextResource.label ?? contextResource.id, type: contextResource.type ?? "unknown", addresses: contextResource.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [], neighbors: contextNeighbors.map((resource) => resource.id) }); setTopologyContextMenu(null); } }, "Visa enhetsdetaljer"),
+        e("button", { key: "focus", type: "button", role: "menuitem", "data-topology-context-action": "focus", onClick: () => focusTopologyNode(contextResource.id, contextResource.label ?? contextResource.id) }, "Öppna fokuserad topologi"),
+        e("button", { key: "neighbors", type: "button", role: "menuitem", "data-topology-context-action": "neighbors", onClick: () => { focusTopologyNode(contextResource.id, contextResource.label ?? contextResource.id); setTopologyContextDetails({ kind: "neighbors", id: contextResource.id, neighbors: contextNeighbors.map((resource) => resource.id) }); } }, "Visa direkt anslutna enheter"),
+        e("button", { key: "links", type: "button", role: "menuitem", "data-topology-context-action": "links", onClick: () => { setTopologyContextDetails({ kind: "links", id: contextResource.id, links: canonicalNetwork.connections.filter((connection) => connection.from.resource === contextResource.id || connection.to.resource === contextResource.id).map((connection) => connection.id) }); setTopologyContextMenu(null); } }, "Visa deklarerade länkar"),
+        e("button", { key: "copy", type: "button", role: "menuitem", "data-topology-context-action": "copy-id", onClick: () => { void navigator.clipboard?.writeText(contextResource.id); setTopologyContextMenu(null); } }, "Kopiera enhets-ID"),
+      ] : topologyContextMenu.kind === "edge" && contextConnection ? [
+        e("strong", { key: "heading" }, contextConnection.id),
+        e("button", { key: "details", type: "button", role: "menuitem", "data-topology-context-action": "edge-details", onClick: () => { setTopologyContextDetails({ kind: "edge", id: contextConnection.id, source: contextConnection.from.resource, target: contextConnection.to.resource }); setTopologyContextMenu(null); } }, "Visa länkdetaljer"),
+        e("button", { key: "focus", type: "button", role: "menuitem", "data-topology-context-action": "edge-focus", onClick: () => focusTopologyNode(contextConnection.from.resource, contextConnection.from.resource) }, "Fokusera länkens ändpunkter"),
+        e("button", { key: "copy", type: "button", role: "menuitem", "data-topology-context-action": "edge-copy-id", onClick: () => { void navigator.clipboard?.writeText(contextConnection.id); setTopologyContextMenu(null); } }, "Kopiera länk-ID"),
+      ] : [
+        e("strong", { key: "heading" }, "Topologivy"),
+        e("button", { key: "fit", type: "button", role: "menuitem", "data-topology-context-action": "fit", onClick: () => { flowApi.current?.fitView?.({ duration: 220, padding: 0.1 }); setTopologyContextMenu(null); } }, "Anpassa aktuell vy"),
+        e("button", { key: "back", type: "button", role: "menuitem", disabled: topologyViewHistory.length <= 1, "data-topology-context-action": "back", onClick: goTopologyBack }, "Tillbaka till överordnad vy"),
+        e("button", { key: "overview", type: "button", role: "menuitem", "data-topology-context-action": "overview", onClick: navigateOverview }, "Visa nätverksöversikt"),
+        e("button", { key: "reset", type: "button", role: "menuitem", "data-topology-context-action": "reset-camera", onClick: () => { flowApi.current?.fitView?.({ duration: 220, padding: 0.1 }); setTopologyContextMenu(null); } }, "Återställ kameran"),
+        e("small", { key: "counts", "data-topology-context-counts": "true" }, `${canonicalNetwork.resources.length} enheter · ${canonicalNetwork.connections.length} länkar`),
+      ],
+    ) : null,
+    topologyContextDetails ? e("aside", { className: "topology-context-details", "data-topology-context-details": topologyContextDetails.kind, role: "status" },
+      e("strong", null, topologyContextDetails.label ?? topologyContextDetails.id),
+      topologyContextDetails.id ? e("small", null, topologyContextDetails.id) : null,
+      topologyContextDetails.type ? e("small", null, topologyContextDetails.type) : null,
+      topologyContextDetails.source ? e("small", null, `${topologyContextDetails.source} → ${topologyContextDetails.target}`) : null,
+      topologyContextDetails.addresses?.length ? e("small", null, topologyContextDetails.addresses.join(", ")) : null,
+      topologyContextDetails.neighbors?.length ? e("small", null, `${topologyContextDetails.neighbors.length} deklarerade grannar`) : null,
+      topologyContextDetails.links?.length ? e("small", null, `${topologyContextDetails.links.length} deklarerade länkar`) : null,
+      e("button", { type: "button", onClick: () => setTopologyContextDetails(null) }, "Stäng detaljer"),
     ) : null,
   );
 }

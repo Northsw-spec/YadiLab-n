@@ -1,5 +1,34 @@
 import assert from "node:assert/strict";
-import { buildTopologySearchIndex, filterTopologyNodes, searchTopology } from "../../dist-browser-test/ui/src/canvas/topology-navigation.js";
+import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopology, searchTopologyWithCount } from "../../dist-browser-test/ui/src/canvas/topology-navigation.js";
 const nodes = [{ id: "router01", type: "resource", data: { semanticId: "router01", semanticKind: "resource", label: "Router01", resourceType: "router", zoneKind: "management", interfaces: [{ interfaceId: "eth0", label: "eth0", addresses: ["10.0.0.1/24"] }] } }, { id: "server01", type: "resource", data: { semanticId: "server01", semanticKind: "resource", label: "App Server", resourceType: "server", zoneKind: "server", interfaces: [], services: ["HTTP"] } }];
 const index = buildTopologySearchIndex(nodes); assert.equal(index.length, 7); assert.equal(searchTopology(index, "10.0.0.1")[0].nodeId, "router01"); assert.equal(searchTopology(index, "http")[0].entity, "service"); assert.equal(filterTopologyNodes(nodes, { query: "app", pathNodeIds: [] }).server01, "match"); assert.equal(filterTopologyNodes(nodes, { query: "app", pathNodeIds: [] }).router01, "dim"); assert.equal(filterTopologyNodes(nodes, { query: "", nodeType: "router", zone: "management", pathNodeIds: [] }).router01, "match"); assert.equal(filterTopologyNodes(nodes, { query: "", nodeType: "router", zone: "management", pathNodeIds: ["server01"] }).router01, "dim");
-console.log("PASS dev4 topology navigation: 7 deterministic assertions");
+const canonical = { resources: Array.from({ length: 10000 }, (_, i) => ({ id: `device-${String(i + 1).padStart(5, "0")}`, label: `Device ${i + 1}`, type: i === 9999 ? "network.switch" : "endpoint.windows", interfaces: [{ id: "eth0", label: "eth0", addresses: [`10.0.${Math.floor(i / 254)}.${(i % 254) + 1}`] }], properties: { site: i === 9999 ? "Campus 9" : "Campus 1" } })), connections: [{ id: "link-last", from: { resource: "device-09999" }, to: { resource: "device-10000" } }] };
+const globalIndex = buildTopologySearchIndexFromNetwork(canonical); const global = searchTopologyWithCount(globalIndex, "device 10000"); assert.equal(global.total, 1); assert.equal(global.results[0].nodeId, "device-10000");
+const focus = buildTopologyFocusPage({ resources: [{ id: "switch", label: "Access", type: "network.switch" }, ...Array.from({ length: 2050 }, (_, i) => ({ id: `pc-${String(i).padStart(4, "0")}`, label: `PC ${i}`, type: "endpoint.windows" }))], connections: Array.from({ length: 2050 }, (_, i) => ({ id: `edge-${String(i).padStart(4, "0")}`, from: { resource: "switch" }, to: { resource: `pc-${String(i).padStart(4, "0")}` } })) }, "switch", 2, 100, 250);
+assert.equal(focus.totalNeighbors, 2050); assert.equal(focus.pageCount, 21); assert.equal(focus.visibleNeighbors, 99); assert.equal(focus.hiddenNeighbors, 1951); assert.equal(focus.nodeIds.length, 100); assert.ok(focus.edgeIds.every((id) => id.startsWith("edge-")));
+assert.equal(focus.totalRootLinks, 2050); assert.equal(focus.visibleRootLinks, 99); assert.equal(focus.hiddenRootLinks, 1951); assert.equal(focus.visibleNeighborLinks, 0); assert.equal(focus.totalVisibleLinks, 99);
+const parallelResources = [{ id: "parallel-root" }, ...Array.from({ length: 99 }, (_, i) => ({ id: `parallel-neighbor-${String(i + 1).padStart(3, "0")}` }))];
+const parallelConnections = parallelResources.slice(1).flatMap((resource, index) => Array.from({ length: 3 }, (_, link) => ({
+  id: `parallel-link-${String(index * 3 + link + 1).padStart(3, "0")}`,
+  from: { resource: "parallel-root" }, to: { resource: resource.id },
+})));
+const parallelNetwork = { resources: parallelResources, connections: parallelConnections };
+const parallelFirst = buildTopologyFocusPage(parallelNetwork, "parallel-root", 1, 100, 250);
+const parallelSecond = buildTopologyFocusPage(parallelNetwork, "parallel-root", 2, 100, 250);
+assert.equal(parallelFirst.pageCount, 2); assert.equal(parallelSecond.pageCount, 2);
+assert.ok(parallelFirst.nodeIds.length <= 100 && parallelSecond.nodeIds.length <= 100);
+assert.ok(parallelFirst.edgeIds.length <= 250 && parallelSecond.edgeIds.length <= 250);
+assert.equal(parallelFirst.totalRootLinks, 297); assert.equal(parallelFirst.visibleRootLinks, 250); assert.equal(parallelFirst.hiddenRootLinks, 47);
+assert.equal(parallelSecond.visibleRootLinks, 47); assert.equal(parallelSecond.hiddenRootLinks, 250);
+assert.equal(parallelFirst.totalVisibleLinks, parallelFirst.visibleRootLinks + parallelFirst.visibleNeighborLinks);
+assert.equal(parallelSecond.totalVisibleLinks, parallelSecond.visibleRootLinks + parallelSecond.visibleNeighborLinks);
+assert.equal(new Set([...parallelFirst.edgeIds, ...parallelSecond.edgeIds]).size, 297);
+assert.deepEqual(new Set([...parallelFirst.edgeIds, ...parallelSecond.edgeIds]), new Set(parallelConnections.map((connection) => connection.id)));
+const dense = buildTopologyFocusPage({ resources: [{ id: "root" }, { id: "a" }, { id: "b" }], connections: [
+  { id: "root-a-1", from: { resource: "root" }, to: { resource: "a" } },
+  { id: "root-a-2", from: { resource: "root" }, to: { resource: "a" } },
+  { id: "root-b", from: { resource: "root" }, to: { resource: "b" } },
+  { id: "a-b", from: { resource: "a" }, to: { resource: "b" } },
+] }, "root", 1, 3, 4);
+assert.deepEqual(dense.edgeIds, ["root-a-1", "root-a-2", "root-b", "a-b"]); assert.equal(dense.visibleRootLinks, 3); assert.equal(dense.visibleNeighborLinks, 1); assert.equal(dense.totalVisibleLinks, 4);
+console.log("PASS PROJECT-086 topology navigation: global canonical search, focus pagination and 7 base assertions");
