@@ -4608,7 +4608,16 @@ function WorkspaceMenu({ label, children, className = "", panelClassName = "", c
     ref: menuRef,
     className: `workspace-menu ${className}`.trim(),
     ...(alwaysOpen ? { open: true } : {}),
-    onToggle: (event) => setOpen(event.currentTarget.open),
+    onToggle: (event) => {
+      if (alwaysOpen && !event.currentTarget.open) {
+        queueMicrotask(() => {
+          if (menuRef.current) menuRef.current.open = true;
+        });
+        setOpen(true);
+        return;
+      }
+      setOpen(event.currentTarget.open);
+    },
     onClick: (event) => {
       if (!closeOnAction) return;
       if (event.target.closest("button, .file-button")) {
