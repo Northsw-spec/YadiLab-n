@@ -17,10 +17,10 @@ def attr_values(locator, attribute):
     return locator.evaluate_all("(els, attribute) => els.map(el => el.getAttribute(attribute)).filter(Boolean)", attribute)
 
 
-def run_case(browser, url, evidence_dir):
+def run_case(browser, url, evidence_dir, profile, env_name):
     page, errors, outside = setup(browser, url)
     try:
-        source, source_kind = fixture_bytes("legacy-six", "PROJECT088_XLSX_A")
+        source, source_kind = fixture_bytes(profile, env_name)
         source_sha = hashlib.sha256(source).hexdigest()
         page.locator('[data-network-import-primary="true"]').click()
         panel = page.locator('[data-network-import-panel="ready"]')
@@ -29,6 +29,8 @@ def run_case(browser, url, evidence_dir):
             "name": "PROJECT-088-Arvidsjaur-A.xlsx", "mimeType": MIME, "buffer": source,
         })
         expect(panel.locator('[data-network-import-preview="READY"]')).to_be_visible(timeout=120000)
+        if profile == "legacy-src-22":
+            panel.locator('[data-legacy-workbook-consent="true"]').check()
         panel.locator('[data-network-import-activate="true"]').click()
         expect(panel).to_have_count(0, timeout=180000)
         expect(page.locator('[data-topology-mode="normal"][aria-pressed="true"]')).to_be_visible(timeout=180000)
@@ -60,11 +62,12 @@ def run_case(browser, url, evidence_dir):
         require(all(" C " not in path for path in route_paths), "normal topology fell back to generic Bezier routing")
         require(not errors, f"Chromium page errors: {errors!r}")
         require(not outside, f"Unexpected external requests: {outside!r}")
-        page.screenshot(path=str(evidence_dir / "project088-arvidsjaur-normal-desktop.png"), full_page=True)
+        suffix = "legacy-six" if profile == "legacy-six" else "legacy-src-22"
+        page.screenshot(path=str(evidence_dir / f"project088-arvidsjaur-normal-{suffix}-desktop.png"), full_page=True)
         page.set_viewport_size({"width": 390, "height": 844})
         page.wait_for_timeout(500)
         require(page.evaluate("document.documentElement.scrollWidth") <= 392, "normal topology overflows 390px viewport")
-        page.screenshot(path=str(evidence_dir / "project088-arvidsjaur-normal-390px.png"), full_page=True)
+        page.screenshot(path=str(evidence_dir / f"project088-arvidsjaur-normal-{suffix}-390px.png"), full_page=True)
         return {
             "status": "PASS",
             "sourceKind": source_kind,
@@ -73,8 +76,8 @@ def run_case(browser, url, evidence_dir):
             "canonicalLinks": len(canonical_links),
             "renderedResources": len(rendered_resource_ids),
             "renderedLinks": rendered_edges.count(),
-            "desktopScreenshot": "project088-arvidsjaur-normal-desktop.png",
-            "mobileScreenshot": "project088-arvidsjaur-normal-390px.png",
+            "desktopScreenshot": f"project088-arvidsjaur-normal-{suffix}-desktop.png",
+            "mobileScreenshot": f"project088-arvidsjaur-normal-{suffix}-390px.png",
             "pageErrors": errors,
             "outsideRequests": outside,
         }
@@ -98,7 +101,10 @@ def main():
             launch["args"].append("--no-sandbox")
         browser = playwright.chromium.launch(**launch)
         try:
-            report = run_case(browser, args.url, args.evidence_dir)
+            report = [
+                run_case(browser, args.url, args.evidence_dir, "legacy-six", "PROJECT088_XLSX_A"),
+                run_case(browser, args.url, args.evidence_dir, "legacy-src-22", "PROJECT088_XLSX_B"),
+            ]
         finally:
             browser.close()
     (args.evidence_dir / "project088-normal-topology-real-browser.json").write_text(json.dumps(report, indent=2) + "\n")
