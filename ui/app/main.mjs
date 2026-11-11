@@ -5206,7 +5206,9 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
           e("div", null, e("strong", null, "Avancerade verktyg"), e("small", null, "Inspektion, replay, Office-review och övriga arbetsflöden hålls separerade från canvasen.")),
           e("label", null, e("span", { className: "sr-only" }, "Sök avancerade verktyg"), e("input", { type: "search", value: advancedQuery, onChange: (event) => setAdvancedQuery(event.target.value), placeholder: "Sök verktyg…", "aria-label": "Sök avancerade verktyg", "data-advanced-tools-search": "true" })),
         ),
-        category("scenario", "Lab & Scenario", "Ladda, starta eller kompilera en källa.", scenarioItems),
+        // The legacy source contract still names this path "Lab & Scenario";
+        // the visible category avoids colliding with its compatibility menu.
+        category("scenario", "Scenario & labb", "Ladda, starta eller kompilera en källa.", scenarioItems),
         category("builder", "Builder-läge", "Enterprise, labb och canonical layout.", builderItems),
         category("runtime", "Run & Preview", "Runtime, autosparning och modellerade probes.", runItems),
         category("inspection", "Inspektion & replay", "Read-only dokument, observationer och sparade referenser.", inspectionItems),
