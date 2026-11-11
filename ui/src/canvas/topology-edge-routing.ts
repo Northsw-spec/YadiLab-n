@@ -5,6 +5,7 @@ export interface CanvasRoutePoint extends CanvasPosition {}
 interface Rect extends CanvasPosition {
   readonly width: number;
   readonly height: number;
+  readonly kind: CanvasNode["type"];
 }
 
 const ROUTE_MARGIN = 28;
@@ -24,6 +25,7 @@ function absoluteRects(nodes: readonly CanvasNode[]): ReadonlyMap<string, Rect> 
       y: (parent?.y ?? 0) + node.position.y,
       width: node.width,
       height: node.height,
+      kind: node.type,
     };
     cache.set(id, rect);
     return rect;
@@ -83,7 +85,10 @@ function routeForEdge(
   const sourcePoint = { x: source.x + source.width, y: source.y + source.height / 2 };
   const targetPoint = { x: target.x, y: target.y + target.height / 2 };
   const offset = parallelCount > 1 ? (parallelIndex - (parallelCount - 1) / 2) * PARALLEL_GAP : 0;
-  const obstacleRects = allRects.filter((rect) => rect !== source && rect !== target);
+  // Zones are visual containers, not physical resources. Treating their
+  // enclosing rectangles as obstacles would make every valid inter-zone
+  // route appear blocked and force a straight fallback through resources.
+  const obstacleRects = allRects.filter((rect) => rect !== source && rect !== target && rect.kind === "resource");
   const minX = Math.min(source.x, target.x);
   const maxX = Math.max(source.x + source.width, target.x + target.width);
   const minY = Math.min(source.y, target.y);
