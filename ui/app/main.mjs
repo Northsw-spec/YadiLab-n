@@ -4577,7 +4577,7 @@ function RuntimeResults({ workspace }) {
   );
 }
 
-function WorkspaceMenu({ label, children, className = "", panelClassName = "" }) {
+function WorkspaceMenu({ label, children, className = "", panelClassName = "", closeOnAction = true }) {
   const menuRef = useRef(null);
   const summaryRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -4609,6 +4609,7 @@ function WorkspaceMenu({ label, children, className = "", panelClassName = "" })
     className: `workspace-menu ${className}`.trim(),
     onToggle: (event) => setOpen(event.currentTarget.open),
     onClick: (event) => {
+      if (!closeOnAction) return;
       if (event.target.closest("button, .file-button")) {
         queueMicrotask(() => {
           if (menuRef.current?.open) menuRef.current.open = false;
@@ -5207,26 +5208,26 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     // operator path is the compact toolbar above; these controls retain the
     // original callbacks and data hooks without reintroducing a large menu.
     e("div", { className: "legacy-workspace-menus", "data-legacy-workspace-menus": "true" },
-      e(WorkspaceMenu, { label: "Lab & Scenario" },
+      e(WorkspaceMenu, { label: "Lab & Scenario", closeOnAction: false },
         e("button", { type: "button", onClick: () => openEnterpriseScenario(true), disabled: busy || !enterpriseScenarioId }, busy ? "Startar enterprise-labb…" : "Starta enterprise-labb"),
         e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(true), disabled: busy || !verifiedDeliveryScenarioId }, busy ? "Startar verifierad demo…" : "Starta verifierad leveransdemo"),
         e("button", { type: "button", onClick: () => openGuidedLab(true), disabled: busy || !guidedLabId }, busy ? "Startar labb…" : "Starta guidad labb"),
         fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json"),
         fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab"),
       ),
-      e(WorkspaceMenu, { label: "Builder" },
+      e(WorkspaceMenu, { label: "Builder", closeOnAction: false },
         e("button", { type: "button", onClick: () => openEnterpriseScenario(false), disabled: busy || !enterpriseScenarioId }, "Öppna enterprise i byggläget"),
         e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(false), disabled: busy || !verifiedDeliveryScenarioId }, "Öppna verifierad demo i byggläget"),
         e("button", { type: "button", onClick: () => openGuidedLab(false), disabled: busy || !guidedLabId }, "Öppna labb i byggläget"),
         workspace.mode === "builder" ? e("button", { type: "button", onClick: compileAndLayout, disabled: busy }, busy ? "Kompilerar…" : "Kompilera + layout") : null,
       ),
-      e(WorkspaceMenu, { label: "Run & Preview" },
+      e(WorkspaceMenu, { label: "Run & Preview", closeOnAction: false },
         workspace.mode === "builder" ? e("button", { type: "button", onClick: preview, disabled: workspace.compile?.status !== "valid" }, "Förhandsvisa körläge") : e("button", { type: "button", onClick: backToBuilder }, "Tillbaka till byggläget"),
         workspace.mode === "runtime" ? e("button", { type: "button", onClick: autosaveProgress, disabled: !workspace }, "Autospara nu") : null,
         workspace.mode === "runtime" ? e("button", { type: "button", onClick: restoreAutosave, disabled: !workspace }, "Återställ autosparning") : null,
         workspace.mode === "runtime" ? e("button", { type: "button", onClick: clearAutosave, disabled: !workspace }, "Rensa autosparning") : null,
       ),
-      e(WorkspaceMenu, { label: "Import / Export" },
+      e(WorkspaceMenu, { label: "Import / Export", closeOnAction: false },
         e("button", { type: "button", "data-ic010-p2-open": "true", onClick: onInspectStructuredXml }, "Inspect structured documents (XML + static Ansible, read-only)"),
         e("button", { type: "button", "data-import-network-action": "true", onClick: openNetworkPicker }, "Import Network from Excel / CSV"),
         e("button", { type: "button", "data-inspect-graphml": "PREVIEW_ONLY", onClick: onInspectGraphml }, "Inspect GraphML (read-only preview)"),
