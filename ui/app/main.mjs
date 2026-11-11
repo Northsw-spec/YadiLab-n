@@ -5219,6 +5219,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     // operator path is the compact toolbar above; these controls retain the
     // original callbacks and data hooks without reintroducing a large menu.
     e("div", { className: "legacy-workspace-menus", "data-legacy-workspace-menus": "true" },
+      e("button", { type: "button", className: "legacy-network-import-button", onClick: openNetworkPicker }, "Import JSON / Excel / CSV → Network Topology"),
       e(WorkspaceMenu, { label: "Lab & Scenario", closeOnAction: false, alwaysOpen: true },
         e("button", { type: "button", onClick: () => openEnterpriseScenario(true), disabled: busy || !enterpriseScenarioId }, busy ? "Startar enterprise-labb…" : "Starta enterprise-labb"),
         e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(true), disabled: busy || !verifiedDeliveryScenarioId }, busy ? "Startar verifierad demo…" : "Starta verifierad leveransdemo"),
