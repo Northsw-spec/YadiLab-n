@@ -318,6 +318,7 @@ import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
 import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.ts";
+import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 
@@ -725,6 +726,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusRoot, setTopologyFocusRoot] = useState(null);
   const [topologyFocusPage, setTopologyFocusPage] = useState(1);
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
+  const [topologyHierarchyScope, setTopologyHierarchyScope] = useState(null);
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
   const topologyFocusRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
@@ -760,6 +762,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
     setTopologyGroup(null);
@@ -914,7 +917,28 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     scaledTenThousandFocus?.source===workspace.source&&
     scaledTenThousandFocus?.model===workspace.compile.model
       ?scaledTenThousandFocus:null;
+  const tenThousandHierarchyIndex = useMemo(() => {
+    if (!validTenThousandFocus?.model || validTenThousandFocus.model.resources.length !== 10000 || validTenThousandFocus.model.connections.length !== 10000) return null;
+    try { return buildHierarchicalTopologyIndex(validTenThousandFocus.model); }
+    catch { return null; }
+  }, [validTenThousandFocus?.model]);
+  const hierarchicalTopologyView = useMemo(() => {
+    if (!tenThousandHierarchyIndex || topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY) return null;
+    try {
+      return buildHierarchicalTopologyView(
+        tenThousandHierarchyIndex,
+        topologyHierarchyScope?.rootId ? "branch" : "overview",
+        topologyHierarchyScope?.rootId,
+        topologyFocusPage,
+      );
+    } catch { return null; }
+  }, [tenThousandHierarchyIndex, topologyHierarchyScope?.rootId, topologyFocusPage, topologyViewMode]);
   useEffect(() => {
+    if (tenThousandHierarchyIndex) {
+      topologyFocusRequestRef.current += 1;
+      setTopologyFocusProjection(null);
+      return undefined;
+    }
     const source = validTenThousandFocus?.source;
     const model = validTenThousandFocus?.model;
     const rootId = topologyFocusRoot;
@@ -941,7 +965,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         }
       });
     return () => { topologyFocusRequestRef.current += 1; };
-  }, [validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
+  }, [tenThousandHierarchyIndex, validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
   const tenThousandGuard=workspace.mode==="builder"&&(
     workspace.source.resources.length>=5000||
     (scaledTenThousandSessionActive&&
@@ -994,11 +1018,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
     ? topologyFocusProjection
     : null;
-  const projection = topologyOverview ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
+  const projection = topologyOverview ?? hierarchicalTopologyView?.projection ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? normalTopologyCanvas;
-  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
+  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!tenThousandHierarchyIndex && !validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
     ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
     : null);
   const visibleProjection = localFocusPage && projection
@@ -1010,7 +1034,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // Remount only when the exact reviewed hierarchy page identity changes.
   const hierarchyCanvasKey = topologyOverview
     ? `network-overview:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
-    : `${topologyViewMode}:` + (validHierarchyFocus
+    : `${topologyViewMode}:` + (hierarchicalTopologyView
+      ? `project-090:${hierarchicalTopologyView.kind}:${hierarchicalTopologyView.rootId ?? "overview"}:${hierarchicalTopologyView.page}:${hierarchicalTopologyView.edgeIds.join(",")}`
+      : validHierarchyFocus
     ? `scale001-p2b2c:${validHierarchyFocus.sourceModelHash}:${validHierarchyFocus.scopeKind}:${validHierarchyFocus.scopeId}:${validHierarchyFocus.page}`
     : validTenThousandFocus
       ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
@@ -1345,7 +1371,6 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       openTopologyGroupFromNode(node);
       return;
     }
-    if (validTenThousandFocus) return;
     if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
     else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
@@ -1418,6 +1443,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyGroup(null);
     setTopologyGroupQuery("");
@@ -1433,6 +1459,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyGroup(null);
     setTopologyGroupQuery("");
@@ -1451,7 +1478,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
-    if (validTenThousandFocus) {
+    if (tenThousandHierarchyIndex) {
+      const role = tenThousandHierarchyIndex.roleById.get(nodeId) ?? "device";
+      const hierarchyLabel = role === "distribution" ? `Distribution branch: ${label}` : role === "access" ? `Access network: ${label}` : `Connected branch: ${label}`;
+      setTopologyHierarchyScope({ rootId: nodeId });
+      setTopologyFocusRoot(nodeId);
+      setTopologyFocusPage(1);
+      setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: hierarchyLabel, page: 1 }]);
+    } else if (validTenThousandFocus) {
       setTopologyFocusRoot(nodeId);
       setTopologyFocusPage(1);
       setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: `Fokuserad enhet: ${label}`, page: 1 }]);
@@ -1466,14 +1500,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }
     // The bounded 10k explorer is a read-only visual projection. Avoid
     // rebuilding the 10,000-row Builder selection map during navigation.
-    if (!validTenThousandFocus) {
+    if (!validTenThousandFocus || tenThousandHierarchyIndex) {
       if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [nodeId], nodeId));
       else setWorkspace(setRuntimeSelection(active, [nodeId], nodeId));
     }
     setTopologyContextMenu(null);
   };
   useEffect(() => {
-    if (!validTenThousandFocus) return undefined;
+    if (!validTenThousandFocus || tenThousandHierarchyIndex) return undefined;
     const panel = topologyPanelRef.current;
     if (!panel) return undefined;
     const onNativeDoubleClick = (event) => {
@@ -1487,7 +1521,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     document.addEventListener("dblclick", onNativeDoubleClick, true);
     return () => document.removeEventListener("dblclick", onNativeDoubleClick, true);
-  }, [validTenThousandFocus, canonicalResourceById, topologyFocusRoot]);
+  }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById, topologyFocusRoot]);
   const goTopologyBack = () => {
     setTopologyViewHistory((history) => {
       if (history.length <= 1) return history;
@@ -1502,12 +1536,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         }
         setTopologyFocusRoot(null);
         setTopologyFocusPage(1);
+        setTopologyHierarchyScope(null);
       } else {
         setTopologyGroup(null);
         setTopologyGroupQuery("");
         setTopologyGroupPage(1);
         setTopologyFocusRoot(previous?.rootId ?? null);
         setTopologyFocusPage(previous?.page ?? 1);
+        setTopologyHierarchyScope(previous?.rootId ? { rootId: previous.rootId } : null);
       }
       return next;
     });
@@ -1520,7 +1556,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextMenu({ ...menu, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 300)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 280)) });
   };
   useEffect(() => {
-    if (!validTenThousandFocus) return undefined;
+    if (!validTenThousandFocus || tenThousandHierarchyIndex) return undefined;
     const onNativeContextMenu = (event) => {
       const resourceNode = event.target?.closest?.(".react-flow__node-resource, .react-flow__node[data-id]")?.closest?.(".react-flow__node[data-id]");
       const nodeId = resourceNode?.getAttribute?.("data-id");
@@ -1529,10 +1565,18 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     document.addEventListener("contextmenu", onNativeContextMenu, true);
     return () => document.removeEventListener("contextmenu", onNativeContextMenu, true);
-  }, [validTenThousandFocus, canonicalResourceById]);
+  }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById]);
   const selectedCanonicalResource = workspace.selection.primary ? canonicalResourceById.get(workspace.selection.primary) : undefined;
+  const canonicalIncidentLinkCounts = useMemo(() => {
+    const counts = new Map();
+    for (const connection of canonicalNetwork.connections) {
+      counts.set(connection.from.resource, (counts.get(connection.from.resource) ?? 0) + 1);
+      counts.set(connection.to.resource, (counts.get(connection.to.resource) ?? 0) + 1);
+    }
+    return counts;
+  }, [canonicalNetwork.connections]);
   const selectedCanonicalLinkCount = selectedCanonicalResource
-    ? canonicalNetwork.connections.filter((connection) => connection.from.resource === selectedCanonicalResource.id || connection.to.resource === selectedCanonicalResource.id).length
+    ? canonicalIncidentLinkCounts.get(selectedCanonicalResource.id) ?? 0
     : 0;
   const contextResource = topologyContextMenu?.nodeId ? canonicalResourceById.get(topologyContextMenu.nodeId) : undefined;
   const contextGroup = topologyContextMenu?.groupId ? findTopologyGroup(topologyContextMenu.groupId) : undefined;
@@ -1603,6 +1647,20 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         : "Neutral type bands are used because the source does not prove Core / Distribution / Access roles."),
       e("small", null, "Group cards and dashed summary edges are visual summaries; click a group to open a real source device."),
     ) : null,
+    hierarchicalTopologyView ? e("section", {
+      className: "topology-hierarchy-status",
+      "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
+      "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
+      "data-topology-hierarchy-hidden-boundary-links": String(hierarchicalTopologyView.hiddenBoundaryConnectionCount),
+      "data-topology-hierarchy-layout": hierarchicalTopologyView.layoutStrategy,
+    },
+      e("strong", null, hierarchicalTopologyView.roleLabel),
+      e("p", null, hierarchicalTopologyView.kind === "overview"
+        ? `${tenThousandHierarchyIndex?.roleCounts.core ?? 0} core · ${tenThousandHierarchyIndex?.roleCounts.distribution ?? 0} distribution · ${hierarchicalTopologyView.nodeIds.length} synliga källnoder`
+        : `${hierarchicalTopologyView.nodeIds.length} synliga källnoder · ${hierarchicalTopologyView.visibleConnectionCount} synliga deklarerade länkar`),
+      e("small", null, `${hierarchicalTopologyView.hiddenConnectionCount} deklarerade länkar ligger utanför vyn; ${hierarchicalTopologyView.hiddenBoundaryConnectionCount} korsar vygränsen och är inte aggregerade.`),
+      hierarchicalTopologyView.pageCount > 1 ? e("small", null, `Grenvy ${hierarchicalTopologyView.page}/${hierarchicalTopologyView.pageCount}`) : null,
+    ) : null,
     topologyGroupNavigator,
     localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
     selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
@@ -1647,6 +1705,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
               setTopologyGroupPage(1);
               setTopologyFocusRoot(item.rootId ?? null);
               setTopologyFocusPage(item.page ?? 1);
+              setTopologyHierarchyScope(item.rootId ? { rootId: item.rootId } : null);
             }
             setTopologyContextMenu(null);
           } }, item.label))),
@@ -1883,6 +1942,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      ...(hierarchicalTopologyView ? {
+        "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
+        "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),
+        "data-topology-hierarchy-link-count": String(hierarchicalTopologyView.edgeIds.length),
+        "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
+      } : {}),
       ...(topologyFocusRoot ? { "data-topology-focus-root": topologyFocusRoot, "data-topology-focus-page": String(topologyFocusPage) } : {}),
       "data-topology-last-valid-size": topologyViewportState.lastValidSize ? `${topologyViewportState.lastValidSize.width}x${topologyViewportState.lastValidSize.height}` : "UNMEASURED",
       "data-topology-preserve-canonical-geometry": String(topologyViewportState.preserveCanonicalGeometry),

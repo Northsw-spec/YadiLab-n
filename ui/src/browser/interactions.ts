@@ -1,5 +1,5 @@
 import type { Scenariosourceconnection } from "../../../core-model/src/generated/contracts.js";
-import { setBuilderSelection, setLayoutOverride, upsertConnection } from "./builder.js";
+import { hasKnownSemanticId, setBuilderSelection, setLayoutOverride, upsertConnection } from "./builder.js";
 import type { BrowserCommandResult, BrowserDiagnostic, BuilderWorkspace } from "./types.js";
 
 export interface BuilderCanvasSelectionInput {
@@ -36,22 +36,13 @@ function failure(workspace: BuilderWorkspace, diagnostic: BrowserDiagnostic): Br
   return { ok: false, workspace, diagnostics: [diagnostic] };
 }
 
-function allSemanticIds(workspace: BuilderWorkspace): ReadonlySet<string> {
-  return new Set([
-    ...workspace.source.zones.map((item) => item.id),
-    ...workspace.source.resources.map((item) => item.id),
-    ...workspace.source.connections.map((item) => item.id),
-  ]);
-}
-
 export function applyBuilderCanvasSelection(
   workspace: BuilderWorkspace,
   input: BuilderCanvasSelectionInput,
 ): BuilderWorkspace {
   const ids = [...(input.nodeIds ?? []), ...(input.edgeIds ?? [])];
-  const known = allSemanticIds(workspace);
-  const primary = input.primary && known.has(input.primary) ? input.primary : undefined;
-  return setBuilderSelection(workspace, ids, primary);
+  const primary = input.primary && hasKnownSemanticId(workspace, input.primary) ? input.primary : undefined;
+  return setBuilderSelection(workspace, ids.filter((id) => hasKnownSemanticId(workspace, id)), primary);
 }
 
 export function resizeBuilderZone(

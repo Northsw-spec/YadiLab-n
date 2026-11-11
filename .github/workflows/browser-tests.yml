@@ -120,6 +120,10 @@ jobs:
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project089-import-consent"
           npm run test:project089-import-consent
+          npm run test:project090-hierarchy
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project090_hierarchical_stability_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project090-hierarchy"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

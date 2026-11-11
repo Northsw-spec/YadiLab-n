@@ -43,6 +43,7 @@ jobs:
           npm run test:topology-navigation
           npm run test:project088-topology
           npm run test:project089-import-consent
+          npm run test:project090-hierarchy
           npm run test:scale001-p0-source
           npm run test:scale001-p4b1-hierarchical
           node tests/browser/run_scale001_p4b1_10000_bounded_source_frozen_tests.mjs

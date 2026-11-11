@@ -27,12 +27,22 @@ function diagnostic(code: string, message: string, objectId?: string): BrowserDi
   return objectId ? { severity: "error", code, message, objectId } : { severity: "error", code, message };
 }
 
+const semanticIdCache = new WeakMap<object, ReadonlySet<string>>();
+
 function knownSemanticIds(source: ScenarioSource): ReadonlySet<string> {
-  return new Set([
+  const cached = semanticIdCache.get(source as object);
+  if (cached) return cached;
+  const ids = new Set([
     ...source.zones.map((x) => x.id),
     ...source.resources.map((x) => x.id),
     ...source.connections.map((x) => x.id),
   ]);
+  semanticIdCache.set(source as object, ids);
+  return ids;
+}
+
+export function hasKnownSemanticId(workspace: BuilderWorkspace, id: string): boolean {
+  return knownSemanticIds(workspace.source).has(id);
 }
 
 function sortedUnique(ids: readonly string[]): readonly string[] {
