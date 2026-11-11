@@ -52,7 +52,6 @@ export function compactNormalTopologyProjection(projection: CanvasProjection): C
     };
   });
   const rootItems = reflowedChildren.filter((node) => !node.parentId);
-  if (rootItems.length <= 1) return projection;
   const columns = Math.min(GRID_COLUMNS, Math.max(1, rootItems.length));
   const columnWidths = Array.from({ length: columns }, () => 0);
   const rowHeights: number[] = [];

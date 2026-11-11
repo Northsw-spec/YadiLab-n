@@ -9,7 +9,6 @@ import type {
   CanvasProjectionDiagnostic,
 } from "./types.js";
 import { describeDeviceVisual, describeSemanticLink } from "./device-visuals.js";
-import { computeOrthogonalRoutes } from "./topology-edge-routing.js";
 
 const DEFAULT_ZONE: CanvasDimensions = { width: 720, height: 480 };
 const DEFAULT_RESOURCE: CanvasDimensions = { width: 180, height: 96 };
@@ -161,19 +160,14 @@ export function projectScenarioToCanvas(
     });
   }
 
-  const routes = computeOrthogonalRoutes(nodes, edges);
-  const routedEdges = edges.map((edge) => {
-    const route = routes.get(edge.id);
-    return route === undefined || route.length === 0
-      ? edge
-      : { ...edge, data: { ...edge.data, route, routeKind: "orthogonal" as const } };
-  });
-
   return {
     scenarioId: scenario.scenarioId,
     sourceHash: scenario.sourceHash,
     nodes,
-    edges: routedEdges,
+    // Routing is a view concern. NORMAL TOPOLOGY computes routes after its
+    // final packing pass; Runtime keeps the historical projection contract so
+    // playback/edge hit testing is not coupled to Builder-only packing.
+    edges,
     diagnostics,
   };
 }

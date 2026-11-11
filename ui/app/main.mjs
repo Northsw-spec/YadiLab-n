@@ -985,7 +985,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
-  const normalTopologyCanvas = topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
+  const normalTopologyCanvas = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
     vm?.canvas && !hasManualLayoutOverrides
     ? compactNormalTopologyProjection(vm.canvas)
