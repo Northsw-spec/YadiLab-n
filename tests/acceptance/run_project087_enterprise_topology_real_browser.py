@@ -222,6 +222,10 @@ def exercise_case(browser, url, profile, env_name, evidence_dir):
         expect(panel.locator('[data-network-import-activate="true"]')).to_be_enabled()
         panel.locator('[data-network-import-activate="true"]').click()
         expect(panel).to_have_count(0, timeout=180000)
+        # PROJECT-088 makes the real graph the default. PROJECT-087's overview
+        # contract remains covered as an explicit secondary mode.
+        expect(page.locator('[data-topology-mode="normal"][aria-pressed="true"]')).to_be_visible(timeout=180000)
+        page.locator('[data-topology-mode="inventory-summary"]').click()
         overview = page.locator('section[data-topology-overview]')
         expect(overview).to_be_visible(timeout=180000)
         group_nodes = page.locator('.react-flow__node [data-overview-group]')

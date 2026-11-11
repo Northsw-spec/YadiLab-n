@@ -321,6 +321,12 @@ import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.t
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 
 const e = React.createElement;
+const NORMAL_TOPOLOGY_RESOURCE_BUDGET = 200;
+const TOPOLOGY_VIEW_MODES = Object.freeze({
+  NORMAL: "normal",
+  CONNECTED_EXPLORER: "connected-explorer",
+  INVENTORY_SUMMARY: "inventory-summary",
+});
 const packageIO = new SafePackageIO(
   new ZipJsArchiveBackend(),
   (input) => {
@@ -485,8 +491,35 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
     );
 }
 
+function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [] }) {
+  const pathPoints = [{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }]
+    .filter((point, index, all) => index === 0 || point.x !== all[index - 1].x || point.y !== all[index - 1].y);
+  const d = pathPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  let total = 0;
+  for (let index = 1; index < pathPoints.length; index += 1) total += Math.abs(pathPoints[index].x - pathPoints[index - 1].x) + Math.abs(pathPoints[index].y - pathPoints[index - 1].y);
+  let remaining = total / 2;
+  let labelX = (sourceX + targetX) / 2;
+  let labelY = (sourceY + targetY) / 2;
+  for (let index = 1; index < pathPoints.length; index += 1) {
+    const from = pathPoints[index - 1];
+    const to = pathPoints[index];
+    const length = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+    if (remaining <= length) {
+      const ratio = length ? remaining / length : 0;
+      labelX = from.x + (to.x - from.x) * ratio;
+      labelY = from.y + (to.y - from.y) * ratio;
+      break;
+    }
+    remaining -= length;
+  }
+  return [d, labelX, labelY];
+}
+
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
-  const [basePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
+  const [basePath, labelX, labelY] = hasRoute
+    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: data.route })
+    : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
   const endpoint = (resourceId, fallbackX, fallbackY) => resourceId === journeyEndpoint?.resourceId
@@ -691,6 +724,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusRoot, setTopologyFocusRoot] = useState(null);
   const [topologyFocusPage, setTopologyFocusPage] = useState(1);
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
+  const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
   const topologyFocusRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyGroup, setTopologyGroup] = useState(null);
@@ -718,6 +752,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const canonicalConnectionById = useMemo(() => new Map(canonicalNetwork.connections.map((connection) => [connection.id, connection])), [canonicalNetwork]);
   const sourceIdentity = workspace.mode === "builder" ? `${workspace.sourceRevision}:${workspace.source.scenarioId}` : workspace.scenario.sourceHash;
   useEffect(() => {
+    const defaultMode = canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET
+      ? TOPOLOGY_VIEW_MODES.NORMAL
+      : TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER;
+    setTopologyViewMode(defaultMode);
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
@@ -729,7 +767,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextMenu(null);
     setTopologyContextDetails(null);
     setTopologyQuery("");
-  }, [projectGeneration, getScenarioTransitionId(), sourceIdentity]);
+  }, [projectGeneration, getScenarioTransitionId(), sourceIdentity, canonicalNetwork.resources.length]);
   useEffect(() => {
     if (!topologyContextMenu) return undefined;
     const onKeyDown = (event) => { if (event.key === "Escape") setTopologyContextMenu(null); };
@@ -920,11 +958,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     declaredOfficeFocus?.model===workspace.compile.model &&
     declaredOfficeFocus?.sourceRevision===workspace.sourceRevision
       ? declaredOfficeFocus:null;
-  // PROJECT-087: large and documented enterprise workbooks open on a bounded
-  // logical overview instead of the first source-row page. The overview is a
-  // read-only visual projection of canonical resources/connections; summary
-  // cards and summary edges never enter Builder or Engine state.
-  const topologyOverview = !topologyFocusRoot && canonicalNetwork.resources.length >= 32
+  // PROJECT-088: the overview is an explicit secondary mode. Normal topology
+  // must remain the primary projection for a manageable canonical graph.
+  const topologyOverview = topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY && !topologyFocusRoot
     ? buildNetworkOverviewProjection({
         scenarioId: workspace.mode === "builder" ? workspace.source.scenarioId : workspace.scenario.scenarioId,
         sourceHash: workspace.mode === "builder" ? workspace.compile.model?.sourceHash : workspace.scenario.sourceHash,
@@ -967,13 +1003,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // Remount only when the exact reviewed hierarchy page identity changes.
   const hierarchyCanvasKey = topologyOverview
     ? `network-overview:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
-    : validHierarchyFocus
+    : `${topologyViewMode}:` + (validHierarchyFocus
     ? `scale001-p2b2c:${validHierarchyFocus.sourceModelHash}:${validHierarchyFocus.scopeKind}:${validHierarchyFocus.scopeId}:${validHierarchyFocus.page}`
     : validTenThousandFocus
       ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
     : validFiveThousandFocus
       ? `scale001-p3c2:${validFiveThousandFocus.sourceModelHash}:${validFiveThousandFocus.page}`
-      : "regular-topology";
+      : "regular-topology");
   const baseFlow = useMemo(() => visibleProjection ? toReactFlowProjection(visibleProjection) : { nodes: [], edges: [] }, [visibleProjection]);
   void topologyGeometryRevision;
   const topologyGeometryIdentity = `${baseFlow.nodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}:${node.width ?? ""}:${node.height ?? ""}`).join("|")}::${baseFlow.edges.map((edge) => `${edge.id}:${edge.source}:${edge.target}`).join("|")}`;
@@ -1384,6 +1420,26 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     flowApi.current?.fitView?.({ duration: 220, padding: 0.1 });
   };
+  const changeTopologyViewMode = (mode) => {
+    if (!Object.values(TOPOLOGY_VIEW_MODES).includes(mode)) return;
+    setTopologyViewMode(mode);
+    setTopologyFocusRoot(null);
+    setTopologyFocusPage(1);
+    setTopologyFocusProjection(null);
+    topologyFocusRequestRef.current += 1;
+    setTopologyGroup(null);
+    setTopologyGroupQuery("");
+    setTopologyGroupPage(1);
+    setTopologyContextMenu(null);
+    setTopologyContextDetails(null);
+    const label = mode === TOPOLOGY_VIEW_MODES.NORMAL
+      ? "NORMAL TOPOLOGY"
+      : mode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
+        ? "CONNECTED EXPLORER"
+        : "INVENTORY SUMMARY";
+    setTopologyViewHistory([{ kind: "overview", label }]);
+    globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY ? 0.16 : 0.12 }));
+  };
   const focusTopologyNode = (nodeId, label = nodeId) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
@@ -1525,6 +1581,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   ) : null;
   const topologyExplorer = e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
     e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
+    e("small", { "data-topology-active-mode": topologyViewMode }, topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL
+      ? "Verkliga resurser, zoner och deklarerade länkar · redigerbar Builder-yta"
+      : topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
+        ? "Anslutningsbaserad, bunden delgraf · sök, fokusera och expandera verkliga grannar"
+        : "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar"),
     e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
     e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
     topologyOverview ? e("section", { "data-topology-overview": topologyOverview.strategy },
@@ -1547,6 +1608,20 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   );
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
+      e("div", { className: "topology-mode-switcher", "data-topology-view-mode": topologyViewMode, role: "group", "aria-label": "Topology view mode" },
+        e("strong", null, "Topology mode"),
+        ...[
+          [TOPOLOGY_VIEW_MODES.NORMAL, "NORMAL TOPOLOGY"],
+          [TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER, "CONNECTED EXPLORER"],
+          [TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY, "INVENTORY SUMMARY"],
+        ].map(([mode, label]) => e("button", {
+          key: mode,
+          type: "button",
+          "data-topology-mode": mode,
+          "aria-pressed": topologyViewMode === mode,
+          onClick: () => changeTopologyViewMode(mode),
+        }, label)),
+      ),
       e("nav", { className: "topology-breadcrumbs", "data-topology-breadcrumbs": "true", "aria-label": "Topology breadcrumb" },
         ...topologyViewHistory.map((item, index) => e(React.Fragment, { key: `${item.kind}:${item.rootId ?? "overview"}:${index}` },
           index > 0 ? e("span", { "aria-hidden": "true" }, " › ") : null,
