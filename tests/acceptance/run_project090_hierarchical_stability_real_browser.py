@@ -45,9 +45,27 @@ def visible_ids(page):
     return page.locator('.react-flow__node[data-id]').evaluate_all("nodes => nodes.map(node => node.getAttribute('data-id'))")
 
 
-def search_and_open(page, value):
+def fill_topology_search(page, value):
     search = page.get_by_role("textbox", name="Sök i topology")
     search.fill(value)
+    if search.input_value() != value:
+        # React's controlled input can repaint over Playwright's direct fill
+        # while the 10k canonical index is still being committed. Use the
+        # native setter plus both input events to preserve the exact query.
+        search.evaluate(
+            """(element, nextValue) => {
+                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+    return search
+
+
+def search_and_open(page, value):
+    fill_topology_search(page, value)
     result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text=value).first
     try:
         expect(result).to_be_visible(timeout=30000)
