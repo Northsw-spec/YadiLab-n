@@ -306,6 +306,18 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .interface-handle.active { background: #48f0c3 !important; box-shadow: 0 0 0 3px rgba(72,240,195,.22), 0 0 9px #48f0c3; animation: device-led-pulse .72s ease-in-out infinite alternate; }
 .resource-node:has(.interface-handle) .generic-handle { opacity: .18; }
 
+/* PROJECT-091: source-link state is explicit on every bounded hierarchy node. */
+.topology-connection-badge, .topology-boundary-badge { display: inline-block; width: fit-content; margin-top: .16rem; padding: .1rem .28rem; border-radius: 4px; font-size: .48rem; letter-spacing: .04em; text-transform: uppercase; }
+.topology-connection-badge-connected { color: #8df1ca; background: rgba(25,117,91,.3); border: 1px solid rgba(61,216,164,.45); }
+.topology-connection-badge-boundary_connected { color: #ffd783; background: rgba(121,86,25,.3); border: 1px solid rgba(245,197,91,.5); }
+.topology-connection-badge-source_isolated { color: #b9c6d1; background: rgba(79,101,119,.25); border: 1px solid rgba(135,160,180,.35); }
+.topology-connection-badge-incomplete_view { color: #ffd1d6; background: rgba(139,37,51,.35); border: 1px solid rgba(255,100,116,.6); }
+.topology-boundary-badge { color: #f6d17c; background: rgba(116,76,17,.28); border: 1px solid rgba(221,166,61,.45); }
+.navigation-group-node { border-color: rgba(89,166,194,.8); background: linear-gradient(180deg, rgba(25,68,91,.58), rgba(8,25,40,.22)); box-shadow: inset 0 1px rgba(255,255,255,.06), 0 9px 22px rgba(0,0,0,.18); }
+.navigation-group-node::before { background: linear-gradient(90deg, rgba(48,111,139,.78), rgba(18,49,69,.42)); }
+.navigation-group-node .zone-status { background: #62c5d9; box-shadow: 0 0 10px rgba(98,197,217,.38); }
+.topology-hierarchy-incomplete { display: block; color: #ffb4ba; margin-top: .25rem; }
+
 .zone-node { position: relative; padding: 0; border-width: 1px; border-style: solid; border-color: rgba(77,112,145,.7); background: linear-gradient(180deg,rgba(21,49,73,.34),rgba(8,20,34,.16)); overflow: hidden; }
 .zone-node::before { content: ""; position: absolute; inset: 0 0 auto; height: 54px; background: linear-gradient(90deg,rgba(29,64,92,.74),rgba(17,39,59,.38)); border-bottom: 1px solid rgba(102,143,176,.34); pointer-events: none; }
 .zone-heading { position: relative; z-index: 1; min-height: 54px; display: flex; align-items: center; gap: .48rem; padding: .45rem .62rem; }

@@ -45,7 +45,9 @@ try {
   assert.equal(overview.edgeIds.length, 34);
   assert.equal(overview.hiddenConnectionCount, 9966);
   assert.equal(new Set(overview.edgeIds).size, overview.edgeIds.length);
-  assert.ok(overview.projection.nodes.every((node) => overview.nodeIds.includes(node.id)));
+  const overviewResourceNodes = overview.projection.nodes.filter((node) => node.type === "resource");
+  assert.deepEqual(overviewResourceNodes.map((node) => node.id).sort(), [...overview.nodeIds].sort(), "overview resources remain canonical while groups stay presentation-only");
+  assert.ok(overview.projection.nodes.some((node) => node.type === "zone"), "overview has Arvidsjaur-style presentation groups");
   assert.ok(overview.projection.edges.every((edge) => overview.edgeIds.includes(edge.id)));
   const distributionView = buildHierarchicalTopologyView(index, "branch", distribution(4));
   assert.equal(distributionView.nodeIds.length, 10, "distribution branch keeps its upstream core and eight access switches");
@@ -58,7 +60,11 @@ try {
   assert.equal(accessView.visibleConnectionCount, 38);
   assert.equal(accessView.hiddenConnectionCount, 9962);
   assert.ok(accessView.projection.nodes.every((node) => Number.isFinite(node.position.x) && Number.isFinite(node.position.y)));
+  assert.ok(accessView.projection.nodes.filter((node) => node.type === "zone").length >= 2, "access branch groups upstream/root/endpoints");
   assert.ok(accessView.projection.edges.every((edge) => connections.some((source) => source.id === edge.id && source.from.resource === edge.source && source.to.resource === edge.target)));
+  const visibleExpected = connections.filter((connection) => accessView.nodeIds.includes(connection.from.resource) && accessView.nodeIds.includes(connection.to.resource)).map((connection) => connection.id).sort();
+  assert.deepEqual(accessView.projection.edges.filter((edge) => !edge.data.summaryOnly).map((edge) => edge.id).sort(), visibleExpected, "bounded view renders every visible canonical connection exactly once");
+  assert.ok(accessView.projection.edges.every((edge) => edge.data.hierarchyVisual === true && edge.data.routeKind === "orthogonal"), "hierarchy edges carry explicit orthogonal routes");
   const accessAgain = buildHierarchicalTopologyView(index, "branch", access(2));
   assert.deepEqual(accessAgain.projection.nodes.map((node) => [node.id, node.position]), accessView.projection.nodes.map((node) => [node.id, node.position]), "navigation is deterministic");
 

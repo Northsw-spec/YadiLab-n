@@ -30,6 +30,10 @@ export interface CanvasZoneData {
   readonly semanticKind: "zone";
   readonly label: string;
   readonly zoneKind: string;
+  /** Presentation-only navigation groups never enter canonical source state. */
+  readonly presentationOnly?: true;
+  readonly navigationGroupKind?: "declared-zone" | "derived-navigation";
+  readonly memberIds?: readonly string[];
 }
 
 export interface CanvasResourceData {
@@ -43,6 +47,13 @@ export interface CanvasResourceData {
   readonly deviceRoleLabel: string;
   readonly asset?: AssetRenderDescriptor;
   readonly interfaces: readonly CanvasInterfaceHandle[];
+  readonly hierarchyRole?: string;
+  readonly hierarchyVisual?: true;
+  readonly connectionState?: "CONNECTED" | "BOUNDARY_CONNECTED" | "SOURCE_ISOLATED" | "INCOMPLETE_VIEW";
+  readonly visibleConnectionCount?: number;
+  readonly boundaryConnectionCount?: number;
+  readonly omittedConnectionCount?: number;
+  readonly presentationGroupId?: string;
 }
 
 export type CanvasNodeData = CanvasZoneData | CanvasResourceData;
@@ -65,6 +76,8 @@ export interface CanvasEdgeData {
   /** Deterministic visual bend points; canonical endpoints/IDs remain separate. */
   readonly route?: readonly { readonly x: number; readonly y: number }[];
   readonly routeKind?: "orthogonal";
+  /** True when this edge belongs to the bounded PROJECT-090 hierarchy view. */
+  readonly hierarchyVisual?: true;
   /** True when this edge is a visual overview summary, never a physical link. */
   readonly summaryOnly?: boolean;
   /** Number of canonical declared links represented by a summary edge. */

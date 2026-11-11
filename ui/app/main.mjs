@@ -422,9 +422,14 @@ function ResourceNode({ data, selected }) {
   const family = data.deviceFamily ?? "generic";
   const modeledStateFocus = Boolean(data.modeledStateFocus);
   const active = modeledStateFocus || ["current", "arrived", "dropped", "uncertain", "no_path"].includes(data.journeyState) || (data.activeInterfaceIds?.length ?? 0) > 0;
+  const hierarchyVisual = data.hierarchyVisual === true;
+  const connectionState = hierarchyVisual ? (data.connectionState ?? "SOURCE_ISOLATED") : undefined;
+  const boundaryCount = Number(data.boundaryConnectionCount ?? 0);
+  const visibleConnectionCount = Number(data.visibleConnectionCount ?? 0);
+  const omittedConnectionCount = Number(data.omittedConnectionCount ?? 0);
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
+  return e("div", { className: `resource-node device-${family}${hierarchyVisual ? ` topology-connection-${connectionState.toLowerCase()}` : ""}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family, ...(hierarchyVisual ? { "data-topology-connection-state": connectionState, "data-topology-visible-links": String(visibleConnectionCount), "data-topology-boundary-links": String(boundaryCount), "data-topology-omitted-links": String(omittedConnectionCount) } : {}) },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
       e(DeviceChassis, { family, active }),
@@ -438,12 +443,22 @@ function ResourceNode({ data, selected }) {
         e("i", { "aria-hidden": "true" }), e("b", null, iface.label), e("small", null, iface.addresses[0] ?? "DECLARED"))),
       interfaces.length > 3 ? e("span", { className: "compact-port more-ports" }, `+${interfaces.length - 3}`) : null)
       : e("span", { className: "ports-not-modeled" }, "PORTS NOT MODELED"),
+    hierarchyVisual ? e("span", { className: `topology-connection-badge topology-connection-badge-${connectionState.toLowerCase()}`, "data-topology-connection-badge": connectionState }, connectionState === "CONNECTED"
+      ? `${visibleConnectionCount} connected`
+      : connectionState === "BOUNDARY_CONNECTED"
+        ? `${boundaryCount} outside current view`
+        : connectionState === "INCOMPLETE_VIEW"
+          ? `${omittedConnectionCount} links omitted — view incomplete`
+          : "Source isolated") : null,
+    hierarchyVisual && boundaryCount > 0 ? e("span", { className: "topology-boundary-badge", "data-topology-boundary-indicator": "true" }, `${boundaryCount} boundary link${boundaryCount === 1 ? "" : "s"}`) : null,
     data.journeyState && data.journeyState !== "idle" ? e("span", { className: `journey-node-badge ${data.journeyState}`, "aria-hidden": "true" }, data.journeyState === "current" ? "●" : data.journeyState === "source" ? "▶" : data.journeyState === "destination" ? "◎" : data.journeyState === "uncertain" ? "?" : "●") : null,
   );
 }
 
 function ZoneNode({ data, selected }) {
-  return e("div", { className: `zone-node zone-${data.zoneKind ?? "custom"}${selected ? " selected" : ""}`, "data-zone-kind": data.zoneKind ?? "custom" },
+  const presentationOnly = data.presentationOnly === true;
+  const members = Array.isArray(data.memberIds) ? data.memberIds : [];
+  return e("div", { className: `zone-node zone-${data.zoneKind ?? "custom"}${presentationOnly ? " navigation-group-node" : ""}${selected ? " selected" : ""}`, "data-zone-kind": data.zoneKind ?? "custom", "data-navigation-group": presentationOnly ? "true" : undefined, "data-navigation-group-kind": data.navigationGroupKind, "data-navigation-group-members": members.join(",") },
     data.builderEditable ? e(NodeResizer, {
       isVisible: selected,
       minWidth: BUILDER_ZONE_RESIZE_LIMITS.minWidth,
@@ -452,7 +467,7 @@ function ZoneNode({ data, selected }) {
     }) : null,
     e("div", { className: "zone-heading" }, e("i", { className: "zone-status", "aria-hidden": "true" }), e("span", null,
       e("strong", null, data.label ?? data.semanticId),
-      e("small", null, data.zoneKind ?? "zone"))),
+      e("small", null, presentationOnly ? `${data.navigationGroupKind ?? "derived-navigation"} · ${members.length} devices` : (data.zoneKind ?? "zone")))),
   );
 }
 
@@ -519,9 +534,13 @@ function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [] })
 
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
+  const isHierarchical = data?.hierarchyVisual === true;
+  const fallbackLaneX = (sourceX + targetX) / 2;
   const [basePath, labelX, labelY] = hasRoute
     ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: data.route })
-    : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+    : isHierarchical
+      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }] })
+      : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
   const endpoint = (resourceId, fallbackX, fallbackY) => resourceId === journeyEndpoint?.resourceId
@@ -580,6 +599,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       "data-connection-source-port": sourceHandleId?.startsWith("out:") ? sourceHandleId.slice(4) : undefined,
       "data-connection-target-port": targetHandleId?.startsWith("in:") ? targetHandleId.slice(3) : undefined,
       "data-link-enabled": visual.enabled ? "true" : "false",
+      "data-hierarchy-visual": isHierarchical ? "true" : undefined,
       "aria-label": visual.accessibleLabel,
       ...(summaryOnly ? {
         "data-overview-summary-edge": "true",
@@ -1683,7 +1703,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("p", null, hierarchicalTopologyView.kind === "overview"
         ? `${tenThousandHierarchyIndex?.roleCounts.core ?? 0} core · ${tenThousandHierarchyIndex?.roleCounts.distribution ?? 0} distribution · ${hierarchicalTopologyView.nodeIds.length} synliga källnoder`
         : `${hierarchicalTopologyView.nodeIds.length} synliga källnoder · ${hierarchicalTopologyView.visibleConnectionCount} synliga deklarerade länkar`),
+      e("small", { "data-topology-hierarchy-groups": String(hierarchicalTopologyView.navigationGroups.length) }, `${hierarchicalTopologyView.navigationGroups.length} Arvidsjaur-stilade presentationsgrupper`),
       e("small", null, `${hierarchicalTopologyView.hiddenConnectionCount} deklarerade länkar ligger utanför vyn; ${hierarchicalTopologyView.hiddenBoundaryConnectionCount} korsar vygränsen och är inte aggregerade.`),
+      hierarchicalTopologyView.incompleteView ? e("strong", { className: "topology-hierarchy-incomplete", "data-topology-hierarchy-incomplete": "true" }, "INCOMPLETE VIEW · länkbudget överskriden; inga länkar döljs tyst") : null,
       hierarchicalTopologyView.pageCount > 1 ? e("small", null, `Grenvy ${hierarchicalTopologyView.page}/${hierarchicalTopologyView.pageCount}`) : null,
     ) : null,
     topologyGroupNavigator,
@@ -1972,6 +1994,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),
         "data-topology-hierarchy-link-count": String(hierarchicalTopologyView.edgeIds.length),
         "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
+        "data-topology-hierarchy-group-count": String(hierarchicalTopologyView.navigationGroups.length),
+        "data-topology-hierarchy-incomplete": String(hierarchicalTopologyView.incompleteView),
       } : {}),
       ...(topologyFocusRoot ? { "data-topology-focus-root": topologyFocusRoot, "data-topology-focus-page": String(topologyFocusPage) } : {}),
       "data-topology-last-valid-size": topologyViewportState.lastValidSize ? `${topologyViewportState.lastValidSize.width}x${topologyViewportState.lastValidSize.height}` : "UNMEASURED",
