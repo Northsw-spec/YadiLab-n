@@ -5190,7 +5190,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         e("div", { className: "menu-heading" }, e("strong", null, workspace.mode === "builder" ? "Builder-export" : "Runtime-export"), e("small", null, "Direkt åtkomst · ingen lång inspektionslista")),
         ...standardExportItems.map((item) => React.cloneElement(item.node, { key: `export-${item.label}` })),
       ),
-      e(WorkspaceMenu, { label: e(React.Fragment, null, "Avancerade verktyg", e("span", { className: "sr-only" }, "Import / Export")), className: "workspace-menu-advanced", panelClassName: "advanced-tools-panel" },
+      e(WorkspaceMenu, { label: "Avancerade verktyg", className: "workspace-menu-advanced", panelClassName: "advanced-tools-panel" },
         e("div", { className: "advanced-tools-heading" },
           e("div", null, e("strong", null, "Avancerade verktyg"), e("small", null, "Inspektion, replay, Office-review och övriga arbetsflöden hålls separerade från canvasen.")),
           e("label", null, e("span", { className: "sr-only" }, "Sök avancerade verktyg"), e("input", { type: "search", value: advancedQuery, onChange: (event) => setAdvancedQuery(event.target.value), placeholder: "Sök verktyg…", "aria-label": "Sök avancerade verktyg", "data-advanced-tools-search": "true" })),
