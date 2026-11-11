@@ -647,6 +647,15 @@ function ReactFlowGeometryRepair({ panelRef, nodeIds, revision }) {
         const nodesInitialized = [...next.nodeLookup.values()]
           .filter((node) => !node.hidden)
           .every((node) => node.measured?.width > 0 && node.measured?.height > 0 && node.internals.handleBounds);
+        panel.dataset.topologyReactFlowStoreNodeCount = String(next.nodeLookup.size);
+        panel.dataset.topologyReactFlowStoreEdgeCount = String(next.edges.length);
+        panel.dataset.topologyReactFlowStoreEdgeIds = next.edges.map((edge) => edge.id).sort((left, right) => left.localeCompare(right, "en")).join(",");
+        panel.dataset.topologyReactFlowStoreUnmeasuredNodeIds = [...next.nodeLookup.values()]
+          .filter((node) => !node.hidden && !(node.measured?.width > 0 && node.measured?.height > 0 && node.internals.handleBounds))
+          .map((node) => node.id)
+          .sort((left, right) => left.localeCompare(right, "en"))
+          .join(",");
+        panel.dataset.topologyReactFlowStoreNodesInitialized = String(nodesInitialized);
         // React Flow mutates its internal lookup while measuring. Clone the
         // lookup to publish the geometry change to EdgeRenderer in controlled
         // mode, where no onNodesChange callback is supplied by the app.
@@ -2019,11 +2028,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       onConnect,
       onInit: (instance) => { flowApi.current = instance; topologyViewportRef.current = instance.getViewport?.() ?? null; setTopologyZoom(instance.getZoom?.() ?? 1); setTopologyGeometryRevision((value) => value + 1); },
       onMove: (_event, viewport) => { topologyViewportRef.current = viewport; setTopologyZoom(viewport.zoom); },
-    }, e(Background), e(Controls), !hierarchicalTopologyView ? e(ReactFlowGeometryRepair, {
+    }, e(Background), e(Controls), e(ReactFlowGeometryRepair, {
       panelRef: topologyPanelRef,
       nodeIds: baseFlow.nodes.map((node) => node.id),
       revision: `${topologyGeometryRevision}:${journeyKey}`,
-    }) : null,
+    }),
       visibleJourneyOutcome && journeyEndpointNode ? e(ViewportPortal, null,
         e("div", {
           className: "journey-outcome-overlay",
