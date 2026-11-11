@@ -164,6 +164,9 @@ export function projectScenarioToCanvas(
     scenarioId: scenario.scenarioId,
     sourceHash: scenario.sourceHash,
     nodes,
+    // Routing is a view concern. NORMAL TOPOLOGY computes routes after its
+    // final packing pass; Runtime keeps the historical projection contract so
+    // playback/edge hit testing is not coupled to Builder-only packing.
     edges,
     diagnostics,
   };

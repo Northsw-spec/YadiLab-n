@@ -109,6 +109,12 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project087_enterprise_topology_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project087-enterprise-topology"
+          # PROJECT-088: the uploaded Arvidsjaur profiles must open in NORMAL TOPOLOGY.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project088_normal_topology_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project088-normal-topology"
+          # PROJECT-088: canonical normal-topology model invariants.
+          npm run test:project088-topology
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

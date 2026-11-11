@@ -181,6 +181,8 @@ def case(browser, url):
         page.locator('[data-topology-back="true"]').click()
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
         page.locator('[data-topology-overview="true"]').click()
+        # PROJECT-088 keeps the inventory overview as an explicit secondary mode.
+        page.locator('[data-topology-mode="inventory-summary"]').click()
         expect(page.locator('[data-topology-focus-root]')).to_have_count(0, timeout=180000)
         expect(page.locator('section[data-topology-overview]')).to_be_visible(timeout=180000)
         overview_groups = page.locator('.react-flow__node [data-overview-group]')

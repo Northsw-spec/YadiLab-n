@@ -347,6 +347,10 @@ input { width: 100%; margin-top: .25rem; border: 1px solid #3b536e; border-radiu
 .resource-node.journey-node-arrived { border-color: #38dfa2; background: #103d36; box-shadow: 0 0 0 3px rgba(56,223,162,.25), 0 0 30px rgba(56,223,162,.42); }
 .resource-node.journey-node-dropped, .resource-node.journey-node-no_path { border-color: #ff5d6c; background: #3a1723; box-shadow: 0 0 0 3px rgba(255,93,108,.25), 0 0 30px rgba(255,93,108,.42); }
 .topology-navigation { display: grid; grid-template-columns: minmax(16rem, 2fr) minmax(8rem, 1fr) minmax(8rem, 1fr) auto; gap: .45rem; align-items: end; padding: .6rem .75rem; border: 1px solid #244764; border-radius: 10px; background: #091827; }
+.topology-mode-switcher { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding-bottom: .35rem; border-bottom: 1px solid #244764; }
+.topology-mode-switcher strong { margin-right: .35rem; color: #d7ebf8; font-size: .75rem; letter-spacing: .04em; }
+.topology-mode-switcher button { min-height: 1.8rem; padding: .25rem .5rem; border: 1px solid #31506d; background: #10263a; color: #d7ebf8; font-size: .72rem; letter-spacing: .03em; }
+.topology-mode-switcher button[aria-pressed="true"] { border-color: #5bd4ff; background: #16445d; color: #fff; box-shadow: inset 0 -2px 0 #5bd4ff; }
 .topology-navigation label { display: grid; gap: .2rem; color: #a9c2d8; font-size: .72rem; }
 .topology-navigation input, .topology-navigation select { width: 100%; border: 1px solid #31506d; border-radius: 6px; background: #0b1726; color: #edf8ff; padding: .36rem .42rem; }
 .topology-navigation button { min-height: 2rem; }

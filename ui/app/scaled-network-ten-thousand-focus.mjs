@@ -55,8 +55,37 @@ function boundedDeterministicLayout(model, rootId) {
   const rowWidth = Math.max(1, Math.min(12, Math.ceil(Math.sqrt(resources.length))));
   const positions = new Map();
   let nextLevelY = 40;
+  // A high-degree focus is easier to read when a documented hub/connector is
+  // given its own band instead of being sorted into the same row as dozens of
+  // endpoint leaves. This uses only canonical adjacency and documented type;
+  // it does not infer a physical direction or add a link.
+  if (anchor) {
+    const directNeighbors = [...(adjacency.get(anchor) ?? [])].sort((a, b) => a.localeCompare(b, "en"));
+    const connectors = directNeighbors
+      .filter((id) => (adjacency.get(id)?.size ?? 0) > 1 || /(?:core|distribution|router|gateway|firewall)/i.test(String(byId.get(id)?.type ?? "")))
+      .sort((a, b) => (adjacency.get(b)?.size ?? 0) - (adjacency.get(a)?.size ?? 0) || a.localeCompare(b, "en"));
+    if (directNeighbors.length >= 8 && connectors.length > 0 && connectors.length < directNeighbors.length) {
+      const centerX = 40 + ((Math.min(12, rowWidth) - 1) / 2) * rowStep;
+      positions.set(anchor, { x: centerX, y: nextLevelY });
+      const placeBand = (ids, y, columns) => ids.forEach((id, index) => {
+        const count = Math.min(columns, ids.length);
+        positions.set(id, {
+          x: (index % columns - (count - 1) / 2) * rowStep + centerX,
+          y: y + Math.floor(index / columns) * (height + gapY),
+        });
+      });
+      placeBand(connectors, nextLevelY + height + gapY, Math.min(4, connectors.length));
+      const leaves = directNeighbors.filter((id) => !connectors.includes(id));
+      const leafColumns = Math.min(12, Math.max(4, Math.ceil(Math.sqrt(leaves.length))));
+      const connectorRows = Math.max(1, Math.ceil(connectors.length / Math.min(4, connectors.length)));
+      placeBand(leaves, nextLevelY + (connectorRows + 1) * (height + gapY), leafColumns);
+      const leafRows = Math.max(1, Math.ceil(leaves.length / leafColumns));
+      nextLevelY += (connectorRows + leafRows + 2) * (height + gapY);
+    }
+  }
   for (const [level, items] of [...grouped.entries()].sort((a, b) => a[0] - b[0])) {
-    const ordered = items.slice().sort((a, b) => (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0) || a.id.localeCompare(b.id, "en"));
+    const ordered = items.filter((resource) => !positions.has(resource.id)).slice().sort((a, b) => (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0) || a.id.localeCompare(b.id, "en"));
+    if (!ordered.length) continue;
     const rows = Math.max(1, Math.ceil(ordered.length / rowWidth));
     ordered.forEach((resource, index) => {
       const row = Math.floor(index / rowWidth);
