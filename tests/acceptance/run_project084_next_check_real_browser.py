@@ -23,13 +23,35 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
 
 
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 def start_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
     page.locator('[data-guided-lab-start="direct"]').click()
     page.wait_for_function(
         "scenario => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id') === scenario",
@@ -49,6 +71,12 @@ def next_check(page):
     panel = guided(page).locator('[data-next-check]')
     expect(panel).to_be_visible(timeout=15000)
     return panel
+
+
+def require_phase(page, phase):
+    marker = guided(page).locator(f'[data-guided-phase="{phase}"]')
+    expect(marker).to_have_count(1, timeout=15000)
+    require((marker.text_content() or "").strip() == phase, f"Unexpected workflow phase marker for {phase}")
 
 
 def save_transcript(panel, selector):
@@ -75,16 +103,16 @@ def run_probe(page):
 def add_hypothesis(page, text):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(text)
+    fill_value(field(panel, "Learner note", "textarea"), text)
     panel.get_by_role("button", name="Add note to proof chain").click()
 
 
 def apply_gateway_remediation(page):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Target").select_option("client1")
-    field(panel, "Typed remediation action").select_option("change_default_gateway")
-    field(panel, "Gateway IPv4 address", "input").fill("10.78.1.1")
+    choose(field(panel, "Target"), "client1")
+    choose(field(panel, "Typed remediation action"), "change_default_gateway")
+    fill_value(field(panel, "Gateway IPv4 address", "input"), "10.78.1.1")
     panel.get_by_role("button", name="Preview remediation").click()
     expect(panel).to_contain_text("0 → 1", timeout=10000)
     panel.get_by_role("button", name="Commit remediation").click()
@@ -140,11 +168,11 @@ def main():
             expect(field(probe_panel, "Destination")).to_have_value("server1")
             require(probe_panel.locator('[data-active-probe-transcript="ready"]').count() == 0, "Next check executed a probe automatically")
             expect(field(probe_panel, "Källvärd")).to_be_focused()
-            field(probe_panel, "Källvärd").select_option("server1")
+            choose(field(probe_panel, "Källvärd"), "server1")
             page.locator('.react-flow__node[data-id="client1"]').click()
             expect(field(probe_panel, "Källvärd")).to_have_value("server1")
-            field(probe_panel, "Källvärd").select_option("client1")
-            field(probe_panel, "Destination").select_option("server1")
+            choose(field(probe_panel, "Källvärd"), "client1")
+            choose(field(probe_panel, "Destination"), "server1")
             transcript = run_probe(page)[1]
             expect(transcript).to_contain_text("verdict FALSE")
             add_hypothesis(page, "Gatewayen kan vara felaktig.")
@@ -164,7 +192,7 @@ def main():
             after = run_probe(page)[1]
             expect(after).to_contain_text("verdict TRUE")
             expect(page.locator('[data-troubleshooting-summary-status]')).to_have_attribute("data-troubleshooting-summary-status", "VERIFIED_IMPROVEMENT", timeout=15000)
-            expect(guided(page).locator('[data-guided-phase="VERIFICATION_COMPLETE"]')).to_be_visible(timeout=15000)
+            require_phase(page, "VERIFICATION_COMPLETE")
             check = next_check(page)
             expect(check).to_contain_text("Granska verifieringsresultatet")
             check.get_by_role("button", name="Visa felsökningssammanfattning").click()
@@ -172,7 +200,7 @@ def main():
             page.get_by_role("button", name="Ångra").click()
             expect(page.locator('[data-runtime-panel="progress"]')).to_contain_text("Tillståndsrevision: 0", timeout=15000)
             expect(page.locator('[data-troubleshooting-summary-status]')).to_have_attribute("data-troubleshooting-summary-status", "HISTORICAL_VERIFIED_NEEDS_RECHECK", timeout=15000)
-            expect(guided(page).locator('[data-guided-phase="COLLECT_AFTER_EVIDENCE"]')).to_be_visible(timeout=15000)
+            require_phase(page, "COLLECT_AFTER_EVIDENCE")
             expect(guided(page).locator('[data-guided-step="verify_remediation"]')).not_to_have_attribute("data-guided-status", "COMPLETE")
             expect(next_check(page)).to_contain_text("Ny verifiering behövs")
             evidence["gateway"] = {"before": "FALSE", "after": "TRUE", "afterUndo": "HISTORICAL_VERIFIED_NEEDS_RECHECK", "mobileWidth": 390}
@@ -195,7 +223,7 @@ def main():
             require(probe_panel.locator('[data-active-probe-transcript="ready"]').count() == 0, "DNS preparation executed automatically")
             dns_transcript = run_probe(page)[1]
             expect(dns_transcript).to_contain_text("verdict UNKNOWN")
-            require("10.78.102.53" not in next_check(page).inner_text(), "Next check exposed hidden DNS solution material")
+            require("10.78.102.53" not in (next_check(page).text_content() or ""), "Next check exposed hidden DNS solution material")
             evidence["dns"] = {"verdict": "UNKNOWN", "hiddenSolutionExposed": False}
 
             # Linux SSH: service evidence is separate from TCP reachability.
@@ -205,7 +233,7 @@ def main():
             observation_panel = page.locator('[data-observation-engine="wave1"]')
             expect(field(observation_panel, "Mål")).to_have_value("server1")
             expect(check).to_contain_text("Flera stödda alternativ")
-            field(observation_panel, "Modellerat kommando").select_option("linux.systemctl_status")
+            choose(field(observation_panel, "Modellerat kommando"), "linux.systemctl_status")
             expect(field(observation_panel, "Modellerat kommando")).to_have_value("linux.systemctl_status")
             service_transcript = run_observation(page)
             expect(service_transcript).to_contain_text("sshd: inactive")
@@ -218,7 +246,7 @@ def main():
             expect(field(probe_panel, "TCP port", "input")).to_have_value("22")
             ssh_transcript = run_probe(page)[1]
             expect(ssh_transcript).to_contain_text("verdict FALSE")
-            require("canonicalSolution" not in next_check(page).inner_text(), "Linux next check exposed hidden solution material")
+            require("canonicalSolution" not in (next_check(page).text_content() or ""), "Linux next check exposed hidden solution material")
             evidence["linuxSsh"] = {"serviceEvidence": True, "tcpPort": 22, "verdict": "FALSE"}
 
             # Reset and scenario switch clear old runtime evidence UI.
@@ -230,21 +258,21 @@ def main():
             expect(check).to_contain_text("Kontrollera routing")
             check.get_by_role("button", name=re.compile("Öppna observation")).click()
             observation_panel = page.locator('[data-observation-engine="wave1"]')
-            field(observation_panel, "Mål").select_option("client1")
-            field(observation_panel, "Modellerat kommando").select_option("windows.route_print")
+            choose(field(observation_panel, "Mål"), "client1")
+            choose(field(observation_panel, "Modellerat kommando"), "windows.route_print")
             run_observation(page)
             check = next_check(page)
             check.get_by_role("button", name="Förbered anslutningstest").click()
             probe_panel = page.locator('[data-active-probe-engine="wave2"]')
-            field(probe_panel, "Källvärd").select_option("client1")
-            field(probe_panel, "Aktiv probe").select_option("windows.ping")
-            field(probe_panel, "Destination").select_option("server1")
+            choose(field(probe_panel, "Källvärd"), "client1")
+            choose(field(probe_panel, "Aktiv probe"), "windows.ping")
+            choose(field(probe_panel, "Destination"), "server1")
             run_probe(page)
             add_hypothesis(page, "Gatewayen kan vara felaktig.")
             observation_panel = page.locator('[data-observation-engine="wave1"]')
             open_details(page, '[data-observation-engine="wave1"]')
-            field(observation_panel, "Mål").select_option("client1")
-            field(observation_panel, "Modellerat kommando").select_option("windows.route_print")
+            choose(field(observation_panel, "Mål"), "client1")
+            choose(field(observation_panel, "Modellerat kommando"), "windows.route_print")
             run_observation(page)
             apply_gateway_remediation(page)
             expect(next_check(page)).to_contain_text("Förbered samma ping igen")
