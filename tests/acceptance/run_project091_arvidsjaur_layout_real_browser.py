@@ -124,6 +124,132 @@ def wait_for_identity_barrier(page, scope, expected_ids, expected_node_ids, time
     )
 
 
+def collect_dom_diagnostics(page, expected_ids):
+    return page.evaluate(
+        """expectedIds => {
+          const panel = document.querySelector('.topology-panel');
+          const rectDetails = element => {
+            if (!element) return null;
+            const rect = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return {
+              x: rect.x,
+              y: rect.y,
+              width: rect.width,
+              height: rect.height,
+              display: style.display,
+              visibility: style.visibility,
+              opacity: style.opacity,
+              overflow: style.overflow,
+              zIndex: style.zIndex,
+            };
+          };
+          const finiteRect = element => {
+            const rect = element?.getBoundingClientRect?.();
+            return Boolean(rect) && [rect.x, rect.y, rect.width, rect.height]
+              .every(value => Number.isFinite(value));
+          };
+          const nodeRows = Array.from(document.querySelectorAll('.react-flow__node')).map(node => ({
+            id: node.getAttribute('data-id'),
+            html: node.outerHTML.slice(0, 600),
+            rect: rectDetails(node),
+            measuredDomRectFinite: finiteRect(node),
+            handles: Array.from(node.querySelectorAll('.react-flow__handle')).map(handle => ({
+              id: handle.getAttribute('data-react-flow-handle-id') || handle.getAttribute('data-handleid') || handle.getAttribute('id'),
+              type: handle.getAttribute('data-react-flow-handle-type') || handle.getAttribute('data-handle-type'),
+              className: handle.className,
+              rect: rectDetails(handle),
+              html: handle.outerHTML.slice(0, 400),
+            })),
+          }));
+          const edgeRows = Array.from(document.querySelectorAll('.react-flow__edge')).map(edge => ({
+            id: edge.getAttribute('data-id') || edge.getAttribute('id'),
+            html: edge.outerHTML.slice(0, 1200),
+            rect: rectDetails(edge),
+            paths: Array.from(edge.querySelectorAll('path')).map(path => ({
+              id: path.id,
+              source: path.getAttribute('data-connection-source'),
+              target: path.getAttribute('data-connection-target'),
+              sourcePort: path.getAttribute('data-connection-source-port'),
+              targetPort: path.getAttribute('data-connection-target-port'),
+              hierarchyVisual: path.getAttribute('data-hierarchy-visual'),
+              d: path.getAttribute('d'),
+              rect: rectDetails(path),
+            })),
+          }));
+          const semanticPaths = Array.from(document.querySelectorAll('path[data-connection-source]')).map(path => ({
+            id: path.id,
+            source: path.getAttribute('data-connection-source'),
+            target: path.getAttribute('data-connection-target'),
+            sourcePort: path.getAttribute('data-connection-source-port'),
+            targetPort: path.getAttribute('data-connection-target-port'),
+            hierarchyVisual: path.getAttribute('data-hierarchy-visual'),
+            d: path.getAttribute('d'),
+            rect: rectDetails(path),
+          }));
+          const edgeHandleMapText = panel?.getAttribute('data-topology-react-flow-edge-handles');
+          let edgeHandleMap = [];
+          try { edgeHandleMap = edgeHandleMapText ? JSON.parse(edgeHandleMapText) : []; } catch (error) { edgeHandleMap = [{ parseError: String(error) }]; }
+          const nodesById = new Map(nodeRows.map(node => [node.id, node]));
+          const handleChecks = edgeHandleMap.filter(edge => expectedIds.includes(edge.id)).map(edge => {
+            const sourceNode = nodesById.get(edge.source);
+            const targetNode = nodesById.get(edge.target);
+            const sourceHandle = sourceNode?.handles?.find(handle => handle.id === edge.sourceHandle);
+            const targetHandle = targetNode?.handles?.find(handle => handle.id === edge.targetHandle);
+            return {
+              ...edge,
+              sourceNodeMounted: Boolean(sourceNode),
+              targetNodeMounted: Boolean(targetNode),
+              sourceHandleMounted: edge.sourceHandle == null ? true : Boolean(sourceHandle),
+              targetHandleMounted: edge.targetHandle == null ? true : Boolean(targetHandle),
+              sourceHandle,
+              targetHandle,
+            };
+          });
+          const allPathData = Array.from(document.querySelectorAll('.react-flow__edges path'))
+            .map(path => path.getAttribute('d') || '');
+          const nonFinitePathData = allPathData.filter(d => {
+            const numbers = d.match(/-?(?:\\d+\\.?\\d*|\\.\\d+)/g) || [];
+            return numbers.some(value => !Number.isFinite(Number(value)));
+          });
+          const errorBoundaryOutput = Array.from(document.querySelectorAll(
+            '[role="alert"], .diagnostics .diagnostic, [data-react-error-boundary], [data-error-boundary]'
+          )).map(element => ({ text: element.textContent?.slice(0, 1000) || '', html: element.outerHTML.slice(0, 1200) }));
+          return {
+            scope: panel?.getAttribute('data-topology-hierarchy'),
+            panel: rectDetails(panel),
+            panelAttributes: panel ? {
+              edgeCount: panel.getAttribute('data-topology-edge-count'),
+              edgeIds: panel.getAttribute('data-topology-edge-ids'),
+              projectionEdgeIds: panel.getAttribute('data-topology-projection-edge-ids'),
+              reactFlowEdgeIds: panel.getAttribute('data-topology-react-flow-edge-ids'),
+              reactFlowEdgeHandles: edgeHandleMap,
+              hierarchyEdgeIds: panel.getAttribute('data-topology-hierarchy-edge-ids'),
+              nodeCount: panel.getAttribute('data-topology-hierarchy-node-count'),
+              groupCount: panel.getAttribute('data-topology-hierarchy-group-count'),
+            } : null,
+            reactFlowNodeCount: nodeRows.length,
+            reactFlowNodes: nodeRows,
+            reactFlowEdgeCount: edgeRows.length,
+            reactFlowEdges: edgeRows,
+            semanticPaths,
+            allSvgPaths: document.querySelectorAll('.react-flow__edges path').length,
+            edgeLayerMounted: Boolean(panel?.querySelector('.react-flow__edges')),
+            edgeLayer: rectDetails(panel?.querySelector('.react-flow__edges')),
+            expectedEdgeIds: [...expectedIds].sort(),
+            handleChecks,
+            missingHandleIds: handleChecks.flatMap(edge => [
+              edge.sourceHandle && !edge.sourceHandleMounted ? `${edge.id}:source:${edge.sourceHandle}` : null,
+              edge.targetHandle && !edge.targetHandleMounted ? `${edge.id}:target:${edge.targetHandle}` : null,
+            ].filter(Boolean)),
+            nonFinitePathData,
+            errorBoundaryOutput,
+          };
+        }""",
+        list(expected_ids),
+    )
+
+
 def assert_orthogonal(path):
     require(not re.search(r"[CQSAZcqsa]", path), f"Hierarchical path contains a curve or non-polyline command: {path}")
     points = [(float(x), float(y)) for command, x, y in re.findall(r"([ML])\s*(-?[0-9.]+)\s+(-?[0-9.]+)", path)]
@@ -132,7 +258,7 @@ def assert_orthogonal(path):
         require(from_x == to_x or from_y == to_y, f"Hierarchical path has a diagonal segment: {path}")
 
 
-def assert_scope(page, panel, source_links, scope_name, evidence_dir):
+def assert_scope(page, panel, source_links, scope_name, evidence_dir, browser_diagnostics):
     visible = resource_ids(page, [row[0] for row in source_links[0]])
     expected = {
         row[0]
@@ -145,6 +271,7 @@ def assert_scope(page, panel, source_links, scope_name, evidence_dir):
     except PlaywrightTimeoutError:
         pass
     actual_rows = rendered_links(page)
+    dom_diagnostics = collect_dom_diagnostics(page, expected)
     diagnostics = reconcile_rendered_connections(scope_name, expected, actual_rows, expected_endpoints)
     diagnostics.update({
         "visibleResourceIds": sorted(visible),
@@ -157,6 +284,10 @@ def assert_scope(page, panel, source_links, scope_name, evidence_dir):
         "hierarchyProjectionEdgeIds": panel.get_attribute("data-topology-hierarchy-edge-ids"),
         "canvasProjectionEdgeIds": panel.get_attribute("data-topology-projection-edge-ids"),
         "reactFlowEdgePropIds": panel.get_attribute("data-topology-react-flow-edge-ids"),
+        "domDiagnostics": dom_diagnostics,
+        "pageErrors": list(browser_diagnostics["pageErrors"]),
+        "consoleErrors": list(browser_diagnostics["consoleErrors"]),
+        "consoleMessages": list(browser_diagnostics["consoleMessages"]),
     })
     (evidence_dir / f"project091-{scope_name}-reconciliation.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
     require(not diagnostics["missing"] and not diagnostics["unexpected"] and not diagnostics["duplicates"] and not diagnostics["endpointMismatches"], diagnostics)
@@ -183,6 +314,19 @@ def open_access(page, panel, access_node_id):
 
 def case(browser, url, evidence_dir):
     page, errors, outside = setup(browser, url)
+    console_errors = []
+    console_messages = []
+    def record_console(message):
+        row = {"type": message.type, "text": message.text, "location": message.location}
+        console_messages.append(row)
+        if message.type == "error":
+            console_errors.append(row)
+    page.on("console", record_console)
+    browser_diagnostics = {
+        "pageErrors": errors,
+        "consoleErrors": console_errors,
+        "consoleMessages": console_messages,
+    }
     source, devices, links = hierarchical_xlsx()
     try:
         activate(page, source)
@@ -192,18 +336,18 @@ def case(browser, url, evidence_dir):
         require(panel.get_attribute('data-topology-hierarchy') == 'overview', 'PROJECT-091 overview did not open')
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 5, 'Overview lacks core/distribution presentation groups')
         require(page.locator('[data-navigation-group="true"]').count() >= 5, 'Overview has no visible Arvidsjaur-style group containers')
-        assert_scope(page, panel, source_links, 'overview', evidence_dir)
+        assert_scope(page, panel, source_links, 'overview', evidence_dir, browser_diagnostics)
         page.screenshot(path=str(evidence_dir / 'project091-network-overview.png'), full_page=True)
 
         search_and_open(page, dist_id(4))
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 2, 'Distribution branch lacks grouped presentation')
-        assert_scope(page, panel, source_links, 'distribution-0004', evidence_dir)
+        assert_scope(page, panel, source_links, 'distribution-0004', evidence_dir, browser_diagnostics)
         page.screenshot(path=str(evidence_dir / 'project091-distribution-0004.png'), full_page=True)
 
         branch_access = access_id(25)
         open_access(page, panel, branch_access)
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 5, 'Access branch lacks compact endpoint groups')
-        assert_scope(page, panel, source_links, branch_access, evidence_dir)
+        assert_scope(page, panel, source_links, branch_access, evidence_dir, browser_diagnostics)
         require(page.locator('[data-topology-connection-state]').count() == 40, 'Every visible access-branch resource lacks a connection state')
         require(page.locator('[data-topology-boundary-indicator="true"]').count() > 0, 'Boundary-connected devices are not discoverable')
         page.screenshot(path=str(evidence_dir / 'project091-access-0025.png'), full_page=True)
@@ -222,6 +366,8 @@ def case(browser, url, evidence_dir):
             'accessGroups': int(panel.get_attribute('data-topology-hierarchy-group-count') or 0),
             'screenshots': sorted(path.name for path in evidence_dir.glob('project091-*.png')),
             'pageErrors': errors,
+            'consoleErrors': console_errors,
+            'consoleMessages': console_messages,
             'outsideRequests': outside,
         }
     finally:

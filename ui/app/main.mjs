@@ -321,6 +321,7 @@ import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.t
 import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
+import { orthogonalEdgePath, resolveHierarchicalFallbackLaneX } from "./semantic-edge-routing.mjs";
 
 const e = React.createElement;
 const NORMAL_TOPOLOGY_RESOURCE_BUDGET = 200;
@@ -368,15 +369,15 @@ function handlesFor(data) {
   const interfaces = Array.isArray(data?.interfaces) ? data.interfaces : [];
   const activeInterfaces = new Set(Array.isArray(data?.activeInterfaceIds) ? data.activeInterfaceIds : []);
   const result = [
-    e(Handle, { key: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment" }),
-    e(Handle, { key: "generic-out", type: "source", position: Position.Right, className: "semantic-handle generic-handle", title: "Semantic attachment" }),
+    e(Handle, { key: "generic-in", id: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-in", "data-react-flow-handle-type": "target" }),
+    e(Handle, { key: "generic-out", id: "generic-out", type: "source", position: Position.Right, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-out", "data-react-flow-handle-type": "source" }),
   ];
   interfaces.forEach((iface, index) => {
     const top = `${20 + ((index + 1) * 60) / (interfaces.length + 1)}%`;
     const active = activeInterfaces.has(iface.interfaceId);
     const title = `${iface.label} · ${iface.stateLabel}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`;
-    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: Position.Left, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase() }));
-    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: Position.Right, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase() }));
+    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: Position.Left, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.targetHandleId, "data-react-flow-handle-type": "target" }));
+    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: Position.Right, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.sourceHandleId, "data-react-flow-handle-type": "source" }));
   });
   return result;
 }
@@ -508,42 +509,15 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
     );
 }
 
-function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [] }) {
-  const pathPoints = [{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }]
-    .filter((point, index, all) => index === 0 || point.x !== all[index - 1].x || point.y !== all[index - 1].y);
-  const d = pathPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  let total = 0;
-  for (let index = 1; index < pathPoints.length; index += 1) total += Math.abs(pathPoints[index].x - pathPoints[index - 1].x) + Math.abs(pathPoints[index].y - pathPoints[index - 1].y);
-  let remaining = total / 2;
-  let labelX = (sourceX + targetX) / 2;
-  let labelY = (sourceY + targetY) / 2;
-  for (let index = 1; index < pathPoints.length; index += 1) {
-    const from = pathPoints[index - 1];
-    const to = pathPoints[index];
-    const length = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
-    if (remaining <= length) {
-      const ratio = length ? remaining / length : 0;
-      labelX = from.x + (to.x - from.x) * ratio;
-      labelY = from.y + (to.y - from.y) * ratio;
-      break;
-    }
-    remaining -= length;
-  }
-  return [d, labelX, labelY];
-}
-
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
-  const isHierarchical = data?.hierarchyVisual === true;
-  const fallbackLaneX = isHierarchical && data.route.length
-    ? Number(data.route[Math.floor(data.route.length / 2)]?.x ?? (sourceX + targetX) / 2)
-    : (sourceX + targetX) / 2;
+  const { isHierarchical, route, fallbackLaneX } = resolveHierarchicalFallbackLaneX({ data, sourceX, targetX });
   // Layout routes are calculated in canvas coordinates before React Flow has
   // measured interface handles. Re-anchor the hierarchy lane to the live
   // endpoint coordinates so every rendered segment remains truly orthogonal.
   const renderRoute = isHierarchical
     ? [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }]
-    : data?.route;
+    : route;
   const [basePath, labelX, labelY] = hasRoute
     ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: renderRoute })
     : isHierarchical
@@ -1999,6 +1973,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-projection-edge-ids": (visibleProjection?.edges ?? []).map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-react-flow-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-react-flow-edge-handles": JSON.stringify(baseFlow.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourceHandle ?? null, targetHandle: edge.targetHandle ?? null }))),
       ...(hierarchicalTopologyView ? {
         "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
         "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),
