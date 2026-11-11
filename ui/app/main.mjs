@@ -5191,7 +5191,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         "data-guided-lab-start": "direct",
         onClick: () => openGuidedLab(true),
         disabled: busy || !guidedLabId,
-      }, busy ? "Startar valt labb…" : "Starta valt labb"),
+      }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
       e("span", { title: selectedGuidedLab?.title ?? "Välj ett labb ovan" }, selectedGuidedLab ? `${selectedGuidedLab.sequence}. ${selectedGuidedLab.title} · ${selectedGuidedLab.focus}` : "Välj labb ovan"),
     ),
     e("div", { className: "main-actions-toolbar", "data-primary-toolbar": "true" },
