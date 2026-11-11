@@ -63,20 +63,20 @@ export interface HierarchicalTopologyView {
 
 const MAX_NODES = 100;
 const MAX_EDGES = 250;
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 96;
-const GAP_X = 48;
-const GAP_Y = 64;
-const PADDING_X = 72;
-const PADDING_Y = 48;
-const GROUP_GAP_X = 64;
-const GROUP_GAP_Y = 72;
-const GROUP_PADDING_X = 28;
-const GROUP_PADDING_Y = 24;
-const GROUP_HEADER = 48;
-const GROUP_RESOURCE_GAP = 24;
+const NODE_WIDTH = 168;
+const NODE_HEIGHT = 88;
+const GAP_X = 36;
+const GAP_Y = 48;
+const PADDING_X = 56;
+const PADDING_Y = 36;
+const GROUP_GAP_X = 44;
+const GROUP_GAP_Y = 48;
+const GROUP_PADDING_X = 20;
+const GROUP_PADDING_Y = 18;
+const GROUP_HEADER = 42;
+const GROUP_RESOURCE_GAP = 16;
 const GROUP_CHILD_COLUMNS = 4;
-const MAX_GROUP_COLUMNS = 2;
+const MAX_GROUP_COLUMNS = 3;
 
 function normalized(value: unknown): string {
   return String(value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();

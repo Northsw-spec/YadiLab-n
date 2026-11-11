@@ -1666,15 +1666,49 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("button", { type: "button", "data-topology-group-page": "next", disabled: boundedTopologyGroupPage >= topologyGroupPageCount, onClick: () => setTopologyGroupPage((page) => Math.min(topologyGroupPageCount, page + 1)) }, "Nästa"),
     ),
   ) : null;
+  const activeTopologyStats = hierarchicalTopologyView
+    ? {
+      devices: hierarchicalTopologyView.nodeIds.length,
+      links: hierarchicalTopologyView.visibleConnectionCount,
+      groups: hierarchicalTopologyView.navigationGroups.length,
+      hiddenLinks: hierarchicalTopologyView.hiddenConnectionCount,
+      canonical: false,
+    }
+    : topologyOverview
+      ? {
+        devices: topologyOverview.canonicalNodes,
+        links: topologyOverview.canonicalLinks,
+        groups: topologyOverview.groups.length,
+        hiddenLinks: 0,
+        canonical: true,
+      }
+      : {
+        devices: baseFlow.nodes.filter((node) => node.type === "resource").length,
+        links: baseFlow.edges.length,
+        groups: baseFlow.nodes.filter((node) => node.type === "zone").length,
+        hiddenLinks: 0,
+        canonical: false,
+      };
   const topologyExplorer = e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
-    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
-    e("small", { "data-topology-active-mode": topologyViewMode }, topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL
+    e("div", { className: "topology-explorer-heading" },
+      e("div", null, e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"), e("small", { "data-topology-active-mode": topologyViewMode }, topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL
       ? "Verkliga resurser, zoner och deklarerade länkar · redigerbar Builder-yta"
       : topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
         ? "Anslutningsbaserad, bunden delgraf · sök, fokusera och expandera verkliga grannar"
-        : "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar"),
-    e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
-    e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
+        : "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar")),
+      e("span", { className: "topology-truth-badge" }, activeTopologyStats.canonical ? "CANONICAL INVENTORY" : "VISIBLE SOURCE VIEW"),
+    ),
+    e("div", { className: "topology-stat-strip", "data-topology-active-stats": "true" },
+      e("div", { className: "topology-stat", "data-topology-active-device-count": String(activeTopologyStats.devices) }, e("strong", null, String(activeTopologyStats.devices)), e("span", null, "aktiva enheter")),
+      e("div", { className: "topology-stat", "data-topology-active-link-count": String(activeTopologyStats.links) }, e("strong", null, String(activeTopologyStats.links)), e("span", null, "aktiva länkar")),
+      e("div", { className: "topology-stat topology-stat-presentation", "data-topology-active-group-count": String(activeTopologyStats.groups) }, e("strong", null, String(activeTopologyStats.groups)), e("span", null, "presentationsgrupper")),
+      e("div", { className: "topology-stat topology-stat-canonical", "data-topology-canonical-counts": "true" }, e("strong", null, `${canonicalNetwork.resources.length} · ${canonicalNetwork.connections.length}`), e("span", null, "hela canonical-nätet")),
+    ),
+    e("p", { className: "topology-stat-note", "data-topology-active-stat-note": "true" }, activeTopologyStats.hiddenLinks > 0
+      ? `${activeTopologyStats.hiddenLinks} deklarerade länkar ligger utanför aktuell vy; de är inte aggregerade.`
+      : activeTopologyStats.canonical
+        ? "Gruppkort och sammanfattningskanter är presentation; de räknas inte som fysiska enheter eller länkar."
+        : "Presentationsgrupper är visuella behållare och räknas inte som fysiska nätverksenheter."),
     topologyOverview ? e("section", { "data-topology-overview": topologyOverview.strategy },
       e("strong", null, "Logisk nätverksöversikt"),
       e("p", null, `${topologyOverview.canonicalNodes} canonical devices · ${topologyOverview.canonicalLinks} declared links · ${topologyOverview.groups.length} bounded visual groups`),
@@ -1972,6 +2006,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("span", null, `Sida ${topologyFocusPage}/${localFocusPage.pageCount}`),
         e("button", { type: "button", disabled: topologyFocusPage >= localFocusPage.pageCount, onClick: () => { const page = Math.min(localFocusPage.pageCount, topologyFocusPage + 1); setTopologyFocusPage(page); setTopologyViewHistory((history) => history.map((item, index) => index === history.length - 1 ? { ...item, page } : item)); } }, "Nästa fokusvy")) : null
     ),
+    topologyExplorer,
     e("section", {
       ref: topologyPanelRef,
       className: "topology-panel",
@@ -2057,7 +2092,6 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         ),
       ) : null),
     ),
-    topologyExplorer,
     journey ? e("section", {
       className: `journey-player truth-${journey.truth.toLowerCase()}`,
       "data-visual-journey": "ready",
@@ -4543,10 +4577,47 @@ function RuntimeResults({ workspace }) {
   );
 }
 
-function WorkspaceMenu({ label, children }) {
-  return e("details", { className: "workspace-menu" },
-    e("summary", null, label),
-    e("div", { className: "workspace-menu-panel" }, children),
+function WorkspaceMenu({ label, children, className = "", panelClassName = "" }) {
+  const menuRef = useRef(null);
+  const summaryRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (restoreFocus = false) => {
+      if (menuRef.current?.open) menuRef.current.open = false;
+      setOpen(false);
+      if (restoreFocus) summaryRef.current?.focus();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close(true);
+      }
+    };
+    const onPointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) close(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+  return e("details", {
+    ref: menuRef,
+    className: `workspace-menu ${className}`.trim(),
+    onToggle: (event) => setOpen(event.currentTarget.open),
+    onClick: (event) => {
+      if (event.target.closest("button, .file-button")) {
+        queueMicrotask(() => {
+          if (menuRef.current?.open) menuRef.current.open = false;
+        });
+      }
+    },
+  },
+    e("summary", { ref: summaryRef, "aria-haspopup": "menu" }, label),
+    e("div", { className: `workspace-menu-panel ${panelClassName}`.trim(), role: "menu" }, children),
   );
 }
 
@@ -5015,85 +5086,120 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     if (file) onImportNetworkFile(file);
   };
   const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
+  const [advancedQuery, setAdvancedQuery] = useState("");
+  const actionButton = (label, onClick, extra = {}) => e("button", { type: "button", onClick, ...extra, disabled: busy || extra.disabled }, label);
+  const category = (key, title, description, items) => {
+    const query = advancedQuery.trim().toLocaleLowerCase();
+    const visible = items.filter((item) => !query || `${item.label} ${item.searchTerms ?? ""}`.toLocaleLowerCase().includes(query));
+    if (!visible.length) return null;
+    return e("section", { key, className: "advanced-tools-category", "aria-label": title },
+      e("div", { className: "advanced-tools-category-heading" }, e("strong", null, title), e("small", null, description)),
+      e("div", { className: "advanced-tools-actions" }, ...visible.map((item) => item.node)),
+    );
+  };
+  const standardExportItems = workspace.mode === "builder"
+    ? [
+      { label: "Exportera källfil", searchTerms: "source json", node: actionButton("Exportera källfil", exportSource, { "data-export-action": "source" }) },
+      { label: "Exportera elevpaket", searchTerms: "student package", node: actionButton("Exportera elevpaket", () => exportPackage("student"), { disabled: workspace.compile?.status !== "valid", "data-export-action": "student" }) },
+      { label: "Exportera författarpaket", searchTerms: "author package", node: actionButton("Exportera författarpaket", () => exportPackage("author"), { disabled: workspace.compile?.status !== "valid", "data-export-action": "author" }) },
+    ]
+    : [
+      { label: "Exportera framsteg", searchTerms: "progress", node: actionButton("Exportera framsteg", exportProgress, { "data-export-action": "progress" }) },
+      { label: "Exportera sessionsbackup", searchTerms: "session troubleshooting backup", node: actionButton("Exportera sessionsbackup", exportTroubleshootingSession, { "data-export-action": "session" }) },
+      { label: "Läs in framsteg", searchTerms: "load progress", node: fileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress") },
+      { label: "Importera sessionsbackup", searchTerms: "load session", node: fileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") },
+    ];
+  const scenarioItems = [
+    { label: "Starta enterprise-labb", searchTerms: "enterprise scenario", node: actionButton("Starta enterprise-labb", () => openEnterpriseScenario(true), { disabled: !enterpriseScenarioId }) },
+    { label: "Starta verifierad demo", searchTerms: "verified delivery", node: actionButton("Starta verifierad demo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
+    { label: "Starta valt labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta valt labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
+    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json") },
+    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab") },
+  ];
+  const builderItems = [
+    { label: "Öppna enterprise i byggläget", searchTerms: "enterprise builder", node: actionButton("Öppna enterprise i byggläget", () => openEnterpriseScenario(false), { disabled: !enterpriseScenarioId }) },
+    { label: "Öppna verifierad demo i byggläget", searchTerms: "verified builder", node: actionButton("Öppna verifierad demo i byggläget", () => openVerifiedDeliveryScenario(false), { disabled: !verifiedDeliveryScenarioId }) },
+    { label: "Öppna labb i byggläget", searchTerms: "guided builder", node: actionButton("Öppna labb i byggläget", () => openGuidedLab(false), { disabled: !guidedLabId }) },
+    { label: "Kompilera + layout", searchTerms: "compile layout builder", node: actionButton(busy ? "Kompilerar…" : "Kompilera + layout", compileAndLayout) },
+  ];
+  const runItems = [
+    { label: "Förhandsvisa körläge", searchTerms: "runtime preview", node: actionButton("Förhandsvisa körläge", preview, { disabled: workspace.compile?.status !== "valid" }) },
+    { label: "Tillbaka till byggläget", searchTerms: "builder", node: actionButton("Tillbaka till byggläget", backToBuilder) },
+    { label: "Autospara nu", searchTerms: "autosave runtime", node: actionButton("Autospara nu", autosaveProgress, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Återställ autosparning", searchTerms: "restore autosave runtime", node: actionButton("Återställ autosparning", restoreAutosave, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Rensa autosparning", searchTerms: "clear autosave runtime", node: actionButton("Rensa autosparning", clearAutosave, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Open modeled Runtime + Probes", searchTerms: "modeled probes runtime", node: actionButton("Open modeled Runtime + Probes", () => {
+      const panel = document.querySelector('[data-active-probe-engine="wave2"]');
+      if (!panel) return;
+      panel.open = true;
+      panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, { disabled: workspace.mode !== "runtime", "data-open-active-probes": "true" }) },
+  ];
+  const inspectionItems = [
+    { label: "Inspect structured documents", searchTerms: "xml ansible read only", node: actionButton("Inspect structured documents (XML + static Ansible, read-only)", onInspectStructuredXml, { "data-ic010-p2-open": "true" }) },
+    { label: "Import Network from Excel / CSV", searchTerms: "import network xlsx ods csv tsv", node: actionButton("Import Network from Excel / CSV", openNetworkPicker, { "data-import-network-action": "true" }) },
+    { label: "Inspect GraphML", searchTerms: "graphml preview", node: actionButton("Inspect GraphML (read-only preview)", onInspectGraphml, { "data-inspect-graphml": "PREVIEW_ONLY" }) },
+    { label: "Inspect Nmap XML", searchTerms: "nmap observations replay", node: actionButton("Inspect Nmap XML (observations only)", onInspectNmap, { "data-inspect-nmap": "EVIDENCE_ONLY" }) },
+    { label: "Replay saved Nmap XML", searchTerms: "nmap replay saved", node: actionButton("Inspect saved Nmap XML references (read-only replay)", onInspectNmapReplay, { "data-inspect-nmap-replay": "EVIDENCE_OBSERVED" }) },
+    { label: "Inspect Nessus", searchTerms: "nessus severity replay", node: actionButton("Inspect Nessus .nessus (severity summary only)", onInspectNessus, { "data-inspect-nessus": "EVIDENCE_ONLY" }) },
+    { label: "Replay saved Nessus", searchTerms: "nessus replay saved", node: actionButton("Inspect saved Nessus references (read-only replay)", onInspectNessusReplay, { "data-inspect-nessus-replay": "EVIDENCE_OBSERVED" }) },
+    { label: "Inspect draw.io", searchTerms: "drawio structure preview", node: actionButton("Inspect draw.io .drawio (uncompressed structure)", onInspectDrawio, { "data-inspect-drawio": "PREVIEW_ONLY" }) },
+    { label: "Review diagrams.net", searchTerms: "drawio builder review", node: actionButton("Review diagrams.net (.drawio) into Builder", onReviewDrawioBuilder, { "data-review-drawio-builder": "REVIEW_REQUIRED" }) },
+    { label: "Replay saved draw.io", searchTerms: "drawio replay", node: actionButton("Inspect saved draw.io references (read-only replay)", onInspectDrawioReplay, { "data-inspect-drawio-replay": "TOPOLOGY_DECLARED" }) },
+    { label: "Inspect Ansible YAML", searchTerms: "ansible yaml inventory", node: actionButton("Inspect Ansible YAML (read-only inventory)", onInspectAnsible, { "data-inspect-ansible": "CONFIG_DOCUMENTED" }) },
+    { label: "Replay saved Ansible YAML", searchTerms: "ansible yaml replay", node: actionButton("Inspect saved Ansible YAML references (read-only replay)", onInspectAnsibleYamlReplay, { "data-inspect-ansible-yaml-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect Ansible INI", searchTerms: "ansible ini inventory", node: actionButton("Inspect Ansible INI (read-only inventory)", onInspectAnsibleIni, { "data-inspect-ansible-ini": "CONFIG_DOCUMENTED" }) },
+    { label: "Replay saved Ansible INI", searchTerms: "ansible ini replay", node: actionButton("Inspect saved Ansible INI references (read-only replay)", onInspectAnsibleIniReplay, { "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect Word DOCX", searchTerms: "docx structure office", node: actionButton("Inspect Word DOCX (structure only)", onInspectDocx, { "data-inspect-docx": "CONFIG_DOCUMENTED" }) },
+    { label: "Review DOCX / ODT", searchTerms: "office builder review", node: actionButton("Review DOCX / ODT nodes into Builder", onReviewOfficeBuilder, { "data-review-office-builder": "REVIEW_REQUIRED" }) },
+    { label: "Inspect saved DOCX", searchTerms: "docx replay", node: actionButton("Inspect saved DOCX references (read-only)", onInspectDocxReplay, { "data-inspect-docx-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect OpenDocument ODT", searchTerms: "odt structure office", node: actionButton("Inspect OpenDocument ODT (structure only)", onInspectOdt, { "data-inspect-odt": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect saved ODT", searchTerms: "odt replay", node: actionButton("Inspect saved ODT references (read-only)", onInspectOdtReplay, { "data-inspect-odt-replay": "CONFIG_DOCUMENTED" }) },
+  ];
+  const officeReviewItems = [
+    { label: "Review 100 DOCX / ODT source nodes", searchTerms: "office scale 100", node: actionButton("Review 100 DOCX / ODT source-declared network nodes into Builder", onReviewScaledOfficeBuilder, { "data-review-scaled-office-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 1,000 original DOCX / ODT devices", searchTerms: "office scale 1000", node: actionButton("Review 1,000 original DOCX / ODT network devices into focused Builder", onReviewScaledOfficeThousandBuilder, { "data-review-scaled-office-thousand-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 5,000 original DOCX / ODT devices", searchTerms: "office scale 5000", node: actionButton("Review 5,000 original DOCX / ODT devices and 5,000 port-linked source rows into bounded Builder", onReviewScaledOfficeFiveThousandBuilder, { "data-review-scaled-office-five-thousand-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 10,000 original DOCX / ODT preflight", searchTerms: "office scale 10000 preflight", node: actionButton("Review 10,000 original DOCX / ODT source devices + 10,000 original Links (source-only; no Builder activation)", onReviewScaledOfficeTenThousandPreflight, { "data-review-scaled-office-ten-thousand-preflight": "REVIEW_REQUIRED" }) },
+    { label: "Load 10,000 original DOCX / ODT Builder", searchTerms: "office scale 10000 builder", node: actionButton("Review and explicitly load 10,000 original DOCX / ODT devices + port-linked original Links into bounded editable Builder", onReviewScaledOfficeTenThousandBuilder, { "data-review-scaled-office-ten-thousand-builder": "REVIEW_REQUIRED" }) },
+  ];
   return e("section", { className: "main-actions", "aria-label": "Main actions" },
     e("div", { className: "main-actions-heading" },
-      e("div", null, e("strong", null, "MAIN ACTIONS"), e("span", null, "Common workspace actions are grouped; current lab context stays visible.")),
+      e("div", null, e("strong", null, "WORKSPACE TOOLBAR"), e("span", null, "Topology first · import, export and advanced tools remain available without pushing the canvas.")),
       e("div", { className: "main-actions-context" },
         e("label", { className: "context-select" }, "Enterprise-labb", e("select", { value: enterpriseScenarioId, onChange: (event) => setEnterpriseScenarioId(event.target.value), "data-enterprise-scenario-selector": "true" }, ...enterpriseOfficeScenarios.map((scenario) => e("option", { key: scenario.scenarioId, value: scenario.scenarioId }, scenario.metadata.title)))),
         e("label", { className: "context-select" }, "Verifierad leverans", e("select", { value: verifiedDeliveryScenarioId, onChange: (event) => setVerifiedDeliveryScenarioId(event.target.value), "data-verified-delivery-scenario-selector": "true" }, ...verifiedDeliveryScenarios.map((scenario) => e("option", { key: scenario.scenarioId, value: scenario.scenarioId }, scenario.metadata.title)))),
         e("label", { className: "context-select" }, "Guidad labb", e("select", { value: guidedLabId, onChange: (event) => setGuidedLabId(event.target.value), disabled: !builtinGuidedLabs.length, "data-guided-lab-catalog": "wave1" }, ...builtinGuidedLabs.map((lab) => e("option", { key: lab.id, value: lab.id }, `${lab.sequence}. ${lab.title} · ${lab.focus}`)))),
       ),
     ),
-    e("div", { className: "main-actions-guided-start", "data-guided-lab-entrypoint": "direct" },
+    e("div", { className: "main-actions-guided-start compact", "data-guided-lab-entrypoint": "direct" },
       e("button", {
         type: "button",
         className: "guided-lab-primary-button",
         "data-guided-lab-start": "direct",
         onClick: () => openGuidedLab(true),
         disabled: busy || !guidedLabId,
-      }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
-      e("span", null, "Välj labb ovan och börja felsöka direkt; menyvägen finns kvar för övriga scenarieåtgärder."),
+      }, busy ? "Startar valt labb…" : "Starta valt labb"),
+      e("span", { title: selectedGuidedLab?.title ?? "Välj ett labb ovan" }, selectedGuidedLab ? `${selectedGuidedLab.sequence}. ${selectedGuidedLab.title} · ${selectedGuidedLab.focus}` : "Välj labb ovan"),
     ),
-    e("div", { className: "main-actions-primary-import", "data-network-import-entrypoint": "always-visible" },
-      e("button", { type: "button", className: "network-import-primary-button", "data-network-import-primary": "true", onClick: openNetworkPicker, disabled: busy, "aria-controls": "network-topology-import-panel" }, "Import JSON / Excel / CSV → Network Topology"),
+    e("div", { className: "main-actions-toolbar", "data-primary-toolbar": "true" },
+      e("button", { type: "button", className: "toolbar-primary-button toolbar-import", "data-network-import-primary": "true", onClick: openNetworkPicker, disabled: busy, "aria-controls": "network-topology-import-panel", title: "Importera JSON, Excel, ODS, CSV eller TSV" }, "Importera"),
       e("input", { type: "file", ref: networkPickerRef, accept: ".json,.xlsx,.ods,.csv,.tsv", onChange: acceptNetworkFile, style: { display: "none" }, tabIndex: -1, "aria-label": "Select network inventory document", "data-network-import-quick-file": "true" }),
-      e("span", null, "Select .json / .xlsx / .ods / .csv / .tsv directly. A review dialog opens before topology replacement."),
-    ),
-    workspace.mode === "runtime" ? e("button", { type: "button", "data-open-active-probes": "true", className: "network-import-runtime-button", onClick: () => {
-      const panel = document.querySelector('[data-active-probe-engine="wave2"]');
-      if (!panel) return;
-      panel.open = true;
-      panel.scrollIntoView({ block: "center", behavior: "smooth" });
-    } }, "Open Modeled Probes") : null,
-    e("div", { className: "main-actions-menus" },
-      e(WorkspaceMenu, { label: "Lab & Scenario" },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(true), disabled: busy || !enterpriseScenarioId }, busy ? "Startar enterprise-labb…" : "Starta enterprise-labb"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(true), disabled: busy || !verifiedDeliveryScenarioId }, busy ? "Startar verifierad demo…" : "Starta verifierad leveransdemo"),
-        e("button", { type: "button", onClick: () => openGuidedLab(true), disabled: busy || !guidedLabId }, busy ? "Startar labb…" : "Starta guidad labb"),
-        fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json"),
-        fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab"),
+      e(WorkspaceMenu, { label: e(React.Fragment, null, "Exportera", e("span", { className: "toolbar-caret", "aria-hidden": "true" }, "▾")), className: "workspace-menu-export", panelClassName: "export-menu-panel" },
+        e("div", { className: "menu-heading" }, e("strong", null, workspace.mode === "builder" ? "Builder-export" : "Runtime-export"), e("small", null, "Direkt åtkomst · ingen lång inspektionslista")),
+        ...standardExportItems.map((item) => React.cloneElement(item.node, { key: `export-${item.label}` })),
       ),
-      e(WorkspaceMenu, { label: "Builder" },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(false), disabled: busy || !enterpriseScenarioId }, "Öppna enterprise i byggläget"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(false), disabled: busy || !verifiedDeliveryScenarioId }, "Öppna verifierad demo i byggläget"),
-        e("button", { type: "button", onClick: () => openGuidedLab(false), disabled: busy || !guidedLabId }, "Öppna labb i byggläget"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: compileAndLayout, disabled: busy }, busy ? "Kompilerar…" : "Kompilera + layout") : null,
-      ),
-      e(WorkspaceMenu, { label: "Run & Preview" },
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: preview, disabled: workspace.compile.status !== "valid" }, "Förhandsvisa körläge") : e("button", { type: "button", onClick: backToBuilder }, "Tillbaka till byggläget"),
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: autosaveProgress, disabled: !workspace }, "Autospara nu") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: restoreAutosave, disabled: !workspace }, "Återställ autosparning") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: clearAutosave, disabled: !workspace }, "Rensa autosparning") : null,
-      ),
-      e(WorkspaceMenu, { label: "Import / Export" },
-        e("button", { type: "button", "data-ic010-p2-open": "true", onClick: onInspectStructuredXml }, "Inspect structured documents (XML + static Ansible, read-only)"),
-        e("button", { type: "button", "data-import-network-action": "true", onClick: openNetworkPicker }, "Import Network from Excel / CSV"),
-        e("button", { type: "button", "data-inspect-graphml": "PREVIEW_ONLY", onClick: onInspectGraphml }, "Inspect GraphML (read-only preview)"),
-        e("button", { type: "button", "data-inspect-nmap": "EVIDENCE_ONLY", onClick: onInspectNmap }, "Inspect Nmap XML (observations only)"),
-        e("button", { type: "button", "data-inspect-nmap-replay": "EVIDENCE_OBSERVED", onClick: onInspectNmapReplay }, "Inspect saved Nmap XML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-nessus": "EVIDENCE_ONLY", onClick: onInspectNessus }, "Inspect Nessus .nessus (severity summary only)"),
-        e("button", { type: "button", "data-inspect-nessus-replay": "EVIDENCE_OBSERVED", onClick: onInspectNessusReplay }, "Inspect saved Nessus references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-drawio": "PREVIEW_ONLY", onClick: onInspectDrawio }, "Inspect draw.io .drawio (uncompressed structure)"),
-        e("button", { type: "button", "data-review-drawio-builder": "REVIEW_REQUIRED", onClick: onReviewDrawioBuilder }, "Review diagrams.net (.drawio) into Builder"),
-        e("button", { type: "button", "data-inspect-drawio-replay": "TOPOLOGY_DECLARED", onClick: onInspectDrawioReplay }, "Inspect saved draw.io references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible": "CONFIG_DOCUMENTED", onClick: onInspectAnsible }, "Inspect Ansible YAML (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-yaml-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleYamlReplay }, "Inspect saved Ansible YAML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible-ini": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIni }, "Inspect Ansible INI (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIniReplay }, "Inspect saved Ansible INI references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-docx": "CONFIG_DOCUMENTED", onClick: onInspectDocx }, "Inspect Word DOCX (structure only)"),
-        e("button", { type: "button", "data-review-office-builder": "REVIEW_REQUIRED", onClick: onReviewOfficeBuilder }, "Review DOCX / ODT nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeBuilder }, "Review 100 DOCX / ODT source-declared network nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeThousandBuilder }, "Review 1,000 original DOCX / ODT network devices into focused Builder"),
-        e("button", { type: "button", "data-review-scaled-office-five-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeFiveThousandBuilder }, "Review 5,000 original DOCX / ODT devices and 5,000 port-linked source rows into bounded Builder"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-preflight": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandPreflight }, "Review 10,000 original DOCX / ODT source devices + 10,000 original Links (source-only; no Builder activation)"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandBuilder }, "Review and explicitly load 10,000 original DOCX / ODT devices + port-linked original Links into bounded editable Builder"),
-        e("button", { type: "button", "data-inspect-docx-replay": "CONFIG_DOCUMENTED", onClick: onInspectDocxReplay }, "Inspect saved DOCX references (read-only)"),
-        e("button", { type: "button", "data-inspect-odt": "CONFIG_DOCUMENTED", onClick: onInspectOdt }, "Inspect OpenDocument ODT (structure only)"),
-        e("button", { type: "button", "data-inspect-odt-replay": "CONFIG_DOCUMENTED", onClick: onInspectOdtReplay }, "Inspect saved ODT references (read-only)"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: exportSource }, "Exportera källfil") : e("button", { type: "button", onClick: exportProgress }, "Exportera framsteg"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("student"), disabled: workspace.compile.status !== "valid" }, "Exportera elevpaket") : fileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("author"), disabled: workspace.compile.status !== "valid" }, "Exportera författarpaket") : e("button", { type: "button", onClick: exportTroubleshootingSession }, "Exportera sessionsbackup"),
-        workspace.mode === "runtime" ? fileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") : null,
+      e(WorkspaceMenu, { label: e(React.Fragment, null, "Avancerade verktyg", e("span", { className: "sr-only" }, "Import / Export")), className: "workspace-menu-advanced", panelClassName: "advanced-tools-panel" },
+        e("div", { className: "advanced-tools-heading" },
+          e("div", null, e("strong", null, "Avancerade verktyg"), e("small", null, "Inspektion, replay, Office-review och övriga arbetsflöden hålls separerade från canvasen.")),
+          e("label", null, e("span", { className: "sr-only" }, "Sök avancerade verktyg"), e("input", { type: "search", value: advancedQuery, onChange: (event) => setAdvancedQuery(event.target.value), placeholder: "Sök verktyg…", "aria-label": "Sök avancerade verktyg", "data-advanced-tools-search": "true" })),
+        ),
+        category("scenario", "Lab & Scenario", "Ladda, starta eller kompilera en källa.", scenarioItems),
+        category("builder", "Builder-läge", "Enterprise, labb och canonical layout.", builderItems),
+        category("runtime", "Run & Preview", "Runtime, autosparning och modellerade probes.", runItems),
+        category("inspection", "Inspektion & replay", "Read-only dokument, observationer och sparade referenser.", inspectionItems),
+        category("office-review", "Office-review", "Separata, uttryckliga DOCX/ODT-granskningar med provenance.", officeReviewItems),
+        category("exports", "Exportgenvägar", "Samma validerade exportcallbacks är även åtkomliga här.", standardExportItems),
       ),
     ),
   );
@@ -6525,20 +6631,20 @@ function App() {
   return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
     e("header", { className: "app-header" },
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
-      e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
-        onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
-      e(ProjectFileControls, {
-        workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
-        setWorkspace, onReplace: replaceProjectDocument,
-        // Manual project documents may contain an intentionally empty New
-        // draft. Compilation still uses the stricter runnable "source" schema.
-        validateSource: source => validateContract("editableSource", source),
-        setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
-        getPendingDraftChanges: hasPendingBuilderDrafts,
-        pendingDraftCount: pendingBuilderDraftCount,
-        getScenarioTransitionId: () => scenarioTransitionRef.current,
-      }),
     ),
+    e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
+      onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+    e(ProjectFileControls, {
+      workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+      setWorkspace, onReplace: replaceProjectDocument,
+      // Manual project documents may contain an intentionally empty New
+      // draft. Compilation still uses the stricter runnable "source" schema.
+      validateSource: source => validateContract("editableSource", source),
+      setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
+      getPendingDraftChanges: hasPendingBuilderDrafts,
+      pendingDraftCount: pendingBuilderDraftCount,
+      getScenarioTransitionId: () => scenarioTransitionRef.current,
+    }),
     e("section", { className: "mission-strip" }, e("strong", null, title)),
     selectedGuidedLab ? e("section", { className: "curriculum-strip", "data-curriculum-wave": "guided_troubleshooting_wave1" },
       e("div", null, e("strong", null, `Inbyggd guidad labb ${selectedGuidedLab.sequence}/8 · ${selectedGuidedLab.platform} · ${selectedGuidedLab.focus}`), e("span", null, selectedGuidedLab.summary)),

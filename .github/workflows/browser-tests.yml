@@ -195,6 +195,10 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project091_arvidsjaur_layout_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project091-layout"
+          # PROJECT-092: topology-first toolbar, anchored popovers, responsive viewports and active counts.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project092_ui_redesign_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project092-ui-redesign"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
