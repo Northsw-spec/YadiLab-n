@@ -1984,11 +1984,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       onConnect,
       onInit: (instance) => { flowApi.current = instance; topologyViewportRef.current = instance.getViewport?.() ?? null; setTopologyZoom(instance.getZoom?.() ?? 1); setTopologyGeometryRevision((value) => value + 1); },
       onMove: (_event, viewport) => { topologyViewportRef.current = viewport; setTopologyZoom(viewport.zoom); },
-    }, e(Background), e(Controls), e(ReactFlowGeometryRepair, {
+    }, e(Background), e(Controls), !hierarchicalTopologyView ? e(ReactFlowGeometryRepair, {
       panelRef: topologyPanelRef,
       nodeIds: baseFlow.nodes.map((node) => node.id),
       revision: `${topologyGeometryRevision}:${journeyKey}`,
-    }),
+    }) : null,
       visibleJourneyOutcome && journeyEndpointNode ? e(ViewportPortal, null,
         e("div", {
           className: "journey-outcome-overlay",
