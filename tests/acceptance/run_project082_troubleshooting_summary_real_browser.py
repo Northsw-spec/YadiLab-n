@@ -221,7 +221,12 @@ def main():
             apply_remediation(page, "client1", "set_windows_network_profile", "public")
             run_probe(page, "windows.resolve_dnsname", "UNKNOWN")
             dns_report = wait_summary_status(page, "NO_VERIFIED_IMPROVEMENT")
-            require("VERIFIED_IMPROVEMENT" not in (dns_report.text_content() or ""), "UNKNOWN DNS result was presented as verified success")
+            dns_status = dns_report.locator('[data-troubleshooting-summary-status]')
+            require(
+                dns_status.get_attribute("data-troubleshooting-summary-status") == "NO_VERIFIED_IMPROVEMENT"
+                and dns_report.locator('[data-summary-verification="RESTORED"]').count() == 0,
+                "UNKNOWN DNS result was presented as verified success",
+            )
             expect(dns_report).to_contain_text("UNKNOWN")
             evidence["dns"] = {"status": "NO_VERIFIED_IMPROVEMENT", "unknownPreserved": True}
 
