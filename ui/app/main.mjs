@@ -1025,6 +1025,30 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!tenThousandHierarchyIndex && !validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
     ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
     : null);
+  // Keep the established focus-count contract available for the bounded
+  // PROJECT-090 hierarchy too. The values are derived from the canonical
+  // adjacency index; they are not synthetic summary links.
+  const hierarchicalFocusCounts = hierarchicalTopologyView?.kind === "branch" && hierarchicalTopologyView.rootId && tenThousandHierarchyIndex
+    ? (() => {
+      const rootId = hierarchicalTopologyView.rootId;
+      const rootNeighbors = tenThousandHierarchyIndex.adjacency.get(rootId) ?? [];
+      const visibleEdgeIds = new Set(hierarchicalTopologyView.edgeIds);
+      const visibleRootLinks = rootNeighbors.filter((neighbor) => visibleEdgeIds.has(neighbor.connectionId)).length;
+      const visibleNeighbors = new Set(rootNeighbors
+        .filter((neighbor) => visibleEdgeIds.has(neighbor.connectionId))
+        .map((neighbor) => neighbor.neighborId)).size;
+      const totalNeighbors = new Set(rootNeighbors.map((neighbor) => neighbor.neighborId)).size;
+      return {
+        visibleNeighbors,
+        totalNeighbors,
+        visibleRootLinks,
+        totalRootLinks: rootNeighbors.length,
+        hiddenRootLinks: Math.max(0, rootNeighbors.length - visibleRootLinks),
+        visibleNeighborLinks: Math.max(0, hierarchicalTopologyView.visibleConnectionCount - visibleRootLinks),
+        totalVisibleLinks: hierarchicalTopologyView.visibleConnectionCount,
+      };
+    })()
+    : null;
   const visibleProjection = localFocusPage && projection
     ? { ...projection, nodes: projection.nodes.filter((node) => localFocusPage.nodeIds.includes(node.id)), edges: projection.edges.filter((edge) => localFocusPage.edgeIds.includes(edge.id)) }
     : projection;
@@ -1663,7 +1687,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       hierarchicalTopologyView.pageCount > 1 ? e("small", null, `Grenvy ${hierarchicalTopologyView.page}/${hierarchicalTopologyView.pageCount}`) : null,
     ) : null,
     topologyGroupNavigator,
-    localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
+    hierarchicalFocusCounts ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(hierarchicalFocusCounts.totalRootLinks), "data-topology-visible-root-links": String(hierarchicalFocusCounts.visibleRootLinks), "data-topology-hidden-root-links": String(hierarchicalFocusCounts.hiddenRootLinks), "data-topology-visible-neighbor-links": String(hierarchicalFocusCounts.visibleNeighborLinks), "data-topology-total-visible-links": String(hierarchicalFocusCounts.totalVisibleLinks) }, `${hierarchicalFocusCounts.visibleNeighbors} synliga av ${hierarchicalFocusCounts.totalNeighbors} direktanslutna grannar · ${hierarchicalFocusCounts.visibleRootLinks} av ${hierarchicalFocusCounts.totalRootLinks} direktlänkar synliga · ${hierarchicalFocusCounts.visibleNeighborLinks} synliga grannlänkar · ${hierarchicalFocusCounts.totalVisibleLinks} länkar totalt i vyn`) : localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
     selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
       e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
       e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),

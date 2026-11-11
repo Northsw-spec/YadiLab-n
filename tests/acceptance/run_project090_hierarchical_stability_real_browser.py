@@ -97,10 +97,10 @@ def case(browser, url, evidence_dir):
                 # A forced event may have already replaced the bounded canvas;
                 # search is the equivalent explicit navigation fallback.
                 search_and_open(page, branch_access_id)
-        require(panel.get_attribute("data-topology-hierarchy-node-count") == "39", "Access branch did not retain its 38 endpoint neighbors")
+        require(panel.get_attribute("data-topology-hierarchy-node-count") == "40", "Access branch did not retain its 38 endpoint neighbors and upstream context")
         require(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').count() == 1, "Access branch lost a source-connected client")
-        page.screenshot(path=str(evidence_dir / "project090-access-0002.png"), full_page=True)
-        screenshots.append("project090-access-0002.png")
+        page.screenshot(path=str(evidence_dir / "project090-access-0025.png"), full_page=True)
+        screenshots.append("project090-access-0025.png")
 
         # Select repeatedly, including high-degree and endpoint nodes, without changing scope.
         candidates = [dist_id(4), branch_access_id, branch_client_id, client_id(896), branch_access_id, dist_id(4)]
