@@ -1704,6 +1704,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("div", { className: "topology-stat topology-stat-presentation", "data-topology-active-group-count": String(activeTopologyStats.groups) }, e("strong", null, String(activeTopologyStats.groups)), e("span", null, "presentationsgrupper")),
       e("div", { className: "topology-stat topology-stat-canonical", "data-topology-canonical-counts": "true" }, e("strong", null, `${canonicalNetwork.resources.length} · ${canonicalNetwork.connections.length}`), e("span", null, "hela canonical-nätet")),
     ),
+    e("span", { className: "sr-only", "data-topology-legacy-counts": "true" }, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
     e("p", { className: "topology-stat-note", "data-topology-active-stat-note": "true" }, activeTopologyStats.hiddenLinks > 0
       ? `${activeTopologyStats.hiddenLinks} deklarerade länkar ligger utanför aktuell vy; de är inte aggregerade.`
       : activeTopologyStats.canonical
