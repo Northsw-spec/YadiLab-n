@@ -369,9 +369,12 @@ export function validateNetworkWorkbook(document: ImportDocument): readonly Impo
 export function previewNetworkWorkbook(document: ImportDocument, diagnostics: readonly ImportDiagnostic[] = validateNetworkWorkbook(document)): WorkbookPreview {
   const compatibility = resolveWorkbookCompatibility(document);
   const rowsPerSheet: Record<string, number> = {}; const mappedRows: Record<string, number> = {}; const rejectedRows: Record<string, number> = {};
-  const sourceTables = compatibility.profile === "legacy-src-22" ? document.tables : document.tables;
+  // Use the compatibility projection for authoritative rows. It maps
+  // normalized SRC worksheet names to canonical Nodes/Interfaces/Links/… IDs
+  // while leaving documentation sheets under their original names.
+  const sourceTables = compatibility.document.tables;
   for (const table of sourceTables) {
-    const canonicalName = compatibility.profile === "legacy-src-22" && table.tableId.startsWith("SRC ") ? table.tableId.slice(4) : table.tableId;
+    const canonicalName = table.tableId;
     // A physical row can contain several bad fields: count it once in
     // rejectedRows, while preview.errors still counts every diagnostic.
     // Table-level errors without a row are not fictional rejected source rows.
@@ -387,7 +390,7 @@ export function previewNetworkWorkbook(document: ImportDocument, diagnostics: re
       ? (rowsPerSheet[table.tableId] ?? 0) - (rejectedRows[table.tableId] ?? 0)
       : 0;
   }
-  return { mode: "PREVIEW", profile: compatibility.profile, sheetsFound: document.tables.map((x) => x.tableId), authoritativeSheets: compatibility.authoritativeSheets, documentationSheets: compatibility.documentationSheets, preservedDocumentation: compatibility.preservedDocumentation, sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
+  return { mode: "PREVIEW", profile: compatibility.profile, sheetsFound: compatibility.originalSheets, authoritativeSheets: compatibility.authoritativeSheets, documentationSheets: compatibility.documentationSheets, preservedDocumentation: compatibility.preservedDocumentation, sheetsRequired: ["Metadata", "Nodes"], sheetsOptional: standardWorkbookSheets.filter((x) => x !== "Metadata" && x !== "Nodes"), rowsPerSheet, mappedRows, rejectedRows, errors: diagnostics.filter((x) => x.severity === "error").length, warnings: diagnostics.filter((x) => x.severity === "warning").length };
 }
 
 export function mapNetworkWorkbookToScenario(document: ImportDocument): WorkbookImportResult {

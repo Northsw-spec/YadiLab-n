@@ -4758,14 +4758,10 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     preview ? e("div", { className: "network-import-preview", "data-network-import-preview": preview.ok ? "READY" : "BLOCKED" },
       e("h3", null, "Preview – ", preview.filename),
       e("p", null, `Found tables: ${preview.sheets.join(", ") || "none"} · Devices: ${preview.devices} · Explicit links: ${preview.links}`),
-      preview.workbookProfile === "legacy-src-22" ? e("section", { "data-legacy-workbook-profile": "SRC_22_REVIEW_REQUIRED" },
-        e("strong", null, "Workbook detected: 22 populated sheets"),
-        e("p", null, `Authoritative topology: ${preview.authoritativeSheets?.length ?? 0} SRC sheets · documentation: ${preview.documentationSheets?.length ?? 0} sheets`),
-        e("p", null, `Canonical resources: ${preview.devices} · canonical links: ${preview.links}`),
-        e("p", null, "Documentation sheets are preserved as source documentation only. They are not converted into Builder resources, links, routes, VLANs, firewall rules or Engine evidence."),
-        e("label", null,
-          e("input", { type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
-          " I have reviewed the six SRC sheets and the 16 documentation sheets; activate only the canonical source model."),
+      preview.workbookProfile ? e("p", { className: "network-import-detected", "data-network-import-detected": preview.workbookProfile },
+        preview.workbookProfile === "legacy-src-22"
+          ? `Canonical SRC workbook detected: ${preview.devices} devices and ${preview.links} source-declared links; ${preview.documentationSheets?.length ?? 0} supplementary documentation sheets preserved.`
+          : `Canonical workbook detected: ${preview.devices} devices and ${preview.links} source-declared links.`
       ) : null,
       e("p", { "data-network-import-sha": "true", "data-network-import-byte-size": preview.sourceByteSize }, `Original SHA-256: ${preview.sourceSha256} · Bytes: ${preview.sourceByteSize}`),
       e("p", { "data-network-import-unmapped": preview.unmappedColumnCount, "data-network-import-unmapped-status": preview.unmappedColumnCount > 0 ? "UNMAPPED" : "NONE" }, `Unmapped source columns: ${preview.unmappedColumnCount}. Populated unsupported Devices columns BLOCK activation with original sheet, row and field; genuinely blank extra template columns are allowed. Populated supplementary Devices workbook sheets, unsupported selected Links fields and nonprojected canonical workbook sheets/columns also BLOCK activation instead of silently disappearing.`),
@@ -4787,37 +4783,6 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
                 "Review: Use ONLY Connected To declarations"))
       ) : null,
       e("p", { className: "helper-note" }, preview.links === 0 ? "No physical connections provided. Devices will be shown without invented links." : "Only explicitly declared links will appear in the topology."),
-      largeNetworkPreview(preview)&&!tenThousandXlsxProfile(preview)&&!tenThousandOdsProfile(preview)?e("section",{"data-scale-p4b1-profile":
-        tenThousandCsvProfile(preview)?"REVIEW_REQUIRED":"UNSUPPORTED_LARGE_SOURCE"},
-        e("p",null,"Large source: full-graph ELK/ReactFlow and Runtime are blocked. Only an explicit original 10,000/10,000 CSV bounded Builder profile can be activated."),
-        tenThousandCsvProfile(preview)
-          ?e("label",null,
-            e("input",{type:"checkbox","data-scale-p4b1-consent":"true",
-              checked:tenThousandBoundedConsent,disabled:busy,
-              onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
-            "I explicitly approve loading this 10,000-device and 10,000-source-link CSV into editable Builder with only 100 source-row devices displayed per bounded graph page. Source links are modeled, not verified physical cables.")
-          :e("p",null,"No verified large-source UI profile for this size/file; Builder replacement and Runtime remain blocked.")
-      ):null,
-      tenThousandXlsxProfile(preview)?e("section",{
-        "data-scale-p4e1-xlsx-10000-profile":"REVIEW_REQUIRED"
-      },
-        e("p",null,"XLSX original Devices and separate original Links: exactly 10,000 source-declared IDs and 10,000 source-declared endpoint pairs. Only bounded 100-row source views, never full-graph ELK/ReactFlow or Runtime/Engine."),
-        e("label",null,
-          e("input",{type:"checkbox","data-scale-p4e1-consent":"true",
-            checked:tenThousandBoundedConsent,disabled:busy,
-            onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
-          "I explicitly approve importing this genuine XLSX with 10,000 original Devices and 10,000 separate original Links into editable bounded Builder. These are modeled links, not verified physical cables.")
-      ):null,
-      tenThousandOdsProfile(preview)?e("section",{
-        "data-scale-p4f2-ods-10000-profile":"REVIEW_REQUIRED"
-      },
-        e("p",null,"Genuine ODS original Devices and Links sheets: 10,000 original device IDs and 10,000 explicitly declared link IDs. Builder-only bounded 100-row views; no Engine, physical cabling proof or full-graph layout."),
-        e("label",null,
-          e("input",{type:"checkbox","data-scale-p4f2-consent":"true",
-            checked:tenThousandBoundedConsent,disabled:busy,
-            onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
-          "I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages.")
-      ):null,
       preview.diagnostics.length ? e("ul", { className: "validation-list" }, ...preview.diagnostics.slice(0, 30).map((d, i) => e("li", { key: i }, formatNetworkImportDiagnostic(d)))) : e("p", null, "No import diagnostics."),
       isCoreReimport(preview) ? e("section", {
         "data-network-reimport-review": reimportApproved ? "APPROVED" : reimportReview ? "REVIEWED" : "REVIEW_REQUIRED",
@@ -4857,6 +4822,41 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
             } }, reimportApproved ? "Reviewed replacement approved" : "Approve replacing the entire current workspace")
         ) : null
       ) : null,
+      e("div", { className: "network-import-confirmation", "data-network-import-confirmation": "true" },
+      preview.workbookProfile === "legacy-src-22" ? e("section", { className: "network-import-consent", "data-legacy-workbook-profile": "SRC_22_REVIEW_REQUIRED" },
+        e("strong", null, "Explicit approval required for the canonical SRC workbook"),
+        e("p", { id: "legacy-workbook-consent-help" }, `Authoritative topology: ${preview.authoritativeSheets?.length ?? 0} SRC sheets · documentation: ${preview.documentationSheets?.length ?? 0} sheets. Documentation remains source documentation and is not converted into topology or Engine evidence.`),
+        e("label", { htmlFor: "legacy-workbook-consent", className: "network-import-consent-label" },
+          e("input", { id: "legacy-workbook-consent", type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "aria-describedby": "legacy-workbook-consent-help", "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
+          e("span", null, "I have reviewed the six SRC sheets and the supplementary documentation; activate only the canonical source model.")),
+      ) : null,
+      largeNetworkPreview(preview)&&!tenThousandXlsxProfile(preview)&&!tenThousandOdsProfile(preview)?e("section",{className:"network-import-consent", "data-scale-p4b1-profile":
+        tenThousandCsvProfile(preview)?"REVIEW_REQUIRED":"UNSUPPORTED_LARGE_SOURCE"},
+        e("p",null,"Large source: full-graph ELK/ReactFlow and Runtime are blocked. Only an explicit original 10,000/10,000 CSV bounded Builder profile can be activated."),
+        tenThousandCsvProfile(preview)
+          ?e("label",{className:"network-import-consent-label"},
+            e("input",{type:"checkbox","data-scale-p4b1-consent":"true",
+              checked:tenThousandBoundedConsent,disabled:busy,
+              onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
+            e("span",null,"I explicitly approve loading this 10,000-device and 10,000-source-link CSV into editable Builder with only 100 source-row devices displayed per bounded graph page. Source links are modeled, not verified physical cables."))
+          :e("p",null,"No verified large-source UI profile for this size/file; Builder replacement and Runtime remain blocked.")
+      ):null,
+      tenThousandXlsxProfile(preview)?e("section",{className:"network-import-consent", "data-scale-p4e1-xlsx-10000-profile":"REVIEW_REQUIRED"},
+        e("p",null,"XLSX original Devices and separate original Links: exactly 10,000 source-declared IDs and 10,000 source-declared endpoint pairs. Only bounded 100-row source views, never full-graph ELK/ReactFlow or Runtime/Engine."),
+        e("label",{className:"network-import-consent-label"},
+          e("input",{type:"checkbox","data-scale-p4e1-consent":"true",
+            checked:tenThousandBoundedConsent,disabled:busy,
+            onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
+          e("span",null,"I explicitly approve importing this genuine XLSX with 10,000 original Devices and 10,000 separate original Links into editable bounded Builder. These are modeled links, not verified physical cables."))
+      ):null,
+      tenThousandOdsProfile(preview)?e("section",{className:"network-import-consent", "data-scale-p4f2-ods-10000-profile":"REVIEW_REQUIRED"},
+        e("p",null,"Genuine ODS original Devices and Links: 10,000 original device IDs and 10,000 explicitly declared link IDs. Builder-only bounded 100-row views; no Engine, physical cabling proof or full-graph layout."),
+        e("label",{className:"network-import-consent-label"},
+          e("input",{type:"checkbox","data-scale-p4f2-consent":"true",
+            checked:tenThousandBoundedConsent,disabled:busy,
+            onChange:event=>setTenThousandBoundedConsent(event.currentTarget.checked)}),
+          e("span",null,"I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages."))
+      ):null,
       e("div", { className: "network-import-actions" },
         e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
         e("button", { type: "button", disabled: !preview.ok || busy ||
@@ -4865,6 +4865,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent)||
           (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-activate": "true", onClick: () => activate("builder") }, busy ? "Validating…" : "Create topology in Builder (edit only)")),
       e("p", { className: "helper-note", "data-import-probe-boundary": "true" }, "Modeled probes use declared Windows/Linux source hosts and existing Engine evidence. A topology inventory alone cannot prove connectivity, routing, DNS or open ports: UNKNOWN is expected when required facts are absent. No real traffic is sent."),
+      ),
     ) : null,
     ),
   );

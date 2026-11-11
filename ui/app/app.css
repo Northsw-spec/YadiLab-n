@@ -720,6 +720,15 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .network-import-preview { padding-top: 8px; }
 .network-import-preview h3 { font-size: 1rem; }
 .network-import-preview .validation-list { max-height: 240px; overflow-y: auto; }
+.network-import-detected { margin: .55rem 0; padding: .65rem .8rem; border: 1px solid #5ebf9b; border-radius: 8px; background: rgba(52, 160, 116, .14); color: #d9ffef; font-weight: 700; }
+.network-import-confirmation { position: sticky; bottom: 0; z-index: 2; margin: 1rem -0.35rem -0.35rem; padding: .85rem .35rem .35rem; border-top: 2px solid #5ebfe7; background: color-mix(in srgb, var(--panel-bg, #182632) 94%, #07111f); box-shadow: 0 -10px 24px rgba(1, 8, 20, .38); }
+.network-import-consent { margin: 0 0 .75rem; padding: .8rem .9rem; border: 2px solid #5ebfe7; border-radius: 10px; background: color-mix(in srgb, #185074 28%, var(--panel-bg, #182632)); }
+.network-import-consent strong { display: block; margin-bottom: .35rem; }
+.network-import-consent p { margin: .25rem 0 .6rem; }
+.network-import-consent-label { display: flex; align-items: flex-start; gap: .75rem; min-height: 44px; padding: .55rem .6rem; border-radius: 8px; cursor: pointer; line-height: 1.35; }
+.network-import-consent-label:hover { background: rgba(94, 191, 231, .12); }
+.network-import-panel input[type="checkbox"] { width: 24px; min-width: 24px; height: 24px; margin: 0; padding: 0; accent-color: #5ebfe7; }
+.network-import-panel input[type="checkbox"]:focus-visible { outline: 3px solid #ffd166; outline-offset: 3px; }
 
 /* IMPORT-003: import review is a foreground dialog, not hidden below long header content. */
 .network-import-overlay { position: fixed; z-index: 10000; inset: 0; display: flex; justify-content: center; align-items: flex-start; overflow: auto; padding: min(6vh, 40px) 14px 22px; background: rgba(1, 8, 20, .86); }
@@ -731,6 +740,9 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 /* IMPORT-004: make imported topology probe actions obvious, while preserving the source-only Builder path. */
 .network-import-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin-top: .6rem; }
 .network-import-actions button { min-height: 2.7rem; padding: .55rem .9rem; }
+.network-import-confirmation .network-import-actions { margin-top: .25rem; }
+.network-import-confirmation .network-import-actions button { flex: 1 1 18rem; }
+.network-import-confirmation > .helper-note { margin: .55rem 0 .1rem; }
 .network-import-actions [data-network-import-runtime] { background: #174e54; color: #effcfb; border: 1px solid #6eb7ad; font-weight: 700; }
 .network-import-runtime-button { margin: .35rem 0 .4rem; background: #174e54; color: #effcfb; border: 1px solid #6eb7ad; border-radius: 8px; padding: .65rem .9rem; font-weight: 700; }
 
