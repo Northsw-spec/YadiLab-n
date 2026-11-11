@@ -804,7 +804,7 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .legacy-workspace-menus > .workspace-menu:nth-child(3) { left: 200px; }
 .legacy-workspace-menus > .workspace-menu:nth-child(4) { left: 300px; }
 .legacy-workspace-menus .workspace-menu > summary { width: 96px; min-width: 96px; height: 1px; min-height: 1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
-.legacy-workspace-menus .workspace-menu-panel { position: absolute; left: 0; right: auto; top: auto; bottom: 1px; width: 96px; min-width: 96px; max-width: 96px; max-height: none; height: auto; overflow: visible; padding: 0; margin: 0; gap: 0; box-shadow: none; }
+.legacy-workspace-menus .workspace-menu-panel { position: absolute; left: 0; right: auto; top: auto; bottom: 1px; width: 96px; min-width: 96px; max-width: 96px; height: min(672px, calc(100vh - 96px)); max-height: calc(100vh - 96px); overflow-y: auto; overflow-x: visible; padding: 0; margin: 0; gap: 0; box-shadow: none; }
 .legacy-workspace-menus .workspace-menu-panel > button, .legacy-workspace-menus .workspace-menu-panel > .file-button { display: block; width: 96px; min-width: 96px; max-width: 96px; min-height: 2.25rem; height: 2.25rem; padding: 0; margin: 0; overflow: visible; white-space: nowrap; }
 .legacy-workspace-menus .workspace-menu-panel input { display: none; }
 .menu-heading, .advanced-tools-heading { display: grid; gap: .12rem; margin-bottom: .15rem; }
