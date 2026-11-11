@@ -1507,7 +1507,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextMenu(null);
   };
   useEffect(() => {
-    if (!validTenThousandFocus || tenThousandHierarchyIndex) return undefined;
+    if (!validTenThousandFocus) return undefined;
     const panel = topologyPanelRef.current;
     if (!panel) return undefined;
     const onNativeDoubleClick = (event) => {

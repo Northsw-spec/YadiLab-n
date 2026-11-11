@@ -8,7 +8,7 @@ from pathlib import Path
 from time import monotonic
 from urllib.parse import urlsplit
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 from run_ic010_p2_shared_xml_real_browser import exported_source, menu, require, setup
 from run_project086_hierarchical_xlsx_real_browser import (
@@ -84,7 +84,13 @@ def case(browser, url, evidence_dir):
         access_node = page.locator(f'.react-flow__node[data-id="{branch_access_id}"]')
         expect(access_node).to_be_visible(timeout=180000)
         access_node.dblclick(force=True)
-        page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=180000)
+        try:
+            page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=5000)
+        except PlaywrightTimeoutError:
+            # Pinned Chromium can deliver forced dblclick through ReactFlow's
+            # overlay; production also has the bubbled DOM event path.
+            access_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
+            page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=180000)
         require(page.locator('[data-topology-hierarchy-node-count="39"]').count() == 1, "Access branch did not retain its 38 endpoint neighbors")
         require(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').count() == 1, "Access branch lost a source-connected client")
         page.screenshot(path=str(evidence_dir / "project090-access-0002.png"), full_page=True)
