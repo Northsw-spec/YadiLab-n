@@ -5084,6 +5084,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         finally { event.currentTarget.value = ""; }
       },
       hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
+  const advancedFileAction = (label, accept, onChange) => fileAction(label, accept, onChange, null);
   const networkPickerRef = useRef(null);
   // Opening the native picker happens synchronously within the user's click,
   // not from an effect: browsers reject deferred file dialogs.
@@ -5117,15 +5118,15 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     : [
       { label: "Exportera framsteg", searchTerms: "progress", node: actionButton("Exportera framsteg", exportProgress, { "data-export-action": "progress" }) },
       { label: "Exportera sessionsbackup", searchTerms: "session troubleshooting backup", node: actionButton("Exportera sessionsbackup", exportTroubleshootingSession, { "data-export-action": "session" }) },
-      { label: "Läs in framsteg", searchTerms: "load progress", node: fileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress") },
-      { label: "Importera sessionsbackup", searchTerms: "load session", node: fileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") },
+      { label: "Läs in framsteg", searchTerms: "load progress", node: advancedFileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0])) },
+      { label: "Importera sessionsbackup", searchTerms: "load session", node: advancedFileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0])) },
     ];
   const scenarioItems = [
     { label: "Starta enterprise-labb", searchTerms: "enterprise scenario", node: actionButton("Starta enterprise-labb", () => openEnterpriseScenario(true), { disabled: !enterpriseScenarioId }) },
     { label: "Starta verifierad demo", searchTerms: "verified delivery", node: actionButton("Starta verifierad demo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
     { label: "Starta valt labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta valt labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
-    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json") },
-    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab") },
+    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: advancedFileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0])) },
+    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: advancedFileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0])) },
   ];
   const builderItems = [
     { label: "Öppna enterprise i byggläget", searchTerms: "enterprise builder", node: actionButton("Öppna enterprise i byggläget", () => openEnterpriseScenario(false), { disabled: !enterpriseScenarioId }) },
