@@ -24,11 +24,79 @@ jobs:
           npm run build:browser
           node scripts/verify_browser_release.mjs
       - name: Install one pinned Chromium
+        shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m venv "$RUNNER_TEMP/yadilab-playwright"
-          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m pip install --disable-pip-version-check 'playwright==1.55.0'
-          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m playwright install --with-deps chromium
+          venv="$RUNNER_TEMP/yadilab-playwright"
+          python3 -m venv "$venv"
+          PYTHON="$venv/bin/python"
+
+          "$PYTHON" -m pip install \
+            --disable-pip-version-check \
+            --retries 3 \
+            --timeout 60 \
+            'playwright==1.55.0'
+
+          install_dependencies() {
+            echo "Installing Chromium Linux dependencies via Playwright"
+            DEBIAN_FRONTEND=noninteractive "$PYTHON" -m playwright install-deps chromium
+          }
+
+          dependencies_installed=false
+          for attempt in 1 2 3; do
+            echo "Chromium dependency installation attempt $attempt/3"
+            if install_dependencies; then
+              dependencies_installed=true
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              delay=$((attempt * 15))
+              echo "Dependency installation failed; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+
+          if [ "$dependencies_installed" != true ]; then
+            echo "::error::Chromium Linux dependencies failed after 3 attempts; this is an infrastructure failure."
+            exit 1
+          fi
+
+          # Install the browser separately so the dependency retry cannot mask
+          # a missing Playwright browser binary or a failed browser download.
+          "$PYTHON" -m playwright install chromium
+
+          browser_path="$($PYTHON - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              print(playwright.chromium.executable_path)
+          PY
+          )"
+          test -x "$browser_path"
+          browser_ldd="$(ldd "$browser_path")"
+          if grep -Fq 'not found' <<<"$browser_ldd"; then
+            echo "::error::Pinned Chromium has unresolved shared-library dependencies."
+            printf '%s\n' "$browser_ldd"
+            exit 1
+          fi
+
+          "$PYTHON" - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(
+                  headless=True,
+                  args=[
+                      "--disable-background-networking",
+                      "--disable-dev-shm-usage",
+                  ],
+              )
+              page = browser.new_page()
+              page.goto("about:blank")
+              assert page.title() == ""
+              print("PASS: Pinned Playwright Chromium launched:", browser.version)
+              browser.close()
+          PY
       - name: Mounted UI identity, import truth and reviewed graph
         env:
           YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
