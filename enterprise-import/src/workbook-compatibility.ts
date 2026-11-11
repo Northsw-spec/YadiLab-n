@@ -25,6 +25,16 @@ export interface WorkbookCompatibility {
 }
 
 const CANONICAL = ["Nodes", "Interfaces", "Links", "Zones", "Layout", "Metadata"] as const;
+/**
+ * Worksheet names are producer-controlled text. Excel commonly preserves
+ * non-breaking spaces or harmless casing/spacing changes when a workbook is
+ * copied between templates. Match only the documented canonical names after
+ * deterministic Unicode/whitespace normalization; never match by position or
+ * filename. The original tableId remains attached to every source locator.
+ */
+function normalizedSheetName(value: string): string {
+  return value.normalize("NFKC").replace(/\u00a0/g, " ").trim().replace(/\s+/g, " ").toLowerCase();
+}
 const populated = (value: unknown): boolean => value !== undefined && value !== null &&
   !(typeof value === "string" && value.trim() === "");
 
@@ -51,14 +61,32 @@ function hasPopulatedRows(table: ImportTable | undefined): boolean {
 }
 
 export function resolveWorkbookCompatibility(document: ImportDocument): WorkbookCompatibility {
-  const tables = new Map(document.tables.map((table) => [table.tableId, table] as const));
+  const normalizedTables = new Map<string, ImportTable[]>();
+  for (const table of document.tables) {
+    const key = normalizedSheetName(table.tableId);
+    const matches = normalizedTables.get(key) ?? [];
+    matches.push(table);
+    normalizedTables.set(key, matches);
+  }
   const originalSheets = document.tables.map((table) => table.tableId);
   const diagnostics: ImportDiagnostic[] = [];
   const srcNames = CANONICAL.map((name) => `SRC ${name}`);
-  const hasAllSrc = srcNames.every((name) => tables.has(name));
-  const hasAnySrc = srcNames.some((name) => tables.has(name));
-  const hasAllCanonical = CANONICAL.every((name) => tables.has(name));
-  const hasAnyCanonical = CANONICAL.some((name) => tables.has(name));
+  const findUnique = (name: string): ImportTable | undefined => {
+    const matches = normalizedTables.get(normalizedSheetName(name)) ?? [];
+    if (matches.length > 1) diagnostics.push({
+      code: "WORKBOOK_SHEET_NAME_COLLISION",
+      severity: "error",
+      message: `Multiple worksheets normalize to '${name}'. No worksheet was selected implicitly.`,
+      table: matches.map((table) => table.tableId).join(", "),
+    });
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const srcTables = srcNames.map(findUnique);
+  const canonicalTablesByName = CANONICAL.map(findUnique);
+  const hasAllSrc = srcTables.every(Boolean);
+  const hasAnySrc = srcTables.some(Boolean);
+  const hasAllCanonical = canonicalTablesByName.every(Boolean);
+  const hasAnyCanonical = canonicalTablesByName.some(Boolean);
 
   if (hasAnySrc && !hasAllSrc) {
     diagnostics.push({
@@ -77,8 +105,9 @@ export function resolveWorkbookCompatibility(document: ImportDocument): Workbook
 
   if (hasAllSrc && !hasAnyCanonical) {
     const authoritativeSheets = srcNames.slice();
-    const documentationTables = document.tables.filter((table) => !authoritativeSheets.includes(table.tableId));
-    const canonicalTables = CANONICAL.map((name) => cloneTable(tables.get(`SRC ${name}`)!, name));
+    const authoritativeOriginalIds = new Set(srcTables.map((table) => table!.tableId));
+    const documentationTables = document.tables.filter((table) => !authoritativeOriginalIds.has(table.tableId));
+    const canonicalTables = CANONICAL.map((name, index) => cloneTable(srcTables[index]!, name));
     const documentationSheets = documentationTables.map((table) => table.tableId);
     for (const table of documentationTables) {
       if (hasPopulatedRows(table)) diagnostics.push({
@@ -100,12 +129,18 @@ export function resolveWorkbookCompatibility(document: ImportDocument): Workbook
   }
 
   if (hasAllCanonical) {
-    const extraFields = document.tables.some((table) =>
-      table.tableId === "Nodes" && Object.keys(table.records[0]?.fields ?? {}).some((field) => field === "Floor / Area" || field === "Department" || field === "Function" || field === "Training Note")
-      || table.tableId === "Interfaces" && Object.keys(table.records[0]?.fields ?? {}).some((field) => field === "Addressing Note")
-      || table.tableId === "Links" && Object.keys(table.records[0]?.fields ?? {}).some((field) => field === "Medium" || field === "Training Note")
-      || table.tableId === "Zones" && Object.keys(table.records[0]?.fields ?? {}).some((field) => field === "Illustrative Subnet" || field === "Segmentation Note")
-      || table.tableId === "Metadata" && Object.keys(table.records[0]?.fields ?? {}).some((field) => field === "notice" || field === "sourceUrl" || field === "scope"));
+    const canonicalByName = new Map(CANONICAL.map((name, index) => [name, canonicalTablesByName[index]!]));
+    const canonicalOriginalIds = new Set(canonicalTablesByName.map((table) => table!.tableId));
+    const preservedExtraTables = document.tables.filter((table) => !canonicalOriginalIds.has(table.tableId));
+    const extraFields = CANONICAL.some((name) => {
+      const table = canonicalByName.get(name);
+      const fields = Object.keys(table?.records[0]?.fields ?? {});
+      return name === "Nodes" && fields.some((field) => field === "Floor / Area" || field === "Department" || field === "Function" || field === "Training Note")
+        || name === "Interfaces" && fields.some((field) => field === "Addressing Note")
+        || name === "Links" && fields.some((field) => field === "Medium" || field === "Training Note")
+        || name === "Zones" && fields.some((field) => field === "Illustrative Subnet" || field === "Segmentation Note")
+        || name === "Metadata" && fields.some((field) => field === "notice" || field === "sourceUrl" || field === "scope");
+    });
     const documentationSheets: string[] = [];
     const preservedDocumentation: PreservedDocumentationSheet[] = [];
     if (extraFields) {
@@ -119,7 +154,7 @@ export function resolveWorkbookCompatibility(document: ImportDocument): Workbook
     }
     return {
       profile: extraFields ? "legacy-six" : "standard",
-      document,
+      document: { tables: [...CANONICAL.map((name, index) => cloneTable(canonicalTablesByName[index]!, name)), ...preservedExtraTables] },
       originalSheets,
       authoritativeSheets: CANONICAL.slice(),
       documentationSheets,
@@ -167,10 +202,10 @@ export function documentationNotes(document: ImportDocument, profile: LegacyWork
   if (profile !== "legacy-six" && profile !== "legacy-src-22") return [];
   const canonicalBySource = new Map<string, string>();
   for (const canonical of CANONICAL) canonicalBySource.set(canonical, canonical);
-  for (const canonical of CANONICAL) canonicalBySource.set(`SRC ${canonical}`, canonical);
+  for (const canonical of CANONICAL) canonicalBySource.set(normalizedSheetName(`SRC ${canonical}`), canonical);
   const notes: { table: string; record: ImportRecord; field: string; cell: ImportCell }[] = [];
   for (const table of document.tables) {
-    const canonical = canonicalBySource.get(table.tableId);
+    const canonical = canonicalBySource.get(normalizedSheetName(table.tableId));
     if (canonical) {
       for (const record of table.records) for (const [field, cell] of Object.entries(record.fields)) {
         if (isLegacyDocumentationField(canonical, field) && populated(cell.value)) notes.push({ table: canonical, record, field, cell });

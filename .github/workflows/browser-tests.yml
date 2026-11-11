@@ -115,6 +115,11 @@ jobs:
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project088-normal-topology"
           # PROJECT-088: canonical normal-topology model invariants.
           npm run test:project088-topology
+          # PROJECT-089: canonical workbook detection and visible consent gate.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project089_import_consent_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project089-import-consent"
+          npm run test:project089-import-consent
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
