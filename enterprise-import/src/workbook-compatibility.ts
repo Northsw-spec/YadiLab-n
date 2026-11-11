@@ -201,7 +201,7 @@ export function documentationNotes(document: ImportDocument, profile: LegacyWork
 }[] {
   if (profile !== "legacy-six" && profile !== "legacy-src-22") return [];
   const canonicalBySource = new Map<string, string>();
-  for (const canonical of CANONICAL) canonicalBySource.set(canonical, canonical);
+  for (const canonical of CANONICAL) canonicalBySource.set(normalizedSheetName(canonical), canonical);
   for (const canonical of CANONICAL) canonicalBySource.set(normalizedSheetName(`SRC ${canonical}`), canonical);
   const notes: { table: string; record: ImportRecord; field: string; cell: ImportCell }[] = [];
   for (const table of document.tables) {
