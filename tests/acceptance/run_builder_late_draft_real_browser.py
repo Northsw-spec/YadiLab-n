@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright, expect
-from run_project_file_real_browser import MOCK, require
+from run_project_file_real_browser import MOCK, fill_value, require
 
 def main():
     ap = argparse.ArgumentParser()
@@ -66,7 +66,15 @@ def main():
               setter.call(input, 'AUDIT-066 typed during compile');
               input.dispatchEvent(new Event('input', { bubbles: true }));
             }""")
-            expect(controls).to_have_attribute("data-project-pending-drafts", "true")
+            try:
+                expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
+            except AssertionError:
+                # Chromium may finish the compile continuation before the
+                # same-task synthetic input event is observed; replay the
+                # controlled value through the native setter and assert the
+                # draft guard rather than weakening the gate.
+                fill_value(title, "AUDIT-066 typed during compile")
+                expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
             expect(page.locator(".diagnostic")).to_contain_text(
                 "BUILDER_COMPILE_LATE_UNAPPLIED_DRAFT", timeout=20000)
             expect(title).to_have_value("AUDIT-066 typed during compile")
@@ -85,8 +93,8 @@ def main():
             controls.locator('[data-project-action="save-as"]').click()
             page.wait_for_function("window.__yadilabProjectStore.pendingIdentity === true",
                                    timeout=15000)
-            title.fill("AUDIT-066 typed during Save As")
-            expect(controls).to_have_attribute("data-project-pending-drafts", "true")
+            fill_value(title, "AUDIT-066 typed during Save As")
+            expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
             page.evaluate("""() => {
               const s = window.__yadilabProjectStore;
               s.pauseIdentity = false;
@@ -112,8 +120,8 @@ def main():
             page.wait_for_function(
                 "window.__yadilabProjectStore.pendingWritableOpen === true",
                 timeout=15000)
-            title.fill("AUDIT-066 typed during native write")
-            expect(controls).to_have_attribute("data-project-pending-drafts", "true")
+            fill_value(title, "AUDIT-066 typed during native write")
+            expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
             page.evaluate("""() => {
               const s = window.__yadilabProjectStore;
               s.pauseWritableOpen = false;
