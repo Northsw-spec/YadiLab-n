@@ -318,6 +318,7 @@ import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
 import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.ts";
+import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 
 const e = React.createElement;
@@ -983,6 +984,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // An edited 5000 model with stale focus must never fall back to unbounded layout.
   const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
+  const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
+  const normalTopologyCanvas = topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
+    canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
+    vm?.canvas && !hasManualLayoutOverrides
+    ? compactNormalTopologyProjection(vm.canvas)
+    : vm?.canvas;
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
     ? topologyFocusProjection
@@ -990,7 +997,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const projection = topologyOverview ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
-    validThousandFocus?.focusCanvas ?? vm?.canvas;
+    validThousandFocus?.focusCanvas ?? normalTopologyCanvas;
   const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
     ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
     : null);
