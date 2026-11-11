@@ -1,10 +1,15 @@
 import type { CanvasProjection, CanvasNode } from "./types.js";
 import { computeOrthogonalRoutes } from "./topology-edge-routing.js";
 
-const GRID_COLUMNS = 3;
-const GRID_GAP_X = 96;
-const GRID_GAP_Y = 84;
+const GRID_COLUMNS = 5;
+const GRID_GAP_X = 56;
+const GRID_GAP_Y = 60;
 const GRID_PADDING = 72;
+const ZONE_HEADER = 72;
+const RESOURCE_WIDTH = 180;
+const RESOURCE_HEIGHT = 96;
+const RESOURCE_GAP = 28;
+const ZONE_PADDING = 32;
 
 /**
  * The imported ELK document may place many independent declared zones in one
@@ -13,7 +18,40 @@ const GRID_PADDING = 72;
  * is a view projection: it does not rewrite LayoutDocument or Builder source.
  */
 export function compactNormalTopologyProjection(projection: CanvasProjection): CanvasProjection {
-  const rootItems = projection.nodes.filter((node) => !node.parentId);
+  const directChildren = new Map<string, CanvasNode[]>();
+  for (const node of projection.nodes) {
+    if (node.parentId && node.type === "resource") {
+      const children = directChildren.get(node.parentId) ?? [];
+      children.push(node);
+      directChildren.set(node.parentId, children);
+    }
+  }
+  const reflowed = projection.nodes.map((node) => {
+    if (node.type !== "zone") return node;
+    const children = directChildren.get(node.id) ?? [];
+    if (!children.length) return node;
+    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(children.length))));
+    const rows = Math.ceil(children.length / columns);
+    const width = Math.max(node.width, ZONE_PADDING * 2 + columns * RESOURCE_WIDTH + (columns - 1) * RESOURCE_GAP);
+    const height = ZONE_HEADER + ZONE_PADDING + rows * RESOURCE_HEIGHT + (rows - 1) * RESOURCE_GAP + ZONE_PADDING;
+    return { ...node, width, height };
+  });
+  const reflowedByParent = new Map<string, CanvasNode[]>(directChildren);
+  const reflowedChildren = reflowed.map((node) => {
+    if (!node.parentId || node.type !== "resource") return node;
+    const siblings = reflowedByParent.get(node.parentId) ?? [];
+    const index = siblings.findIndex((sibling) => sibling.id === node.id);
+    if (index < 0) return node;
+    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(siblings.length))));
+    return {
+      ...node,
+      position: {
+        x: ZONE_PADDING + (index % columns) * (RESOURCE_WIDTH + RESOURCE_GAP),
+        y: ZONE_HEADER + ZONE_PADDING + Math.floor(index / columns) * (RESOURCE_HEIGHT + RESOURCE_GAP),
+      },
+    };
+  });
+  const rootItems = reflowedChildren.filter((node) => !node.parentId);
   if (rootItems.length <= 1) return projection;
   const columns = Math.min(GRID_COLUMNS, Math.max(1, rootItems.length));
   const columnWidths = Array.from({ length: columns }, () => 0);
@@ -36,7 +74,7 @@ export function compactNormalTopologyProjection(projection: CanvasProjection): C
   rootItems.forEach((node, index) => {
     nextPositions.set(node.id, { x: columnX[index % columns] ?? GRID_PADDING, y: rowY[Math.floor(index / columns)] ?? GRID_PADDING });
   });
-  const nodes = projection.nodes.map((node) => {
+  const nodes = reflowedChildren.map((node) => {
     const next = nextPositions.get(node.id);
     return next ? { ...node, position: next } : node;
   });
