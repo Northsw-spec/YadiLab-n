@@ -43,6 +43,11 @@ def assert_scope(page, panel, source_links, scope_name):
         for row in source_links[1]
         if row[1] in visible and row[2] in visible
     }
+    page.wait_for_function(
+        "expected => document.querySelectorAll('path[data-connection-source][data-connection-target][data-hierarchy-visual=\\\"true\\\"]').length === expected",
+        arg=len(expected),
+        timeout=180000,
+    )
     actual_rows = rendered_links(page)
     actual = [row["id"] for row in actual_rows]
     require(len(actual) == len(set(actual)), f"{scope_name}: duplicate rendered connection IDs")
