@@ -1315,6 +1315,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onSelectionChange = ({ nodes, edges }) => {
     const active = liveTopologyWorkspace();
     if (!active) return;
+    if (tenThousandHierarchyIndex) return;
     const nodeIds = nodes.map((node) => node.id);
     const edgeIds = edges.map((edge) => edge.id);
     if (active.mode !== "builder") return;
