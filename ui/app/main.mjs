@@ -1743,6 +1743,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
     ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer."),
   );
+  const topologyActiveSummary = e("section", {
+    className: "topology-active-summary",
+    "data-topology-active-summary": "true",
+    "aria-label": "Aktiv topology",
+  },
+    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
+    e("span", null, `${activeTopologyStats.devices} aktiva enheter · ${activeTopologyStats.links} aktiva länkar · ${activeTopologyStats.groups} presentationsgrupper`),
+    e("small", null, `${canonicalNetwork.resources.length} · ${canonicalNetwork.connections.length} i hela canonical-nätet · gruppkort räknas inte som fysiska enheter`),
+  );
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
       e("div", { className: "topology-mode-switcher", "data-topology-view-mode": topologyViewMode, role: "group", "aria-label": "Topology view mode" },
@@ -2006,7 +2015,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("span", null, `Sida ${topologyFocusPage}/${localFocusPage.pageCount}`),
         e("button", { type: "button", disabled: topologyFocusPage >= localFocusPage.pageCount, onClick: () => { const page = Math.min(localFocusPage.pageCount, topologyFocusPage + 1); setTopologyFocusPage(page); setTopologyViewHistory((history) => history.map((item, index) => index === history.length - 1 ? { ...item, page } : item)); } }, "Nästa fokusvy")) : null
     ),
-    topologyExplorer,
+    topologyActiveSummary,
     e("section", {
       ref: topologyPanelRef,
       className: "topology-panel",
@@ -2092,6 +2101,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         ),
       ) : null),
     ),
+    topologyExplorer,
     journey ? e("section", {
       className: `journey-player truth-${journey.truth.toLowerCase()}`,
       "data-visual-journey": "ready",
