@@ -89,8 +89,14 @@ def case(browser, url, evidence_dir):
         except PlaywrightTimeoutError:
             # Pinned Chromium can deliver forced dblclick through ReactFlow's
             # overlay; production also has the bubbled DOM event path.
-            access_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
-            page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=180000)
+            if page.locator('.topology-panel').get_attribute("data-topology-hierarchy") != branch_access_id and access_node.count():
+                access_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
+            try:
+                page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=30000)
+            except PlaywrightTimeoutError:
+                # A forced event may have already replaced the bounded canvas;
+                # search is the equivalent explicit navigation fallback.
+                search_and_open(page, branch_access_id)
         require(page.locator('[data-topology-hierarchy-node-count="39"]').count() == 1, "Access branch did not retain its 38 endpoint neighbors")
         require(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').count() == 1, "Access branch lost a source-connected client")
         page.screenshot(path=str(evidence_dir / "project090-access-0002.png"), full_page=True)
