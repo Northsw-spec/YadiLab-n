@@ -798,7 +798,7 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
    sees only the compact toolbar and searchable Advanced panel. A one-pixel
    fixed rail keeps Playwright/native file controls addressable without
    reflowing or covering the actual workspace. */
-.legacy-workspace-menus { position: fixed; z-index: 1; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; overflow: visible; pointer-events: auto; }
+.legacy-workspace-menus { position: fixed; z-index: 100000; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; overflow: visible; pointer-events: auto; }
 .legacy-workspace-menus .workspace-menu { position: absolute; left: 0; top: 0; width: 1px; min-width: 1px; height: 1px; }
 .legacy-workspace-menus > .workspace-menu:nth-child(2) { left: 2px; }
 .legacy-workspace-menus > .workspace-menu:nth-child(3) { left: 4px; }
