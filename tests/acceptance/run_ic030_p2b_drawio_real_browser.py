@@ -29,9 +29,9 @@ def choose(page, data=RAW):
     page.locator('[data-drawio-candidate-file="true"]').set_input_files({
       "name":FILENAME,"mimeType":"application/xml","buffer":data})
     expect(page.locator('[data-drawio-candidate-controls="REVIEW_REQUIRED"]')).to_be_visible(timeout=30000)
-    require(page.locator('[data-drawio-candidate-source-sha]').inner_text()==hashlib.sha256(data).hexdigest(),
+    require((page.locator('[data-drawio-candidate-source-sha]').text_content() or "")==hashlib.sha256(data).hexdigest(),
             "Original bytes SHA-256 not displayed accurately")
-    require("Compressed pages: " in page.locator('[data-drawio-candidate-counts]').inner_text(),
+    require("Compressed pages: " in (page.locator('[data-drawio-candidate-counts]').text_content() or ""),
             "Actual compressed diagrams not parsed")
     require(page.locator('[data-drawio-candidate-selected-nodes="0"]').count()==1,
             "Implicit default node selection")

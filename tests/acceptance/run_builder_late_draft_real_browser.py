@@ -70,7 +70,7 @@ def main():
             expect(page.locator(".diagnostic")).to_contain_text(
                 "BUILDER_COMPILE_LATE_UNAPPLIED_DRAFT", timeout=20000)
             expect(title).to_have_value("AUDIT-066 typed during compile")
-            require("AUDIT-066 typed" not in page.locator(".mission-strip").inner_text(),
+            require("AUDIT-066 typed" not in (page.locator(".mission-strip").text_content() or ""),
                     "Compiler committed unapplied form text")
             page.once("dialog", lambda dialog: dialog.accept())
             inspector.get_by_role("button", name="Förkasta inspektörsutkast").click()

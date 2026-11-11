@@ -31,7 +31,7 @@ def select_file(page,fmt,variant):
     preview=page.locator('[data-network-import-preview]')
     expect(preview).to_be_visible(timeout=30000)
     require(hashlib.sha256(data).hexdigest() in
-        page.locator('[data-network-import-sha]').inner_text(),
+        page.locator('[data-network-import-sha]').text_content() or "",
         "Original full source SHA was not displayed")
     return preview
 
@@ -46,7 +46,7 @@ def run_selected(pane,page,host,probe,destination,truth):
     transcript=page.locator('[data-active-probe-transcript]').first
     expect(transcript).to_be_visible(timeout=25000)
     expect(transcript).to_contain_text("verdict "+truth,timeout=20000)
-    message=transcript.inner_text()
+    message=transcript.text_content() or ""
     require("NO_GUEST_COMMAND_EXECUTION" in message,
             "Modeled probe boundary incorrectly implies guest/physical execution")
     require(transcript.get_attribute("data-active-probe-scenario-hash")==
@@ -63,7 +63,7 @@ def case_runtime(browser,url,fmt):
     try:
         source=select_file(page,fmt,"valid")
         expect(source).to_have_attribute("data-network-import-preview","READY")
-        txt=source.inner_text()
+        txt=source.text_content() or ""
         require("Devices: 3" in txt and "Explicit links: 2" in txt,
                 "Unexpected modeled graph/connection count for "+fmt)
         require(page.locator('[data-network-import-runtime]').is_enabled(),
@@ -102,8 +102,9 @@ def case_conflicts(browser,url,fmt):
         ):
             pane=select_file(page,fmt,variant)
             expect(pane).to_have_attribute("data-network-import-preview","BLOCKED")
-            require(code in pane.inner_text(),"Invalid typed document was accepted: "+variant)
-            require("10.9.10.99" not in pane.inner_text(),"Conflicting raw IP disclosed")
+            pane_text = pane.text_content() or ""
+            require(code in pane_text,"Invalid typed document was accepted: "+variant)
+            require("10.9.10.99" not in pane_text,"Conflicting raw IP disclosed")
             require(page.locator('[data-network-import-activate]').is_disabled(),
                     "Conflicting document Builder was available")
             require(page.locator('[data-network-import-runtime]').is_disabled(),
@@ -141,7 +142,7 @@ def case_dual_stack_source_truth(browser,url):
         preview=page.locator('[data-network-import-preview]')
         expect(preview).to_have_attribute("data-network-import-preview","READY",timeout=30000)
         require(hashlib.sha256(data).hexdigest() in
-                page.locator('[data-network-import-sha]').inner_text(),
+                page.locator('[data-network-import-sha]').text_content() or "",
                 "Dual-stack original CSV SHA mismatch")
         require(preview.locator('[data-network-import-unmapped="0"]').count()==1,
                 "Documented IPv6/MTU/port columns were silently unmapped")
@@ -181,7 +182,7 @@ def case_dual_stack_source_truth(browser,url):
         future.value.set_files({"name":"bad-ipv6.csv","mimeType":"text/csv","buffer":data})
         blocked=invalid.locator('[data-network-import-preview]')
         expect(blocked).to_have_attribute("data-network-import-preview","BLOCKED",timeout=30000)
-        require("WORKBOOK_IPV6_INVALID" in blocked.inner_text(),
+        require("WORKBOOK_IPV6_INVALID" in (blocked.text_content() or ""),
                 "Malformed IPv6 was not rejected in actual compiled app")
         require(invalid.locator('[data-network-import-activate]').is_disabled(),
                 "Malformed IPv6 incorrectly offered Builder activation")
@@ -267,10 +268,10 @@ def case_unprojected_workbook(browser,url):
             expect(preview).to_have_attribute(
                 "data-network-import-preview",expected,timeout=30000)
             require(hashlib.sha256(data).hexdigest() in
-                    page.locator('[data-network-import-sha]').inner_text(),
+                    page.locator('[data-network-import-sha]').text_content() or "",
                     "Original canonical workbook SHA missing: "+name)
             if code:
-                require(code in preview.inner_text(),
+                require(code in (preview.text_content() or ""),
                         "Canonical source fact was discarded without error: "+name)
                 original_locations={
                     "declared_routes":"Routes / row 1",
@@ -282,7 +283,7 @@ def case_unprojected_workbook(browser,url):
                     "conflicting_gateway_columns":"Nodes / row 1 / field Default Gateway",
                 }
                 original_location=original_locations[name]
-                require(original_location in preview.inner_text(),
+                require(original_location in (preview.text_content() or ""),
                         "The actual import UI did not locate the source row/field: "+name)
                 require(page.locator('[data-network-import-activate]').is_disabled(),
                         "Unmapped canonical facts offered partial Builder activation")
@@ -346,11 +347,11 @@ def case_shorthand_supplemental_source_truth(browser,url):
             review=page.locator('[data-network-import-preview]')
             expect(review).to_have_attribute(
                 "data-network-import-preview","BLOCKED",timeout=30000)
-            text=review.inner_text()
+            text=review.text_content() or ""
             require(diagnostic in text and locator in text,
                     "Silent supplementary source loss or missing original row: "+name)
             require(hashlib.sha256(data).hexdigest() in
-                    page.locator('[data-network-import-sha]').inner_text(),
+                    page.locator('[data-network-import-sha]').text_content() or "",
                     "Preview SHA was not original source file: "+name)
             require(page.locator('[data-network-import-activate]').is_disabled(),
                     "Partially projected source was offered as Builder")
@@ -383,7 +384,7 @@ def case_shorthand_supplemental_source_truth(browser,url):
         review=valid.locator('[data-network-import-preview]')
         expect(review).to_have_attribute(
             "data-network-import-preview","READY",timeout=30000)
-        require("NETWORK_IMPORT_LINK_SOURCES_CONFLICT" not in review.inner_text(),
+        require("NETWORK_IMPORT_LINK_SOURCES_CONFLICT" not in (review.text_content() or ""),
                 "An empty Links template incorrectly triggered link-source conflict")
         require(valid.locator('[data-network-import-activate]').is_enabled(),
                 "Empty secondary templates wrongly blocked real Devices facts")
@@ -430,7 +431,7 @@ def case_declared_inline_link_ports(browser,url):
         expect(review).to_have_attribute("data-network-import-preview",
                                          "READY",timeout=30000)
         require(hashlib.sha256(data).hexdigest() in
-                page.locator('[data-network-import-sha]').inner_text(),
+                page.locator('[data-network-import-sha]').text_content() or "",
                 "Original CSV SHA not retained")
         require(review.locator('[data-network-import-unmapped="0"]').count()==1,
                 "Link port, kind or ID columns were silently ignored")
@@ -486,7 +487,7 @@ def case_declared_inline_link_ports(browser,url):
             review=blocked_page.locator('[data-network-import-preview]')
             expect(review).to_have_attribute(
                 "data-network-import-preview","BLOCKED",timeout=30000)
-            text=review.inner_text()
+            text=review.text_content() or ""
             require(code in text and locator in text,
                     "Missing actual source port rejection: "+name)
             require(blocked_page.locator(
@@ -496,7 +497,7 @@ def case_declared_inline_link_ports(browser,url):
                 '[data-network-import-runtime]').is_disabled(),
                 "Invalid physical port offered modeled Runtime")
             require(hashlib.sha256(negative).hexdigest() in
-                    blocked_page.locator('[data-network-import-sha]').inner_text(),
+                    blocked_page.locator('[data-network-import-sha]').text_content() or "",
                     "Blocked source did not expose its original bytes SHA")
             blocked_page.get_by_role(
                 "button",name="Close network import").click()
@@ -540,7 +541,7 @@ def case_unknown_device_columns_fail_closed(browser,url):
             review=page.locator('[data-network-import-preview]')
             expect(review).to_have_attribute(
                 "data-network-import-preview","BLOCKED",timeout=30000)
-            message=review.inner_text()
+            message=review.text_content() or ""
             require("NETWORK_IMPORT_DEVICE_FIELD_UNMAPPED" in message,
                     "Unknown populated Devices field was allowed: "+name)
             for position in locations:
@@ -551,7 +552,7 @@ def case_unknown_device_columns_fail_closed(browser,url):
                 'data-network-import-unmapped')==str(column_count),
                 "Actual unknown source column count was hidden: "+name)
             require(hashlib.sha256(data).hexdigest() in
-                    page.locator('[data-network-import-sha]').inner_text(),
+                    page.locator('[data-network-import-sha]').text_content() or "",
                     "Original source hash mismatch: "+name)
             require(page.locator('[data-network-import-activate]').is_disabled(),
                     "Partial Devices import offered editable Builder: "+name)

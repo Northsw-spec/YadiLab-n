@@ -15,6 +15,27 @@ def require(condition, message):
     if not condition:
         raise AssertionError(message)
 
+
+def fill_value(control, value):
+    # Use the native setter directly so hidden sibling editors in the
+    # multi-panel draft guard do not block on Playwright's visibility gate.
+    control.evaluate(
+        """(element, nextValue) => {
+            const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+            setter.call(element, nextValue);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        }""",
+        value,
+    )
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 MOCK = r"""
 (() => {
   const store = { text: "", writes: 0, fail: false, reads: 0,
@@ -435,7 +456,7 @@ def main():
             expect(legacy_controls).to_have_attribute(
                 "data-project-filename", "foundation_acceptance.yadilab")
             require(legacy_fallback.locator(
-                '[data-project-message]').inner_text().startswith(
+                '[data-project-message]').text_content().startswith(
                 "File chooser closed without a selection"),
                 "Late legacy selection was accepted after cancel recovery")
             with legacy_fallback.expect_file_chooser() as retry_chooser_info:
@@ -891,16 +912,16 @@ def main():
                 duplicate_section.locator("summary").first.click()
             create_panel = duplicate_page.locator(".create-panel")
             expect(create_panel).to_be_visible(timeout=15000)
-            create_panel.locator("select").first.select_option("connection")
-            create_panel.locator(
+            choose(create_panel.locator("select").first, "connection")
+            fill_value(create_panel.locator(
                 'label.inspector-field', has_text="ID").locator(
-                    "input").fill("fw_rds")
-            create_panel.locator(
+                    "input"), "fw_rds")
+            choose(create_panel.locator(
                 'label.inspector-field', has_text="From").locator(
-                    "select").select_option("rds01")
-            create_panel.locator(
+                    "select"), "rds01")
+            choose(create_panel.locator(
                 'label.inspector-field', has_text="To").locator(
-                    "select").select_option("firewall01")
+                    "select"), "firewall01")
             create_panel.get_by_role("button", name="Skapa objekt").click()
             expect(duplicate_page.locator(".diagnostic")).to_contain_text(
                 "BUILDER_DUPLICATE_ID")
@@ -947,8 +968,8 @@ def main():
                 inspector_section.locator("summary").first.click()
             inspector = page.locator('[data-builder-inspector="mission"]')
             expect(inspector).to_be_visible(timeout=15000)
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-001 edited in Chromium")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-001 edited in Chromium")
             inspector.get_by_role("button", name="Verkställ inspektörsändringar").click()
             expect(controls).to_have_attribute("data-project-dirty", "true")
             # New must refuse to discard unsaved changes when the operator cancels.
@@ -1049,7 +1070,7 @@ def main():
                 "data-runtime-scenario-id", "foundation_acceptance")
             expect(page.locator('[data-project-message]')).to_contain_text(
                 "Opened editable source", timeout=20000)
-            require("PROJECT-001 edited in Chromium" in page.locator(".mission-strip").inner_text(),
+            require("PROJECT-001 edited in Chromium" in (page.locator(".mission-strip").text_content() or ""),
                     "Open lost the user's saved Builder edits")
             require(page.locator('[data-project-status="unchanged"]').count() == 1,
                     "Opened project unexpectedly dirty")
@@ -1081,8 +1102,8 @@ def main():
             # Observe an actual Builder edit before Ctrl+S. A status message
             # may render before Open's finally releases its private busy flag;
             # editing via the UI also verifies that hints survive normal work.
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-008 hints retained after editing")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-008 hints retained after editing")
             inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(controls).to_have_attribute("data-project-dirty", "true")
@@ -1476,8 +1497,8 @@ def main():
             page.evaluate("(saved) => { window.__yadilabProjectStore.text = saved; }",
                           saved_after_ctrl)
             inspector = page.locator('[data-builder-inspector="mission"]')
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-001 unsaved after external file change")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-001 unsaved after external file change")
             inspector.get_by_role("button", name="Verkställ inspektörsändringar").click()
             expect(controls).to_have_attribute("data-project-dirty", "true")
             page.evaluate("window.__yadilabProjectStore.text += ' '")
@@ -1557,7 +1578,7 @@ def main():
                 "data-runtime-scenario-hash", "builder", timeout=15000)
             expect(controls).to_have_attribute("data-project-dirty", "true")
             require("PROJECT-001 unsaved after external file change" in
-                    page.locator(".mission-strip").inner_text(),
+                    page.locator(".mission-strip").text_content() or "",
                     "Runtime→Builder lost the user's unsaved editable source")
             # PROJECT-021: Runtime Preview from a verified, unchanged
             # compiled Builder must invalidate an older in-flight compile.
@@ -1604,7 +1625,7 @@ def main():
                 "data-runtime-scenario-hash", "builder", timeout=15000)
             expect(controls).to_have_attribute("data-project-dirty", "true")
             require("PROJECT-001 unsaved after external file change" in
-                    page.locator(".mission-strip").inner_text(),
+                    page.locator(".mission-strip").text_content() or "",
                     "PROJECT-021 lost editable source after preview/compile transition")
             # Cancelled native Open must not discard an unsaved project.
             page.evaluate("window.__yadilabProjectStore.cancelOpen = true")
@@ -1616,7 +1637,7 @@ def main():
                 "Cancelled", timeout=15000)
             expect(controls).to_have_attribute("data-project-dirty", "true")
             require("PROJECT-001 unsaved after external file change" in
-                    page.locator(".mission-strip").inner_text(),
+                    page.locator(".mission-strip").text_content() or "",
                     "Cancelled Open discarded the current Builder edits")
             page.evaluate("window.__yadilabProjectStore.cancelOpen = false")
             # An unrelated built-in Builder must receive a fresh file
@@ -1634,7 +1655,7 @@ def main():
             builder_menu.get_by_role("button", name="Öppna enterprise i byggläget").click()
             require(declined == ["confirm"], "Builder switch lost the unsaved-change warning")
             require("PROJECT-001 unsaved after external file change" in
-                    page.locator(".mission-strip").inner_text(),
+                    page.locator(".mission-strip").text_content() or "",
                     "Cancelled Builder switch altered the current project")
             page.once("dialog", accept)
             builder_menu.get_by_role("button", name="Öppna enterprise i byggläget").click()
@@ -1663,8 +1684,8 @@ def main():
                 rsection.locator("summary").first.click()
             rmission = recovery.locator('[data-builder-inspector="mission"]')
             expect(rmission).to_be_visible(timeout=15000)
-            rmission.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("RECOVERY-PROJECT-UNSAVED")
+            fill_value(rmission.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "RECOVERY-PROJECT-UNSAVED")
             rmission.get_by_role("button", name="Verkställ inspektörsändringar").click()
             expect(rcontrols).to_have_attribute("data-project-dirty", "true")
             recovery.evaluate("window.__yadilabProjectStore.text += ' OUTSIDE_EDITOR'")
@@ -1760,7 +1781,7 @@ def main():
             expect(stale_inspector).to_be_visible(timeout=15000)
             title = stale_inspector.locator(
                 "label.inspector-field", has_text="Title").locator("input")
-            title.fill("EDIT BEFORE SAVE AS")
+            fill_value(title, "EDIT BEFORE SAVE AS")
             stale_inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(scontrols).to_have_attribute("data-project-dirty", "true")
@@ -1775,7 +1796,7 @@ def main():
             stale.wait_for_function(
                 "window.__yadilabProjectStore.pendingIdentity === true",
                 timeout=15000)
-            title.fill("EDIT AFTER FILE IDENTITY STARTED")
+            fill_value(title, "EDIT AFTER FILE IDENTITY STARTED")
             stale_inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(scontrols).to_have_attribute("data-project-dirty", "true")
@@ -1832,8 +1853,8 @@ def main():
                     parent = parent.parentElement?.closest('details') ?? null;
                 }
             }""")
-            different_scenario.locator(
-                '[data-studio-scenario-id]').fill("project_013_unrelated")
+            fill_value(different_scenario.locator(
+                '[data-studio-scenario-id]'), "project_013_unrelated")
             # PROJECT-048: the new source is visible synchronously, before
             # the React effect detaches the previous physical .yadilab handle.
             # Save must reject the unresolved association immediately,
@@ -1920,8 +1941,8 @@ def main():
                     parent = parent.parentElement?.closest('details') ?? null;
                 }
             }""")
-            reused_id.locator(
-                '[data-studio-scenario-id]').fill(prior_scenario_id)
+            fill_value(reused_id.locator(
+                '[data-studio-scenario-id]'), prior_scenario_id)
             reused_id.evaluate("""() => {
                 const create = document.querySelector('[data-studio-action="create"]');
                 const save = document.querySelector('[data-project-action="save"]');
@@ -2043,7 +2064,7 @@ def main():
             expect(inspector).to_be_visible(timeout=15000)
             title_field = inspector.locator(
                 "label.inspector-field", has_text="Title").locator("input")
-            title_field.fill("PROJECT-046 immediate unsaved change")
+            fill_value(title_field, "PROJECT-046 immediate unsaved change")
             atomic.evaluate("""() => {
                 window.__project046ConfirmCalls = 0;
                 window.confirm = () => {
@@ -2084,7 +2105,7 @@ def main():
             expect(ac).to_have_attribute("data-project-dirty", "false")
             for index in range(3):
                 saved_title = "PROJECT-046 atomic Save " + str(index + 1)
-                title_field.fill(saved_title)
+                fill_value(title_field, saved_title)
                 atomic.evaluate("""() => {
                     const apply = document.querySelector(
                         '[data-builder-inspector="mission"] button');
@@ -2139,8 +2160,8 @@ def main():
                 inspector_section.locator("summary").first.click()
             inspector = restore_race.locator('[data-builder-inspector="mission"]')
             expect(inspector).to_be_visible(timeout=15000)
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-001 runtime restore source")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-001 runtime restore source")
             inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
             expect(rrc).to_have_attribute("data-project-dirty", "true")
@@ -2155,7 +2176,7 @@ def main():
                 expect(compile_button).to_be_disabled(timeout=30000)
             except AssertionError as error:
                 status = restore_race.locator(
-                    '[data-studio-draft-revision]').inner_text()
+                    '[data-studio-draft-revision]').text_content() or ""
                 raise AssertionError(
                     "Runtime fixture compilation did not become valid: " + status) from error
             run_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
@@ -2168,8 +2189,8 @@ def main():
             # enabled Preview button clicked before React repaints. Without
             # the live-source check this starts an obsolete Runtime and can
             # replace the newest unsaved canonical source.
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-001 runtime restore source revised")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-001 runtime restore source revised")
             restore_race.evaluate("""() => {
                 const apply = document.querySelector(
                     '[data-builder-inspector="mission"] button');
@@ -2199,8 +2220,8 @@ def main():
                 restore_race.locator("summary", has_text="Import / Export"))
             if export_menu.get_attribute("open") is None:
                 export_menu.locator("summary").click()
-            inspector.locator("label.inspector-field", has_text="Title").locator(
-                "input").fill("PROJECT-001 runtime restore source exported")
+            fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
+                "input"), "PROJECT-001 runtime restore source exported")
             with restore_race.expect_download(timeout=20000) as live_export:
                 restore_race.evaluate("""() => {
                     const apply = document.querySelector(
@@ -2242,7 +2263,7 @@ def main():
                 # so a failing CI run is actionable instead of an opaque
                 # "remained builder" timeout.
                 draft_status = restore_race.locator(
-                    "[data-studio-draft-revision]").inner_text()
+                    "[data-studio-draft-revision]").text_content() or ""
                 diagnostic_text = restore_race.locator(
                     ".diagnostic").all_text_contents()
                 raise AssertionError(
@@ -2301,7 +2322,7 @@ def main():
                 "data-runtime-scenario-hash", "builder", timeout=15000)
             expect(rrc).to_have_attribute("data-project-dirty", "true")
             require("PROJECT-001 runtime restore source" in
-                    restore_race.locator(".mission-strip").inner_text(),
+                    restore_race.locator(".mission-strip").text_content() or "",
                     "PROJECT-022 lost authored Builder source on immediate return")
             restore_race.wait_for_timeout(450)
             expect(restore_race.locator(".app-frame")).to_have_attribute(
@@ -2578,7 +2599,7 @@ def main():
             expect(inspector).to_be_visible(timeout=15000)
             title_field = inspector.locator('label.inspector-field',
                 has_text="Title").locator("input")
-            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            fill_value(title_field, "PROJECT-065 staged mission never auto-saved")
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
             expect(pc).to_have_attribute("data-project-dirty", "true")
             expect(inspector).to_have_attribute("data-builder-unapplied", "true")
@@ -2593,7 +2614,7 @@ def main():
             require("PROJECT-065 staged" not in title_field.input_value(),
                     "Inspector Revert kept the discarded staged value")
             expect(pc).to_have_attribute("data-project-dirty", "false")
-            title_field.fill("PROJECT-065 staged mission never auto-saved")
+            fill_value(title_field, "PROJECT-065 staged mission never auto-saved")
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
 
             # A separate editor may not commit a newer source revision
@@ -2612,16 +2633,16 @@ def main():
             cross_notes = pending.locator(
                 '.builder-authoring textarea[aria-label="Anteckningar JSON"]')
             original_note_text = cross_notes.input_value()
-            cross_notes.fill(original_note_text + " ")
+            fill_value(cross_notes, original_note_text + " ")
             pending.locator('.builder-authoring').get_by_role(
                 'button', name='Apply Anteckningar JSON').click()
             expect(pending.locator(".diagnostic")).to_contain_text(
                 "BUILDER_OTHER_EDITOR_UNAPPLIED", timeout=15000)
             require("PROJECT-065 staged" not in pending.locator(
-                ".mission-strip").inner_text(),
+                ".mission-strip").text_content() or "",
                 "Cross-editor Apply replaced canonical source despite Inspector draft")
             expect(inspector).to_have_attribute("data-builder-unapplied", "true")
-            cross_notes.fill(original_note_text)
+            fill_value(cross_notes, original_note_text)
 
             # A pane click can clear the selection and unmount Inspector.
             # Test the actual ReactFlow pane: the initial welcome Builder
@@ -2669,7 +2690,7 @@ def main():
                 "data-runtime-scenario-id", "foundation_acceptance")
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
             require("PROJECT-065 staged" not in
-                    pending.locator(".mission-strip").inner_text(),
+                    pending.locator(".mission-strip").text_content() or "",
                     "PROJECT-065 pending title had already mutated canonical source")
             inspector.get_by_role(
                 "button", name="Verkställ inspektörsändringar").click()
@@ -2704,7 +2725,7 @@ def main():
             tests_field = pending.locator(
                 '.builder-authoring textarea[aria-label="Test JSON"]')
             original_tests_json = tests_field.input_value()
-            note_field.fill('[{"id":"project065_note","text":"Staged evidence"}]')
+            fill_value(note_field, '[{"id":"project065_note","text":"Staged evidence"}]')
             expect(pc).to_have_attribute("data-project-pending-drafts", "true")
             pc.locator('[data-project-action="save"]').click()
             expect(pc.locator('[data-project-message]')).to_contain_text(
@@ -2720,7 +2741,7 @@ def main():
                 '.builder-authoring textarea[aria-label="Test JSON"]');
               tests.closest('details').open = true;
             }""")
-            tests_field.fill(original_tests_json + " ")
+            fill_value(tests_field, original_tests_json + " ")
             note_panel = note_field.locator("xpath=ancestor::details")
             note_panel.get_by_role(
                 "button", name="Apply Anteckningar JSON").click()
