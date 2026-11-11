@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """PROJECT-091: compiled Chromium DOM proof for grouped orthogonal hierarchy links."""
 import argparse
+from collections import Counter
 import json
 import os
 import re
@@ -28,6 +29,101 @@ def rendered_links(page):
     )
 
 
+def reconcile_rendered_connections(scope_name, expected, actual_rows, expected_endpoints):
+    actual_ids = [row["id"] for row in actual_rows]
+    counts = Counter(actual_ids)
+    actual = set(actual_ids)
+    endpoint_mismatches = []
+    for row in actual_rows:
+        connection_id = row["id"]
+        if connection_id not in expected_endpoints:
+            continue
+        actual_pair = (row["source"], row["target"])
+        if actual_pair != expected_endpoints[connection_id]:
+            endpoint_mismatches.append({
+                "id": connection_id,
+                "actual": actual_pair,
+                "expected": expected_endpoints[connection_id],
+            })
+    return {
+        "scope": scope_name,
+        "expectedCount": len(expected),
+        "renderedCount": len(actual_rows),
+        "missing": sorted(expected - actual),
+        "unexpected": sorted(actual - expected),
+        "duplicates": sorted(connection_id for connection_id, count in counts.items() if count > 1),
+        "endpointMismatches": endpoint_mismatches,
+    }
+
+
+def wait_for_identity_barrier(page, scope, expected_ids, expected_node_ids, timeout=180000):
+    page.wait_for_function(
+        """({scope, expectedIds, expectedNodeIds}) => {
+          const panel = document.querySelector('.topology-panel');
+          if (!panel || panel.getAttribute('data-topology-hierarchy') !== scope) return false;
+          const read = () => {
+            const actualNodeIds = Array.from(panel.querySelectorAll('.react-flow__node[data-id]'))
+              .map(node => node.getAttribute('data-id')).filter(Boolean).sort();
+            const actualRows = Array.from(panel.querySelectorAll(
+              'path[data-connection-source][data-connection-target][data-hierarchy-visual="true"]'
+            )).map(path => ({
+              id: path.id,
+              source: path.getAttribute('data-connection-source'),
+              target: path.getAttribute('data-connection-target'),
+            })).sort((left, right) => left.id.localeCompare(right.id));
+            return {
+              scope: panel.getAttribute('data-topology-hierarchy'),
+              nodeIds: actualNodeIds,
+              connectionIds: actualRows.map(row => row.id).sort(),
+              endpoints: actualRows.map(row => [row.id, row.source, row.target]),
+            };
+          };
+          const matches = state => {
+            const nodeSet = new Set(state.nodeIds);
+            const expectedNodesMounted = expectedNodeIds.every(id => nodeSet.has(id));
+            const idsMatch = state.connectionIds.length === expectedIds.length &&
+              state.connectionIds.every((id, index) => id === expectedIds[index]);
+            return expectedNodesMounted && idsMatch;
+          };
+          const state = read();
+          const snapshot = JSON.stringify(state);
+          const key = `${scope}|${expectedIds.join(',')}|${expectedNodeIds.join(',')}`;
+          let barrier = window.__project091IdentityBarrier;
+          if (!barrier || barrier.key !== key) {
+            barrier = window.__project091IdentityBarrier = { key, frameOne: null, scheduled: false, ready: false };
+          }
+          if (!matches(state)) {
+            barrier.frameOne = null;
+            barrier.scheduled = false;
+            barrier.ready = false;
+            return false;
+          }
+          if (barrier.frameOne !== snapshot) {
+            barrier.frameOne = snapshot;
+            barrier.scheduled = false;
+            barrier.ready = false;
+          }
+          if (!barrier.scheduled) {
+            barrier.scheduled = true;
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              const current = window.__project091IdentityBarrier;
+              if (!current || current.key !== key) return;
+              const second = read();
+              current.ready = matches(second) && JSON.stringify(second) === current.frameOne;
+              current.scheduled = false;
+            }));
+          }
+          return barrier.ready;
+        }""",
+        arg={
+            "scope": scope,
+            "expectedIds": sorted(expected_ids),
+            "expectedNodeIds": sorted(expected_node_ids),
+        },
+        timeout=timeout,
+    )
+
+
 def assert_orthogonal(path):
     require(not re.search(r"[CQSAZcqsa]", path), f"Hierarchical path contains a curve or non-polyline command: {path}")
     points = [(float(x), float(y)) for command, x, y in re.findall(r"([ML])\s*(-?[0-9.]+)\s+(-?[0-9.]+)", path)]
@@ -36,26 +132,37 @@ def assert_orthogonal(path):
         require(from_x == to_x or from_y == to_y, f"Hierarchical path has a diagonal segment: {path}")
 
 
-def assert_scope(page, panel, source_links, scope_name):
+def assert_scope(page, panel, source_links, scope_name, evidence_dir):
     visible = resource_ids(page, [row[0] for row in source_links[0]])
     expected = {
         row[0]
         for row in source_links[1]
         if row[1] in visible and row[2] in visible
     }
-    page.wait_for_function(
-        "expected => document.querySelectorAll('path[data-connection-source][data-connection-target][data-hierarchy-visual=\\\"true\\\"]').length === expected",
-        arg=len(expected),
-        timeout=180000,
-    )
+    expected_endpoints = {row[0]: (row[1], row[2]) for row in source_links[1]}
+    try:
+        wait_for_identity_barrier(page, panel.get_attribute("data-topology-hierarchy") or scope_name, expected, visible)
+    except PlaywrightTimeoutError:
+        pass
     actual_rows = rendered_links(page)
-    actual = [row["id"] for row in actual_rows]
-    require(len(actual) == len(set(actual)), f"{scope_name}: duplicate rendered connection IDs")
-    require(set(actual) == expected, f"{scope_name}: rendered links do not exactly match visible canonical links")
-    by_id = {row[0]: (row[1], row[2]) for row in source_links[1]}
+    diagnostics = reconcile_rendered_connections(scope_name, expected, actual_rows, expected_endpoints)
+    diagnostics.update({
+        "visibleResourceIds": sorted(visible),
+        "expectedConnectionIds": sorted(expected),
+        "expectedEndpoints": {connection_id: list(pair) for connection_id, pair in sorted(expected_endpoints.items()) if connection_id in expected},
+        "actualRows": actual_rows,
+        "panelHierarchy": panel.get_attribute("data-topology-hierarchy"),
+        "panelEdgeCount": panel.get_attribute("data-topology-edge-count"),
+        "panelEdgeIds": panel.get_attribute("data-topology-edge-ids"),
+        "hierarchyProjectionEdgeIds": panel.get_attribute("data-topology-hierarchy-edge-ids"),
+        "canvasProjectionEdgeIds": panel.get_attribute("data-topology-projection-edge-ids"),
+        "reactFlowEdgePropIds": panel.get_attribute("data-topology-react-flow-edge-ids"),
+    })
+    (evidence_dir / f"project091-{scope_name}-reconciliation.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
+    require(not diagnostics["missing"] and not diagnostics["unexpected"] and not diagnostics["duplicates"] and not diagnostics["endpointMismatches"], diagnostics)
     for row in actual_rows:
-        require(row["id"] in by_id, f"{scope_name}: fabricated connection {row['id']}")
-        require((row["source"], row["target"]) == by_id[row["id"]], f"{scope_name}: endpoint mismatch for {row['id']}")
+        require(row["id"] in expected_endpoints, f"{scope_name}: fabricated connection {row['id']}")
+        require((row["source"], row["target"]) == expected_endpoints[row["id"]], f"{scope_name}: endpoint mismatch for {row['id']}")
         assert_orthogonal(row["d"])
 
 
@@ -85,18 +192,18 @@ def case(browser, url, evidence_dir):
         require(panel.get_attribute('data-topology-hierarchy') == 'overview', 'PROJECT-091 overview did not open')
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 5, 'Overview lacks core/distribution presentation groups')
         require(page.locator('[data-navigation-group="true"]').count() >= 5, 'Overview has no visible Arvidsjaur-style group containers')
-        assert_scope(page, panel, source_links, 'overview')
+        assert_scope(page, panel, source_links, 'overview', evidence_dir)
         page.screenshot(path=str(evidence_dir / 'project091-network-overview.png'), full_page=True)
 
         search_and_open(page, dist_id(4))
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 2, 'Distribution branch lacks grouped presentation')
-        assert_scope(page, panel, source_links, 'distribution-0004')
+        assert_scope(page, panel, source_links, 'distribution-0004', evidence_dir)
         page.screenshot(path=str(evidence_dir / 'project091-distribution-0004.png'), full_page=True)
 
         branch_access = access_id(25)
         open_access(page, panel, branch_access)
         require(int(panel.get_attribute('data-topology-hierarchy-group-count') or 0) >= 5, 'Access branch lacks compact endpoint groups')
-        assert_scope(page, panel, source_links, branch_access)
+        assert_scope(page, panel, source_links, branch_access, evidence_dir)
         require(page.locator('[data-topology-connection-state]').count() == 40, 'Every visible access-branch resource lacks a connection state')
         require(page.locator('[data-topology-boundary-indicator="true"]').count() > 0, 'Boundary-connected devices are not discoverable')
         page.screenshot(path=str(evidence_dir / 'project091-access-0025.png'), full_page=True)

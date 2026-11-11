@@ -1997,10 +1997,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-projection-edge-ids": (visibleProjection?.edges ?? []).map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-react-flow-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       ...(hierarchicalTopologyView ? {
         "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
         "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),
         "data-topology-hierarchy-link-count": String(hierarchicalTopologyView.edgeIds.length),
+        "data-topology-hierarchy-edge-ids": hierarchicalTopologyView.edgeIds.slice().sort((a, b) => a.localeCompare(b, "en")).join(","),
         "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
         "data-topology-hierarchy-group-count": String(hierarchicalTopologyView.navigationGroups.length),
         "data-topology-hierarchy-incomplete": String(hierarchicalTopologyView.incompleteView),
