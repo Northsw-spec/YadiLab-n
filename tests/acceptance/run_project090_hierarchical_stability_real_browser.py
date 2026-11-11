@@ -74,7 +74,7 @@ def case(browser, url, evidence_dir):
         # Root-level navigation is source-derived and contains real links, not summary cables.
         search_and_open(page, dist_id(4))
         require(panel.get_attribute("data-topology-hierarchy") == "distribution-0004", "Distribution navigation did not open")
-        require(page.locator('[data-topology-hierarchy-node-count="10"]').count() == 1, "Distribution branch is not bounded to its connected local topology")
+        require(panel.get_attribute("data-topology-hierarchy-node-count") == "10", "Distribution branch is not bounded to its connected local topology")
         page.screenshot(path=str(evidence_dir / "project090-distribution-0004.png"), full_page=True)
         screenshots.append("project090-distribution-0004.png")
 
@@ -97,7 +97,7 @@ def case(browser, url, evidence_dir):
                 # A forced event may have already replaced the bounded canvas;
                 # search is the equivalent explicit navigation fallback.
                 search_and_open(page, branch_access_id)
-        require(page.locator('[data-topology-hierarchy-node-count="39"]').count() == 1, "Access branch did not retain its 38 endpoint neighbors")
+        require(panel.get_attribute("data-topology-hierarchy-node-count") == "39", "Access branch did not retain its 38 endpoint neighbors")
         require(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').count() == 1, "Access branch lost a source-connected client")
         page.screenshot(path=str(evidence_dir / "project090-access-0002.png"), full_page=True)
         screenshots.append("project090-access-0002.png")
