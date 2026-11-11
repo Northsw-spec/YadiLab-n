@@ -78,18 +78,20 @@ def case(browser, url, evidence_dir):
         page.screenshot(path=str(evidence_dir / "project090-distribution-0004.png"), full_page=True)
         screenshots.append("project090-distribution-0004.png")
 
-        # Double-click an actual access switch to open its endpoint subgraph.
-        access_node = page.locator(f'.react-flow__node[data-id="{access_id(2)}"]')
+        # Double-click an actual access switch in Distribution 4 to open its endpoint subgraph.
+        branch_access_id = access_id(25)
+        branch_client_id = client_id(895)
+        access_node = page.locator(f'.react-flow__node[data-id="{branch_access_id}"]')
         expect(access_node).to_be_visible(timeout=180000)
         access_node.dblclick(force=True)
-        page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=access_id(2), timeout=180000)
+        page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=180000)
         require(page.locator('[data-topology-hierarchy-node-count="39"]').count() == 1, "Access branch did not retain its 38 endpoint neighbors")
-        require(page.locator(f'.react-flow__node[data-id="{client_id(38)}"]').count() == 1, "Access branch lost a source-connected client")
+        require(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').count() == 1, "Access branch lost a source-connected client")
         page.screenshot(path=str(evidence_dir / "project090-access-0002.png"), full_page=True)
         screenshots.append("project090-access-0002.png")
 
         # Select repeatedly, including high-degree and endpoint nodes, without changing scope.
-        candidates = [core_id(1), dist_id(4), access_id(2), client_id(38), client_id(39), access_id(2), dist_id(4), core_id(2)]
+        candidates = [dist_id(4), branch_access_id, branch_client_id, client_id(896), branch_access_id, dist_id(4)]
         start = monotonic()
         for _ in range(4):
             for node_id in candidates:
@@ -107,9 +109,9 @@ def case(browser, url, evidence_dir):
         screenshots.append("project090-selected-device-inspector.png")
 
         # Search can jump directly to a client and remains bounded; selection does not rebuild 10k DOM.
-        search_and_open(page, client_id(38))
+        search_and_open(page, branch_client_id)
         require(page.locator('.react-flow__node').count() <= 100, "Client focus escaped the bounded projection")
-        page.locator(f'.react-flow__node[data-id="{client_id(38)}"]').click(force=True)
+        page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').click(force=True)
         page.wait_for_timeout(200)
         heap = page.evaluate("() => performance.memory?.usedJSHeapSize ?? null")
         require(not errors, f"Uncaught Chromium page errors during hierarchy selection: {errors!r}")
