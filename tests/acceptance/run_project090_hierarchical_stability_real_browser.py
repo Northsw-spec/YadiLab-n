@@ -135,7 +135,7 @@ def case(browser, url, evidence_dir):
             "canonicalDevices": len(devices),
             "canonicalLinks": len(links),
             "overviewNodes": 34,
-            "accessNodes": 39,
+            "accessNodes": 40,
             "selectionIterations": len(candidates) * 4,
             "selectionElapsedMs": round(selection_ms, 2),
             "heapUsedBytes": heap,
