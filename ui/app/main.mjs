@@ -535,9 +535,17 @@ function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [] })
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
   const isHierarchical = data?.hierarchyVisual === true;
-  const fallbackLaneX = (sourceX + targetX) / 2;
+  const fallbackLaneX = isHierarchical && data.route.length
+    ? Number(data.route[Math.floor(data.route.length / 2)]?.x ?? (sourceX + targetX) / 2)
+    : (sourceX + targetX) / 2;
+  // Layout routes are calculated in canvas coordinates before React Flow has
+  // measured interface handles. Re-anchor the hierarchy lane to the live
+  // endpoint coordinates so every rendered segment remains truly orthogonal.
+  const renderRoute = isHierarchical
+    ? [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }]
+    : data?.route;
   const [basePath, labelX, labelY] = hasRoute
-    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: data.route })
+    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: renderRoute })
     : isHierarchical
       ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }] })
       : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
