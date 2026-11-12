@@ -129,18 +129,77 @@ def card_camera_metrics(page):
             const rect = node.getBoundingClientRect();
             return { id: node.getAttribute('data-id'), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
           });
+          const viewport = document.querySelector('.react-flow__viewport');
+          const viewportTransform = viewport ? getComputedStyle(viewport).transform : 'none';
+          const matrix = viewportTransform && viewportTransform !== 'none' ? new DOMMatrix(viewportTransform) : null;
+          const scaleX = matrix?.a ?? 1;
+          const scaleY = matrix?.d ?? 1;
           const primary = [...document.querySelectorAll('.react-flow__node-resource .device-identity strong')]
-            .map(element => Number.parseFloat(getComputedStyle(element).fontSize)).filter(Number.isFinite);
+            .map(element => ({
+              id: element.closest('.react-flow__node[data-id]')?.getAttribute('data-id') ?? null,
+              cssPx: Number.parseFloat(getComputedStyle(element).fontSize),
+              screenPx: element.getBoundingClientRect().height,
+            }))
+            .filter(item => Number.isFinite(item.cssPx) && Number.isFinite(item.screenPx));
           const secondary = [...document.querySelectorAll('.react-flow__node-resource .device-identity small')]
-            .map(element => Number.parseFloat(getComputedStyle(element).fontSize)).filter(Number.isFinite);
+            .map(element => ({
+              id: element.closest('.react-flow__node[data-id]')?.getAttribute('data-id') ?? null,
+              cssPx: Number.parseFloat(getComputedStyle(element).fontSize),
+              screenPx: element.getBoundingClientRect().height,
+            }))
+            .filter(item => Number.isFinite(item.cssPx) && Number.isFinite(item.screenPx));
           return {
             panel: panelRect ? { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom, width: panelRect.width, height: panelRect.height } : null,
             cards,
-            minPrimaryCssPx: primary.length ? Math.min(...primary) : 0,
-            minSecondaryCssPx: secondary.length ? Math.min(...secondary) : 0,
+            viewportTransform,
+            viewportScale: { x: scaleX, y: scaleY },
+            primary,
+            secondary,
+            minPrimaryCssPx: primary.length ? Math.min(...primary.map(item => item.cssPx)) : 0,
+            minSecondaryCssPx: secondary.length ? Math.min(...secondary.map(item => item.cssPx)) : 0,
+            minPrimaryScreenPx: primary.length ? Math.min(...primary.map(item => item.screenPx)) : 0,
+            minSecondaryScreenPx: secondary.length ? Math.min(...secondary.map(item => item.screenPx)) : 0,
             documentScrollWidth: document.documentElement.scrollWidth,
             viewportWidth: window.innerWidth,
           };
+        }"""
+    )
+
+
+def group_containment_metrics(page):
+    return page.evaluate(
+        """() => {
+          const panel = document.querySelector('.topology-panel');
+          const rect = element => {
+            const value = element?.getBoundingClientRect();
+            return value ? { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height } : null;
+          };
+          const groups = [...document.querySelectorAll('.react-flow__node .navigation-group-node')].map(group => {
+            const host = group.closest('.react-flow__node[data-id]');
+            const groupId = host?.getAttribute('data-id') ?? null;
+            const members = (group.getAttribute('data-navigation-group-members') || '').split(',').filter(Boolean);
+            const groupRect = rect(host);
+            const memberRects = members.map(id => {
+              const node = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
+              return { id, rect: rect(node), parentId: node?.getAttribute('data-parentid') ?? node?.getAttribute('data-parent-id') ?? null };
+            });
+            const headerRect = rect(group.querySelector('.zone-heading'));
+            return { groupId, groupRect, headerRect, members: memberRects };
+          });
+          const failures = [];
+          for (const group of groups) {
+            if (!group.groupRect) { failures.push({ groupId: group.groupId, reason: 'GROUP_RECT_MISSING' }); continue; }
+            for (const member of group.members) {
+              const value = member.rect;
+              if (!value) { failures.push({ groupId: group.groupId, memberId: member.id, reason: 'MEMBER_RECT_MISSING' }); continue; }
+              const inside = value.left >= group.groupRect.left - 0.5 && value.right <= group.groupRect.right + 0.5 &&
+                value.top >= group.groupRect.top - 0.5 && value.bottom <= group.groupRect.bottom + 0.5;
+              if (!inside) failures.push({ groupId: group.groupId, memberId: member.id, reason: 'MEMBER_OUTSIDE_GROUP', groupRect: group.groupRect, memberRect: value });
+              if (member.parentId !== group.groupId) failures.push({ groupId: group.groupId, memberId: member.id, reason: 'MEMBER_NOT_NESTED', parentId: member.parentId });
+              if (group.headerRect && value.top < group.headerRect.bottom - 0.5) failures.push({ groupId: group.groupId, memberId: member.id, reason: 'MEMBER_INTERSECTS_HEADER', headerRect: group.headerRect, memberRect: value });
+            }
+          }
+          return { panel: rect(panel), groups, failures };
         }"""
     )
 
@@ -225,14 +284,24 @@ def overview_camera_gate(page, panel):
     return metrics
 
 
-def read_camera_gate(page):
+def read_camera_gate(page, root_id=None):
     page.locator('[data-topology-camera="read"]').click()
     expect(page.locator('[data-topology-camera="read"]')).to_have_attribute("aria-pressed", "true")
     page.evaluate("window.scrollTo(0, 0)")
     page.wait_for_timeout(250)
     metrics = card_camera_metrics(page)
-    require(metrics["minPrimaryCssPx"] >= 13, f"Primary labels are below 13 screen CSS px: {metrics}")
-    require(metrics["minSecondaryCssPx"] >= 11, f"Secondary labels are below 11 screen CSS px: {metrics}")
+    require(metrics["minPrimaryScreenPx"] >= 13, f"Primary labels are below 13 effective screen px: {metrics}")
+    require(metrics["minSecondaryScreenPx"] >= 11, f"Secondary labels are below 11 effective screen px: {metrics}")
+    if root_id:
+        root = next((card for card in metrics["cards"] if card["id"] == root_id), None)
+        require(root is not None, f"READ root card is not mounted: {root_id}")
+        panel = metrics["panel"]
+        require(panel is not None, "READ root cannot be checked without a topology panel")
+        require(
+            root["left"] >= panel["left"] + 16 and root["right"] <= panel["right"] - 16 and
+            root["top"] >= panel["top"] + 16 and root["bottom"] <= panel["bottom"] - 16,
+            f"READ root card is outside the topology panel or lacks the desktop margin: {root} vs {panel}",
+        )
     permanent_labels = page.locator('.semantic-edge-label').evaluate_all(
         "els => els.filter(label => !label.closest('.react-flow__edge')?.classList.contains('selected')).length"
     )
@@ -272,18 +341,24 @@ def case(browser, url, evidence_dir):
         source_report = source_reconciliation(page, devices, links)
         overview_report = assert_scope(page, panel, links, "overview", 34, 34, 5, evidence_dir)
         require(panel.bounding_box()["y"] <= 240, f"Overview canvas starts below first viewport: {panel.bounding_box()}")
-        overview_readability = read_camera_gate(page)
+        overview_readability = read_camera_gate(page, root_id=None)
         overview_camera = overview_camera_gate(page, panel)
+        overview_groups = group_containment_metrics(page)
+        require(not overview_groups["failures"], f"Overview group containment failed: {overview_groups}")
         page.screenshot(path=str(evidence_dir / "project094-overview-1366x768.png"), full_page=False)
 
         search_and_open(page, dist_id(4))
         distribution_report = assert_scope(page, panel, links, dist_id(4), 10, 9, 3, evidence_dir)
-        read_camera_gate(page)
+        distribution_readability = read_camera_gate(page, root_id=dist_id(4))
+        distribution_groups = group_containment_metrics(page)
+        require(not distribution_groups["failures"], f"Distribution group containment failed: {distribution_groups}")
         page.screenshot(path=str(evidence_dir / "project094-distribution-0004-1366x768.png"), full_page=False)
 
         open_access(page, panel, access_id(25))
         access_report = assert_scope(page, panel, links, access_id(25), 40, 39, 7, evidence_dir)
-        read_metrics = read_camera_gate(page)
+        read_metrics = read_camera_gate(page, root_id=access_id(25))
+        access_groups = group_containment_metrics(page)
+        require(not access_groups["failures"], f"Access group containment failed: {access_groups}")
         page.screenshot(path=str(evidence_dir / "project094-access-0025-read-1366x768.png"), full_page=False)
 
         link = page.locator("path#link-01211[data-connection-source][data-connection-target]")
@@ -304,7 +379,7 @@ def case(browser, url, evidence_dir):
         for width, height, name in ((1280, 800, "1280x800"), (1920, 1080, "1920x1080")):
             page.set_viewport_size({"width": width, "height": height})
             page.wait_for_timeout(500)
-            read_metrics_at_viewport = read_camera_gate(page)
+            read_metrics_at_viewport = read_camera_gate(page, root_id=access_id(25))
             geometry = screen_geometry(page)
             require(not geometry["overlaps"] and geometry["crossings"] == 0, f"{name}: geometry gate changed after resize")
             viewport_reports[name] = {"camera": read_metrics_at_viewport, "geometry": geometry}
@@ -312,7 +387,7 @@ def case(browser, url, evidence_dir):
 
         page.set_viewport_size({"width": 390, "height": 844})
         page.wait_for_timeout(500)
-        mobile_metrics = read_camera_gate(page)
+        mobile_metrics = read_camera_gate(page, root_id=access_id(25))
         require(mobile_metrics["documentScrollWidth"] <= mobile_metrics["viewportWidth"], f"Mobile document overflow: {mobile_metrics}")
         page.screenshot(path=str(evidence_dir / "project094-access-0025-mobile-390x844.png"), full_page=False)
 

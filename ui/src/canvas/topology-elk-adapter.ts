@@ -14,6 +14,7 @@ import type {
   CanvasResourceData,
   CanvasProjection,
   CanvasVisualAttachmentHandle,
+  CanvasZoneData,
 } from "./types.js";
 
 export const TOPOLOGY_LAYOUT_CONFIG_VERSION = "project-094-elk-v1";
@@ -81,12 +82,23 @@ export interface TopologyLayoutResult {
 }
 
 interface Rect { readonly id: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
-interface CandidateRun { readonly candidate: TopologyLayoutCandidate; readonly nodes: ReadonlyMap<string, Rect>; readonly edges: readonly LayoutBackendEdge[] }
+interface ElkGraphBuild {
+  readonly graph: LayoutGraph;
+  readonly visualHandles: ReadonlyMap<string, readonly CanvasVisualAttachmentHandle[]>;
+  readonly resourceIds: ReadonlySet<string>;
+  readonly groupIds: ReadonlySet<string>;
+}
+interface CandidateRun {
+  readonly candidate: TopologyLayoutCandidate;
+  /** Resource rectangles in root/world coordinates. */
+  readonly nodes: ReadonlyMap<string, Rect>;
+  /** Presentation-group rectangles in root/world coordinates. */
+  readonly groups: ReadonlyMap<string, Rect>;
+  readonly edges: readonly LayoutBackendEdge[];
+}
 
 const RESOURCE_WIDTH = 168;
 const RESOURCE_HEIGHT = 88;
-const GROUP_PADDING_X = 24;
-const GROUP_PADDING_Y = 48;
 const ORTHOGONAL_EPSILON = 1e-6;
 // Frozen Wave-A PROJECT-093 Access25 measurements.  These values are used
 // only for the additive quality report; they never mutate source data.
@@ -115,7 +127,12 @@ function resourceNodes(projection: CanvasProjection): readonly (CanvasNode & { t
   return projection.nodes.filter((node): node is CanvasNode & { type: "resource"; data: CanvasResourceData } => node.type === "resource");
 }
 
-function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"]): { graph: LayoutGraph; visualHandles: ReadonlyMap<string, readonly CanvasVisualAttachmentHandle[]> } {
+function presentationZones(projection: CanvasProjection): readonly (CanvasNode & { type: "zone"; data: CanvasZoneData })[] {
+  return projection.nodes.filter((node): node is CanvasNode & { type: "zone"; data: CanvasZoneData } =>
+    node.type === "zone" && (node.data as CanvasZoneData).presentationOnly === true);
+}
+
+function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"]): ElkGraphBuild {
   const resources = resourceNodes(projection).slice().sort((a, b) => a.id.localeCompare(b.id, "en"));
   const resourceById = new Map(resources.map((resource) => [resource.id, resource] as const));
   const edges = projection.edges.slice().sort((a, b) => a.id.localeCompare(b.id, "en"));
@@ -195,12 +212,68 @@ function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCand
         "elk.spacing.edgeEdge": "0",
         "org.eclipse.elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
       };
-  const children: LayoutGraphNode[] = resources.map((resource) => ({ id: resource.id, kind: "resource", width: RESOURCE_WIDTH, height: RESOURCE_HEIGHT, children: [], ports: (portsByNode.get(resource.id) ?? []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0) || a.id.localeCompare(b.id)) }));
-  return { graph: { id: "__root__", children, edges: layoutEdges, layoutOptions: options }, visualHandles };
+  const resourceNodesById = new Map(resources.map((resource) => [resource.id, resource] as const));
+  const groups = presentationZones(projection)
+    .slice()
+    .sort((left, right) => left.id.localeCompare(right.id, "en"));
+  const grouped = new Set<string>();
+  const groupNodes: LayoutGraphNode[] = groups.flatMap((group) => {
+    const members = (group.data.memberIds ?? [])
+      .filter((id) => resourceNodesById.has(id))
+      .sort((left, right) => left.localeCompare(right, "en"));
+    if (!members.length) return [];
+    members.forEach((id) => grouped.add(id));
+    return [{
+      id: group.id,
+      kind: "zone",
+      width: Math.max(group.width, RESOURCE_WIDTH + 48),
+      height: Math.max(group.height, RESOURCE_HEIGHT + 90),
+      children: members.map((id) => {
+        const resource = resourceNodesById.get(id)!;
+        return {
+          id,
+          kind: "resource" as const,
+          width: resource.width || RESOURCE_WIDTH,
+          height: resource.height || RESOURCE_HEIGHT,
+          children: [],
+          ports: (portsByNode.get(id) ?? []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0) || a.id.localeCompare(b.id, "en")),
+        };
+      }),
+      ports: [],
+    }];
+  });
+  const ungroupedNodes: LayoutGraphNode[] = resources.filter((resource) => !grouped.has(resource.id)).map((resource) => ({
+    id: resource.id,
+    kind: "resource",
+    width: resource.width || RESOURCE_WIDTH,
+    height: resource.height || RESOURCE_HEIGHT,
+    children: [],
+    ports: (portsByNode.get(resource.id) ?? []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0) || a.id.localeCompare(b.id, "en")),
+  }));
+  const children = [...groupNodes, ...ungroupedNodes];
+  return {
+    graph: { id: "__root__", children, edges: layoutEdges, layoutOptions: options },
+    visualHandles,
+    resourceIds: new Set(resources.map((resource) => resource.id)),
+    groupIds: new Set(groupNodes.map((group) => group.id)),
+  };
 }
 
-function rectsFromBackend(nodes: readonly { id: string; x: number; y: number; width: number; height: number }[]): ReadonlyMap<string, Rect> {
-  return new Map(nodes.map((node) => [node.id, { id: node.id, x: node.x, y: node.y, width: node.width, height: node.height }] as const));
+function rectsFromBackend(nodes: readonly { id: string; x: number; y: number; width: number; height: number; parent?: string }[]): ReadonlyMap<string, Rect> {
+  const byId = new Map(nodes.map((node) => [node.id, node] as const));
+  const cache = new Map<string, Rect>();
+  const resolve = (id: string, visiting = new Set<string>()): Rect | undefined => {
+    const cached = cache.get(id);
+    if (cached) return cached;
+    const node = byId.get(id);
+    if (!node || visiting.has(id)) return undefined;
+    const parent = node.parent ? resolve(node.parent, new Set([...visiting, id])) : undefined;
+    const rect = { id, x: (parent?.x ?? 0) + node.x, y: (parent?.y ?? 0) + node.y, width: node.width, height: node.height };
+    cache.set(id, rect);
+    return rect;
+  };
+  for (const node of nodes) resolve(node.id);
+  return cache;
 }
 
 function segmentLength(a: { x: number; y: number }, b: { x: number; y: number }): number { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
@@ -332,15 +405,17 @@ function candidateAcceptable(metricsValue: TopologyLayoutMetrics, expectedNodeId
 
 async function runCandidate(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"], backend: LayoutBackend): Promise<CandidateRun> {
   const started = performance.now();
-  const { graph } = buildElkGraph(projection, profile);
+  const { graph, resourceIds, groupIds } = buildElkGraph(projection, profile);
   const raw = await backend.layout(graph);
-  const nodes = rectsFromBackend(raw.nodes);
+  const allNodes = rectsFromBackend(raw.nodes);
+  const nodes = new Map([...allNodes.entries()].filter(([id]) => resourceIds.has(id)));
+  const groups = new Map([...allNodes.entries()].filter(([id]) => groupIds.has(id)));
   const edges = normalizeParallelElkSections(
     [...(raw.edges ?? [])].filter((edge) => !edge.id.startsWith("__layout__:")).sort((a, b) => a.id.localeCompare(b.id, "en")),
     nodes,
   );
   const metric = metrics(graph, nodes, edges, performance.now() - started);
-  const expectedNodeIds = new Set(graph.children.map((node) => node.id)); const expectedEdgeIds = new Set(graph.edges.filter((edge) => !edge.layoutOnly).map((edge) => edge.id));
+  const expectedNodeIds = resourceIds; const expectedEdgeIds = new Set(graph.edges.filter((edge) => !edge.layoutOnly).map((edge) => edge.id));
   const hard = candidateAcceptable(metric, expectedNodeIds, expectedEdgeIds, nodes, edges);
   const options: Record<string, string> = {
     "elk.algorithm": "layered",
@@ -350,7 +425,7 @@ async function runCandidate(projection: CanvasProjection, profile: TopologyLayou
     ...(graph.layoutOptions ?? {}),
   };
   const candidate: TopologyLayoutCandidate = { id: profile, direction: options["elk.direction"] === "DOWN" ? "DOWN" : "RIGHT", options, acceptable: hard.acceptable, rejectionReasons: hard.rejectionReasons, metrics: metric, coordinateHash: hashString(JSON.stringify({ nodes: [...nodes.values()], edges: edges.map((edge) => ({ id: edge.id, p: pointList(edge) })) })) };
-  return { candidate, nodes, edges };
+  return { candidate, nodes, groups, edges };
 }
 
 function chooseCandidate(runs: readonly CandidateRun[]): CandidateRun {
@@ -370,32 +445,18 @@ function chooseCandidate(runs: readonly CandidateRun[]): CandidateRun {
   })[0]!;
 }
 
-function groupOverlayNodes(view: HierarchicalTopologyView, positions: ReadonlyMap<string, Rect>, nodes: readonly CanvasNode[]): ReadonlyMap<string, Rect> {
-  const resourceById = new Map(nodes.filter((node) => node.type === "resource").map((node) => [node.id, node] as const));
-  const result = new Map<string, Rect>();
-  for (const group of view.navigationGroups) {
-    const members = group.memberIds.map((id) => positions.get(id)).filter((rect): rect is Rect => Boolean(rect));
-    if (!members.length) continue;
-    const minX = Math.min(...members.map((rect) => rect.x)); const minY = Math.min(...members.map((rect) => rect.y));
-    const maxX = Math.max(...members.map((rect) => rect.x + rect.width)); const maxY = Math.max(...members.map((rect) => rect.y + rect.height));
-    result.set(group.id, { id: group.id, x: minX - GROUP_PADDING_X, y: minY - GROUP_PADDING_Y, width: maxX - minX + GROUP_PADDING_X * 2, height: maxY - minY + GROUP_PADDING_Y * 2 });
-    void resourceById;
-  }
-  return result;
-}
-
 function applyRun(view: HierarchicalTopologyView, run: CandidateRun, visualHandles: ReadonlyMap<string, readonly CanvasVisualAttachmentHandle[]>): CanvasProjection {
   const base = view.projection;
   const positions = run.nodes;
-  const overlays = groupOverlayNodes(view, positions, base.nodes);
   const nodes = base.nodes.map((node) => {
     if (node.type === "zone") {
-      const overlay = overlays.get(node.id);
-      return overlay ? { ...node, position: { x: overlay.x, y: overlay.y }, width: overlay.width, height: overlay.height } : node;
+      const group = run.groups.get(node.id);
+      return group ? { ...node, position: { x: group.x, y: group.y }, width: group.width, height: group.height } : node;
     }
     const position = positions.get(node.id);
     if (!position) return node;
-    const { parentId: _parentId, extent: _extent, ...rootNode } = node;
+    const parent = node.parentId ? run.groups.get(node.parentId) : undefined;
+    const localPosition = parent ? { x: position.x - parent.x, y: position.y - parent.y } : { x: position.x, y: position.y };
     const attachments = visualHandles.get(node.id);
     const attachmentGeometry = attachments?.length
       ? attachments.map((attachment) => {
@@ -411,7 +472,7 @@ function applyRun(view: HierarchicalTopologyView, run: CandidateRun, visualHandl
         return topPercent === undefined ? attachment : { ...attachment, topPercent };
       })
       : undefined;
-    return { ...rootNode, position: { x: position.x, y: position.y }, width: position.width, height: position.height, ...(attachmentGeometry?.length ? { data: { ...rootNode.data, visualAttachmentHandles: attachmentGeometry } } : {}) };
+    return { ...node, position: localPosition, width: position.width, height: position.height, ...(attachmentGeometry?.length ? { data: { ...node.data, visualAttachmentHandles: attachmentGeometry } } : {}) };
   });
   const edgesById = new Map(run.edges.map((edge) => [edge.id, edge] as const));
   const edges = base.edges.map((edge) => {
