@@ -2179,6 +2179,12 @@ def main():
                     '[data-studio-draft-revision]').text_content() or ""
                 raise AssertionError(
                     "Runtime fixture compilation did not become valid: " + status) from error
+            # The button becomes disabled at compile start; wait for the
+            # valid draft status before opening the asynchronous toolbar
+            # popover, otherwise its React repaint can replace the menu while
+            # the live-preview assertion is locating its action.
+            expect(restore_race.locator('[data-studio-draft-revision]')).to_contain_text(
+                "Status valid", timeout=30000)
             run_menu = restore_race.locator(".workspace-menu-advanced")
             if run_menu.get_attribute("open") is None:
                 run_menu.locator("summary").click()
