@@ -1653,6 +1653,11 @@ def main():
             require("PROJECT-001 unsaved after external file change" in
                     page.locator(".mission-strip").text_content() or "",
                     "Cancelled Builder switch altered the current project")
+            # Visible toolbar popovers close after an action; reopen the same
+            # explicit menu before the accepted retry rather than relying on
+            # the removed always-open compatibility rail.
+            if builder_menu.get_attribute("open") is None:
+                builder_menu.locator("summary").click()
             page.once("dialog", accept)
             builder_menu.get_by_role("button", name="Öppna enterprise i byggläget").click()
             expect(page.locator(".app-frame")).not_to_have_attribute(

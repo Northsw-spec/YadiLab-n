@@ -5194,8 +5194,8 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     ];
   const scenarioItems = [
     { label: "Starta enterprise-labb", searchTerms: "enterprise scenario", node: actionButton("Starta enterprise-labb", () => openEnterpriseScenario(true), { disabled: !enterpriseScenarioId }) },
-    { label: "Starta verifierad demo", searchTerms: "verified delivery", node: actionButton("Starta verifierad demo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
-    { label: "Starta valt labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta valt labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
+    { label: "Starta verifierad leveransdemo", searchTerms: "verified delivery", node: actionButton("Starta verifierad leveransdemo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
+    { label: "Starta guidad labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta guidad labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
     { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: advancedFileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json") },
     { label: "Öppna paketerad labb", searchTerms: "open package lab", node: advancedFileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab") },
   ];
@@ -5260,9 +5260,6 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         type: "button",
         className: "guided-lab-primary-button",
         "data-guided-lab-start": "direct",
-        // Preserve the established accessible action name for existing
-        // keyboard/browser clients while the visible copy remains contextual.
-        "aria-label": "Starta guidad labb",
         onClick: () => openGuidedLab(true),
         disabled: busy || !guidedLabId,
       }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
