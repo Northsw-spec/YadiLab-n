@@ -5260,6 +5260,9 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         type: "button",
         className: "guided-lab-primary-button",
         "data-guided-lab-start": "direct",
+        // Preserve the established accessible action name for existing
+        // keyboard/browser clients while the visible copy remains contextual.
+        "aria-label": "Starta guidad labb",
         onClick: () => openGuidedLab(true),
         disabled: busy || !guidedLabId,
       }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
