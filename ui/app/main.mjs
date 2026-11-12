@@ -1274,6 +1274,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const overviewCamera = topologyOverview || topologyCameraMode === "overview";
       const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
       const readableBranch = Boolean(hierarchicalTopologyView?.kind === "branch" && topologyCameraMode === "read");
+      const compactMobileRead = topologyCameraMode === "read" && rect.width < 600 && !hierarchicalTopologyView;
       const rootNode = readableBranch ? baseFlow.nodes.find((node) => node.id === hierarchicalTopologyView?.rootId) : null;
       if (rootNode && instance.setCenter) {
         instance.setCenter(rootNode.position.x + (rootNode.width ?? 168) / 2, rootNode.position.y + (rootNode.height ?? 88) / 2, { zoom: 1, duration: 0 });
@@ -1281,7 +1282,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         instance.fitView?.({
           duration: 0,
           padding: overviewCamera ? 0.2 : 0.08,
-          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera ? 0.32 : 1,
+            minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera || compactMobileRead ? 0.32 : 1,
           maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
         });
       }
