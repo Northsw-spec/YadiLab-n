@@ -2187,7 +2187,12 @@ def main():
                 "Status valid", timeout=30000)
             run_menu = restore_race.locator(".workspace-menu-advanced")
             if run_menu.get_attribute("open") is None:
-                run_menu.locator("summary").click()
+                # Compile completion can repaint the surrounding toolbar after
+                # the summary click. Set the native details state explicitly
+                # once the valid status is stable so the visible action is
+                # present before Playwright resolves its role locator.
+                run_menu.evaluate("el => { el.open = true; }")
+            expect(run_menu).to_have_attribute("open", "", timeout=5000)
             preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
             expect(preview).to_be_enabled(timeout=30000)
             # PROJECT-047: A compiled Builder can be edited and the old
