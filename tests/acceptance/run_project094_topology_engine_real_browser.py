@@ -341,7 +341,7 @@ def case(browser, url, evidence_dir):
         source_report = source_reconciliation(page, devices, links)
         overview_report = assert_scope(page, panel, links, "overview", 34, 34, 5, evidence_dir)
         require(panel.bounding_box()["y"] <= 240, f"Overview canvas starts below first viewport: {panel.bounding_box()}")
-        overview_readability = read_camera_gate(page, root_id=None)
+        overview_readability = read_camera_gate(page, root_id="core-001")
         overview_camera = overview_camera_gate(page, panel)
         overview_groups = group_containment_metrics(page)
         require(not overview_groups["failures"], f"Overview group containment failed: {overview_groups}")

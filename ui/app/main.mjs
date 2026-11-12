@@ -1273,9 +1273,12 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (!measured) return false;
       const overviewCamera = topologyOverview || topologyCameraMode === "overview";
       const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
-      const readableBranch = Boolean(hierarchicalTopologyView?.kind === "branch" && topologyCameraMode === "read");
+      const readableHierarchy = Boolean(hierarchicalTopologyView && topologyCameraMode === "read");
       const compactMobileRead = topologyCameraMode === "read" && rect.width < 600 && !hierarchicalTopologyView;
-      const rootNode = readableBranch ? baseFlow.nodes.find((node) => node.id === hierarchicalTopologyView?.rootId) : null;
+      const readableRootId = readableHierarchy
+        ? hierarchicalTopologyView?.rootId ?? hierarchicalTopologyView.navigationGroups[0]?.memberIds[0]
+        : null;
+      const rootNode = readableRootId ? baseFlow.nodes.find((node) => node.id === readableRootId) : null;
       const rootRect = rootNode ? topologyWorldRect(rootNode.id) : null;
       if (rootRect && instance.setCenter) {
         instance.setCenter(rootRect.x + rootRect.width / 2, rootRect.y + rootRect.height / 2, { zoom: 1, duration: 0 });
@@ -1283,7 +1286,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         instance.fitView?.({
           duration: 0,
           padding: overviewCamera ? 0.2 : 0.08,
-            minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera || compactMobileRead ? 0.32 : 1,
+          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera || compactMobileRead ? 0.32 : 1,
           maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
         });
       }
@@ -1706,14 +1709,16 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyCameraMode(mode);
     const instance = flowApi.current;
     if (!instance) return;
-    const branchRootId = mode === "read" && hierarchicalTopologyView?.kind === "branch" ? hierarchicalTopologyView.rootId : null;
-    const branchRoot = branchRootId ? topologyWorldRect(branchRootId) : null;
-    if (branchRoot && instance.setCenter) {
-      // A branch READ camera is anchored to the current scope's real root.
+    const readableRootId = mode === "read" && hierarchicalTopologyView
+      ? hierarchicalTopologyView.rootId ?? hierarchicalTopologyView.navigationGroups[0]?.memberIds[0]
+      : null;
+    const readableRoot = readableRootId ? topologyWorldRect(readableRootId) : null;
+    if (readableRoot && instance.setCenter) {
+      // Every hierarchy READ camera is anchored to a real scope resource.
       // React Flow positions child nodes in their parent-local frame, so the
       // world-space rect must be resolved before centering; otherwise the root
       // can be rendered above the panel while the breadcrumb still says READ.
-      instance.setCenter(branchRoot.x + branchRoot.width / 2, branchRoot.y + branchRoot.height / 2, { duration: 0, zoom: 1 });
+      instance.setCenter(readableRoot.x + readableRoot.width / 2, readableRoot.y + readableRoot.height / 2, { duration: 0, zoom: 1 });
     } else if (mode === "overview") {
       // Read the mounted panel identity as well as React state.  Camera
       // buttons can be clicked during the async ELK commit; a closure from
