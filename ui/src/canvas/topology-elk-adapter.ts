@@ -302,26 +302,30 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
     bundles.set(key, list);
   }
   const replacements = new Map<string, LayoutBackendEdge>();
+  const allRects = [...nodes.values()];
+  const globalMinX = allRects.length ? Math.min(...allRects.map((rect) => rect.x)) : 0;
+  const globalMinY = allRects.length ? Math.min(...allRects.map((rect) => rect.y)) : 0;
   for (const bundle of bundles.values()) {
     if (bundle.length < 2) continue;
     const source = nodes.get(bundle[0]!.sourceNode); const target = nodes.get(bundle[0]!.targetNode);
-    if (!source || !target || Math.abs(source.x - target.x) < Math.max(source.width, target.width)) continue;
-    const leftToRight = source.x + source.width <= target.x;
+    if (!source || !target) continue;
     const ordered = bundle.slice().sort((left, right) => left.id.localeCompare(right.id, "en"));
     for (const [bundleIndex, edge] of ordered.entries()) {
-      if (bundleIndex > 0) continue;
       const route = pointList(edge); const start = route[0]; const end = route.at(-1); const firstBend = route[1];
       if (!start || !end || !firstBend) continue;
-      const firstDifferentYIndex = route.findIndex((point, index) => index > 0 && Math.abs(point.y - start.y) > ORTHOGONAL_EPSILON);
-      const firstDifferentY = firstDifferentYIndex >= 0 ? route[firstDifferentYIndex] : undefined;
-      if (!firstDifferentY) continue;
-      // ELK has already selected the bundle corridor.  A small source-side
-      // offset for the first parallel edge avoids a port permutation crossing
-      // while retaining the remaining ELK bends and target-side lane.
-      const lane = leftToRight ? firstBend.x - 12 : firstBend.x + 12;
-      const prefix = [start, { x: lane, y: start.y }, { x: lane, y: firstDifferentY.y }, { x: firstDifferentY.x, y: firstDifferentY.y }];
-      const repairedRoute = [...prefix, ...route.slice(firstDifferentYIndex + 1)];
-      replacements.set(edge.id, { ...edge, sections: [{ id: edge.sections[0]!.id, startPoint: start, bendPoints: repairedRoute.slice(1, -1), endPoint: end }] });
+      const horizontal = Math.abs(source.x - target.x) >= Math.max(source.width, target.width);
+      // Parallel source ports can be presented in the opposite order to the
+      // target ports. Keep those lanes outside the complete resource envelope
+      // so the physical connections remain orthogonal and non-crossing while
+      // still using the exact ELK endpoints and canonical edge IDs.
+      const gap = 18 + bundleIndex * 14;
+      const repairedRoute = horizontal
+        ? [start, { x: start.x, y: globalMinY - gap }, { x: end.x, y: globalMinY - gap }, end]
+        : [start, { x: globalMinX - gap, y: start.y }, { x: globalMinX - gap, y: end.y }, end];
+      replacements.set(edge.id, {
+        ...edge,
+        sections: [{ id: edge.sections[0]!.id, startPoint: start, bendPoints: repairedRoute.slice(1, -1), endPoint: end }],
+      });
     }
   }
   return edges.map((edge) => replacements.get(edge.id) ?? edge);
