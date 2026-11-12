@@ -771,6 +771,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
   const [topologyHierarchyScope, setTopologyHierarchyScope] = useState(null);
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
+  const [topologyOverviewReadyIdentity, setTopologyOverviewReadyIdentity] = useState("");
   const [topologyCameraMode, setTopologyCameraMode] = useState("read");
   const topologyFocusRequestRef = useRef(0);
   const topologyLayoutRequestRef = useRef(0);
@@ -1081,6 +1082,37 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         connections: canonicalNetwork.connections,
       })
     : null;
+  const topologyOverviewIdentity = topologyOverview
+    ? `${projectGeneration}:${getScenarioTransitionId()}:${sourceIdentity}:${topologyOverview.sourceHash}:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
+    : "none";
+  useEffect(() => {
+    setTopologyOverviewReadyIdentity("");
+    if (!topologyOverview) return undefined;
+    let firstFrame;
+    let retryInterval;
+    let attempts = 0;
+    const schedule = globalThis.requestAnimationFrame ?? ((callback) => globalThis.setTimeout(callback, 0));
+    const cancel = (handle) => {
+      if (typeof globalThis.cancelAnimationFrame === "function") globalThis.cancelAnimationFrame(handle);
+      else globalThis.clearTimeout(handle);
+    };
+    const checkRenderedEdges = () => {
+      const panel = topologyPanelRef.current;
+      const rendered = panel?.querySelectorAll('path[data-overview-summary-edge="true"]').length ?? 0;
+      if (rendered >= topologyOverview.edges.length) {
+        if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+        setTopologyOverviewReadyIdentity(topologyOverviewIdentity);
+      } else if (++attempts >= 120 && retryInterval !== undefined) {
+        globalThis.clearInterval(retryInterval);
+      }
+    };
+    firstFrame = schedule(checkRenderedEdges);
+    retryInterval = globalThis.setInterval(checkRenderedEdges, 16);
+    return () => {
+      if (firstFrame !== undefined) cancel(firstFrame);
+      if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+    };
+  }, [topologyOverviewIdentity]);
   const activeTopologyGroup = topologyGroup && !topologyFocusRoot ? topologyGroup : null;
   const topologyGroupMembers = activeTopologyGroup
     ? activeTopologyGroup.members.map((memberId) => canonicalResourceById.get(memberId)).filter(Boolean)
@@ -1145,7 +1177,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // newly approved scope label while the controlled store catches up.
   // Remount only when the exact reviewed hierarchy page identity changes.
   const hierarchyCanvasKey = topologyOverview
-    ? `network-overview:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
+    ? `network-overview:${projectGeneration}:${getScenarioTransitionId()}:${sourceIdentity}:${topologyOverview.sourceHash}:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
     : `${topologyViewMode}:` + (hierarchicalTopologyView
       ? `project-090:${hierarchicalTopologyView.kind}:${hierarchicalTopologyView.rootId ?? "overview"}:${hierarchicalTopologyView.page}:${hierarchicalTopologyView.edgeIds.join(",")}`
       : validHierarchyFocus
@@ -1821,7 +1853,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       : activeTopologyStats.canonical
         ? "Gruppkort och sammanfattningskanter är presentation; de räknas inte som fysiska enheter eller länkar."
         : "Presentationsgrupper är visuella behållare och räknas inte som fysiska nätverksenheter."),
-    topologyOverview ? e("section", { "data-topology-overview": topologyOverview.strategy },
+    topologyOverview && topologyOverviewReadyIdentity === topologyOverviewIdentity ? e("section", { "data-topology-overview": topologyOverview.strategy },
       e("strong", null, "Logisk nätverksöversikt"),
       e("p", null, `${topologyOverview.canonicalNodes} canonical devices · ${topologyOverview.canonicalLinks} declared links · ${topologyOverview.groups.length} bounded visual groups`),
       e("small", null, topologyOverview.strategy === "documented-role-bands"
