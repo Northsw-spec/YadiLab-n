@@ -14,6 +14,7 @@
     "test:topology-navigation": "tsc -p tests/tsconfig.browser.json && node tests/browser/run_topology_navigation_tests.mjs && node tests/browser/run_topology_navigation_adversarial.mjs && node tests/browser/run_project087_overview_tests.mjs",
     "test:project088-topology": "rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_project088_topology_tests.mjs",
     "test:project090-hierarchy": "rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_project090_hierarchy_tests.mjs",
+    "test:project093-contract": "node tests/browser/run_project093_contract_tests.mjs",
     "test:project091-layout": "rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_project091_layout_tests.mjs",
     "test:project091-edge-renderer": "node tests/browser/run_project091_edge_renderer_tests.mjs",
     "test:project089-import-consent": "rm -rf dist-enterprise-import-test && tsc -p tests/tsconfig.enterprise-import.json && node tests/enterprise-import/run_project089_import_consent_tests.mjs",

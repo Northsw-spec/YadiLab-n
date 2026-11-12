@@ -1140,7 +1140,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const rect = topologyPanelRef.current?.getBoundingClientRect();
       const instance = flowApi.current;
       if (rect && rect.width > 0 && rect.height > 0 && instance) {
-        instance.fitView?.({ duration: 0, padding: topologyOverview ? 0.16 : 0.12, minZoom: topologyOverview ? 0.58 : 0.45, maxZoom: topologyOverview ? 1.25 : 1.35 });
+        const overviewCamera = topologyOverview || topologyCameraMode === "overview";
+        instance.fitView?.({
+          duration: 0,
+          padding: overviewCamera ? 0.16 : 0.08,
+          minZoom: topologyOverview ? 0.58 : overviewCamera ? 0.32 : 0.62,
+          maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
+        });
         setTopologyGeometryRevision((value) => value + 1);
       }
     };

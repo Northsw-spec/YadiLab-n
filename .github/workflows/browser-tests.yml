@@ -199,6 +199,11 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project092_ui_redesign_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project092-ui-redesign"
+          # PROJECT-093: source-faithful semantic icons, exact Access-0025
+          # reconciliation, orthogonal canonical paths and readable cameras.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project093_semantic_explorer_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project093-semantic-explorer"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

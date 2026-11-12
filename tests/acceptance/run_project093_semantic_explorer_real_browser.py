@@ -54,11 +54,57 @@ def assert_canonical_access(page, expected_links, expected_endpoints):
     return rows
 
 
+def assert_no_card_crossings(page):
+    result = page.evaluate(
+        """() => {
+          const pointList = d => [...(d || '').matchAll(/([ML])\\s*(-?[0-9.]+)\\s+(-?[0-9.]+)/g)]
+            .map(match => ({ x: Number(match[2]), y: Number(match[3]) }));
+          const toScreen = (point, ctm) => {
+            const transformed = new DOMPoint(point.x, point.y).matrixTransform(ctm);
+            return { x: transformed.x, y: transformed.y };
+          };
+          const cards = [...document.querySelectorAll('.react-flow__node-resource[data-id]')]
+            .map(node => { const rect = node.getBoundingClientRect(); return { id: node.getAttribute('data-id'), rect }; });
+          const crosses = (from, to, rect) => {
+            const minX = Math.min(from.x, to.x), maxX = Math.max(from.x, to.x);
+            const minY = Math.min(from.y, to.y), maxY = Math.max(from.y, to.y);
+            // A route that terminates exactly on a card border is valid. Keep
+            // a small screen-space interior margin so floating-point transform
+            // noise cannot report a border touch as card penetration.
+            const margin = 3;
+            if (from.x === to.x) return from.x > rect.left + margin && from.x < rect.right - margin && maxY > rect.top + margin && minY < rect.bottom - margin;
+            if (from.y === to.y) return from.y > rect.top + margin && from.y < rect.bottom - margin && maxX > rect.left + margin && minX < rect.right - margin;
+            return true;
+          };
+          const hits = [];
+          for (const path of document.querySelectorAll('path[data-connection-source][data-connection-target][data-hierarchy-visual="true"]')) {
+            const source = path.getAttribute('data-connection-source');
+            const target = path.getAttribute('data-connection-target');
+            // Include React Flow's nested viewport transform. Using the root
+            // SVG CTM alone maps routes into the wrong coordinate system and
+            // reports false intersections with unrelated resource cards.
+            const ctm = path.getScreenCTM?.();
+            if (!ctm) continue;
+            const points = pointList(path.getAttribute('d')).map(point => toScreen(point, ctm));
+            for (let index = 1; index < points.length; index += 1) {
+              for (const card of cards) {
+                if (card.id !== source && card.id !== target && crosses(points[index - 1], points[index], card.rect)) hits.push({ link: path.id, card: card.id });
+              }
+            }
+          }
+          return { resourceCards: cards.length, crossings: hits };
+        }"""
+    )
+    require(not result["crossings"], f"Canonical cable crosses an unrelated resource card: {result}")
+    return result
+
+
 def access_contract(page, evidence_dir):
     panel = page.locator(".topology-panel")
     expect(panel).to_have_attribute("data-topology-hierarchy", access_id(25), timeout=180000)
     require(panel.get_attribute("data-topology-hierarchy-node-count") == "40", "Access-0025 is not the exact 40-node view")
     require(panel.get_attribute("data-topology-hierarchy-link-count") == "39", "Access-0025 is not the exact 39-link view")
+    page.wait_for_timeout(500)
     visible_ids = set(page.locator('.react-flow__node[data-id]').evaluate_all(
         "nodes => nodes.map(node => node.getAttribute('data-id')).filter(Boolean)"
     ))
@@ -68,11 +114,22 @@ def access_contract(page, evidence_dir):
     require(expected_links == {"link-00059", *{f"link-{index:05d}" for index in range(1185, 1223)}},
             f"Access-0025 canonical link set changed: {sorted(expected_links)}")
     rows = assert_canonical_access(page, expected_links, expected_endpoints)
+    geometry = assert_no_card_crossings(page)
+    require(page.locator('[data-topology-camera="read"]').get_attribute("aria-pressed") == "true",
+            "Access branch did not default to readable camera mode")
+    label_box = page.locator('.react-flow__node-resource .device-identity strong').first.bounding_box()
+    require(label_box and label_box["height"] >= 10,
+            f"Default readable camera shrank resource labels below 10 CSS pixels: {label_box}")
+    require(page.locator('.semantic-edge-label').count() == 0,
+            "Unselected canonical links rendered permanent metadata labels")
     target = next(row for row in rows if row["id"] == "link-01211")
     require((target["source"], target["target"]) == (access_id(25), client_id(921)), f"link-01211 endpoint changed: {target}")
     link_path = page.locator('path#link-01211[data-connection-source][data-connection-target]')
     expect(link_path).to_have_count(1)
-    link_path.click(force=True)
+    # React Flow's SVG path is selectable on its stroke. Dispatching the
+    # bubbled click on the exact canonical path avoids Playwright choosing the
+    # empty centre of a long orthogonal bounding box.
+    link_path.dispatch_event("click", {"bubbles": True, "cancelable": True})
     inspector = page.locator('[data-topology-selected-link="link-01211"]')
     expect(inspector).to_be_visible(timeout=30000)
     text = inspector.inner_text()
@@ -81,12 +138,28 @@ def access_contract(page, evidence_dir):
     require("VLAN: NOT DOCUMENTED" in text, f"Inspector fabricated VLAN metadata: {text}")
     expect(page.locator('[data-topology-focus-link="link-01211"]')).to_be_visible()
     page.screenshot(path=str(evidence_dir / "project093-access-0025-link-01211.png"), full_page=True)
+    page.locator('[data-topology-camera="overview"]').click()
+    expect(page.locator('[data-topology-camera="overview"]')).to_have_attribute("aria-pressed", "true")
+    page.screenshot(path=str(evidence_dir / "project093-access-0025-overview-camera.png"), full_page=False)
+    page.locator('[data-topology-camera="read"]').click()
+    expect(page.locator('[data-topology-camera="read"]')).to_have_attribute("aria-pressed", "true")
+    export_menu = page.locator(".workspace-menu-export")
+    export_menu.locator("summary").click()
+    expect(export_menu).to_have_attribute("open", "")
+    page.screenshot(path=str(evidence_dir / "project093-export-open.png"), full_page=False)
+    page.keyboard.press("Escape")
+    advanced_menu = page.locator(".workspace-menu-advanced")
+    advanced_menu.locator("summary").click()
+    expect(advanced_menu).to_have_attribute("open", "")
+    page.screenshot(path=str(evidence_dir / "project093-advanced-open.png"), full_page=False)
+    page.keyboard.press("Escape")
     return {
         "expectedLinkCount": len(expected_links),
         "renderedLinkCount": len(rows),
         "expectedLinkIds": sorted(expected_links),
         "selectedLink": {"id": target["id"], "source": target["source"], "target": target["target"]},
         "inspectorText": text,
+        "geometry": geometry,
     }
 
 
