@@ -64,6 +64,7 @@ function nodeToElk(node: LayoutGraphNode): Record<string, unknown> {
     layoutOptions: {
       ...(node.kind === "zone" ? { "elk.padding": elkPadding(ZONE_CONTENT_PADDING) } : {}),
       ...(fixedOrder ? { "org.eclipse.elk.portConstraints": "FIXED_ORDER" } : ports.length ? { "org.eclipse.elk.portConstraints": "FIXED_SIDE" } : {}),
+      ...(node.layoutOptions ?? {}),
     },
   };
 }

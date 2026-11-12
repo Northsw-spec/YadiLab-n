@@ -21,6 +21,8 @@ export interface LayoutGraphNode {
   readonly parent?: string;
   readonly children: readonly LayoutGraphNode[];
   readonly ports: readonly LayoutPortInput[];
+  /** Optional view-owned ELK options applied to this node/container. */
+  readonly layoutOptions?: Readonly<Record<string, string>>;
 }
 
 export interface LayoutGraphEdge {

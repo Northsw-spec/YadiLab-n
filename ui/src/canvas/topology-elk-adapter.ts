@@ -286,8 +286,8 @@ function rectOverlap(a: Rect, b: Rect): boolean { return a.x < b.x + b.width && 
 
 function segmentCrossesRect(a: { x: number; y: number }, b: { x: number; y: number }, rect: Rect): boolean {
   const margin = 1;
-  if (a.x === b.x) return a.x > rect.x + margin && a.x < rect.x + rect.width - margin && Math.max(a.y, b.y) > rect.y + margin && Math.min(a.y, b.y) < rect.y + rect.height - margin;
-  if (a.y === b.y) return a.y > rect.y + margin && a.y < rect.y + rect.height - margin && Math.max(a.x, b.x) > rect.x + margin && Math.min(a.x, b.x) < rect.x + rect.width - margin;
+  if (Math.abs(a.x - b.x) <= ORTHOGONAL_EPSILON) return a.x > rect.x + margin && a.x < rect.x + rect.width - margin && Math.max(a.y, b.y) > rect.y + margin && Math.min(a.y, b.y) < rect.y + rect.height - margin;
+  if (Math.abs(a.y - b.y) <= ORTHOGONAL_EPSILON) return a.y > rect.y + margin && a.y < rect.y + rect.height - margin && Math.max(a.x, b.x) > rect.x + margin && Math.min(a.x, b.x) < rect.x + rect.width - margin;
   return true;
 }
 
