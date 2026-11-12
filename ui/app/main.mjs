@@ -1090,7 +1090,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (!topologyOverview) return undefined;
     let firstFrame;
     let retryInterval;
+    let readyTimer;
     let attempts = 0;
+    let stableFrames = 0;
     const schedule = globalThis.requestAnimationFrame ?? ((callback) => globalThis.setTimeout(callback, 0));
     const cancel = (handle) => {
       if (typeof globalThis.cancelAnimationFrame === "function") globalThis.cancelAnimationFrame(handle);
@@ -1100,10 +1102,27 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const panel = topologyPanelRef.current;
       const rendered = panel?.querySelectorAll('path[data-overview-summary-edge="true"]').length ?? 0;
       if (rendered >= topologyOverview.edges.length) {
-        if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
-        setTopologyOverviewReadyIdentity(topologyOverviewIdentity);
+        stableFrames += 1;
+        // React Flow can finish its internal edge commit one frame after the
+        // controlled projection is rendered. Require two stable observations,
+        // then yield once more before exposing the sidebar summary so callers
+        // never observe the summary card without its actual SVG paths.
+        if (stableFrames >= 2 && readyTimer === undefined) {
+          readyTimer = globalThis.setTimeout(() => {
+            readyTimer = undefined;
+            const latestPanel = topologyPanelRef.current;
+            const latestRendered = latestPanel?.querySelectorAll('path[data-overview-summary-edge="true"]').length ?? 0;
+            if (latestRendered >= topologyOverview.edges.length) {
+              if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+              setTopologyOverviewReadyIdentity(topologyOverviewIdentity);
+            } else {
+              stableFrames = 0;
+            }
+          }, 32);
+        }
       } else if (++attempts >= 120 && retryInterval !== undefined) {
         globalThis.clearInterval(retryInterval);
+        stableFrames = 0;
       }
     };
     firstFrame = schedule(checkRenderedEdges);
@@ -1111,6 +1130,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     return () => {
       if (firstFrame !== undefined) cancel(firstFrame);
       if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+      if (readyTimer !== undefined) globalThis.clearTimeout(readyTimer);
     };
   }, [topologyOverviewIdentity]);
   const activeTopologyGroup = topologyGroup && !topologyFocusRoot ? topologyGroup : null;
