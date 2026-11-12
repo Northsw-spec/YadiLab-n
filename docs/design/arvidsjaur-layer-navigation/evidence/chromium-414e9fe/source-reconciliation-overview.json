@@ -1,0 +1,1352 @@
+{
+  "scope": "overview",
+  "expectedResourceCount": 34,
+  "expectedPhysicalLinkCount": 34,
+  "expectedPresentationGroupCount": 5,
+  "expectedLinkIds": [
+    "link-00001",
+    "link-00002",
+    "link-00003",
+    "link-00004",
+    "link-00005",
+    "link-00006",
+    "link-00007",
+    "link-00008",
+    "link-00009",
+    "link-00010",
+    "link-00011",
+    "link-00012",
+    "link-00013",
+    "link-00014",
+    "link-00015",
+    "link-00016",
+    "link-00017",
+    "link-00018",
+    "link-00019",
+    "link-00020",
+    "link-00021",
+    "link-00022",
+    "link-00023",
+    "link-00024",
+    "link-00025",
+    "link-00026",
+    "link-00027",
+    "link-00028",
+    "link-00029",
+    "link-00030",
+    "link-00031",
+    "link-00032",
+    "link-00033",
+    "link-00034"
+  ],
+  "renderedLinkIds": [
+    "link-00001",
+    "link-00002",
+    "link-00003",
+    "link-00004",
+    "link-00005",
+    "link-00006",
+    "link-00007",
+    "link-00008",
+    "link-00009",
+    "link-00010",
+    "link-00011",
+    "link-00012",
+    "link-00013",
+    "link-00014",
+    "link-00015",
+    "link-00016",
+    "link-00017",
+    "link-00018",
+    "link-00019",
+    "link-00020",
+    "link-00021",
+    "link-00022",
+    "link-00023",
+    "link-00024",
+    "link-00025",
+    "link-00026",
+    "link-00027",
+    "link-00028",
+    "link-00029",
+    "link-00030",
+    "link-00031",
+    "link-00032",
+    "link-00033",
+    "link-00034"
+  ],
+  "endpointMismatches": [],
+  "geometry": {
+    "rows": [
+      {
+        "id": "link-00001",
+        "source": "core-001",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00001:source",
+        "targetHandle": "__visual_port__:link-00001:target",
+        "length": 211.03158862229088,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4.000000000232025,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 770,
+            "y": 451.53129308363964
+          },
+          {
+            "x": 865,
+            "y": 451.53129308363964
+          },
+          {
+            "x": 865,
+            "y": 350.49970446134876
+          },
+          {
+            "x": 880,
+            "y": 350.49970446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00002",
+        "source": "core-001",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00002:source",
+        "targetHandle": "__visual_port__:link-00002:target",
+        "length": 5672.384529798761,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4.000000000232025,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 770,
+            "y": 482.07816808363964
+          },
+          {
+            "x": 855,
+            "y": 482.07816808363964
+          },
+          {
+            "x": 855,
+            "y": 3197.989013671875
+          },
+          {
+            "x": 875,
+            "y": 3197.989013671875
+          },
+          {
+            "x": 875,
+            "y": 351.51532946134876
+          },
+          {
+            "x": 880,
+            "y": 351.51532946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00003",
+        "source": "distribution-0001",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00003:source",
+        "targetHandle": "__visual_port__:link-00003:target",
+        "length": 3025.754595588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 3118.989013671875
+          },
+          {
+            "x": 454,
+            "y": 3118.989013671875
+          },
+          {
+            "x": 454,
+            "y": 542.989013671875
+          },
+          {
+            "x": 581,
+            "y": 542.989013671875
+          },
+          {
+            "x": 581,
+            "y": 507.23441808363964
+          },
+          {
+            "x": 596,
+            "y": 507.23441808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00004",
+        "source": "distribution-0002",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00004:source",
+        "targetHandle": "__visual_port__:link-00004:target",
+        "length": 2923.145220588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 3010.989013671875
+          },
+          {
+            "x": 444,
+            "y": 3010.989013671875
+          },
+          {
+            "x": 444,
+            "y": 532.989013671875
+          },
+          {
+            "x": 571,
+            "y": 532.989013671875
+          },
+          {
+            "x": 571,
+            "y": 501.84379308363964
+          },
+          {
+            "x": 596,
+            "y": 501.84379308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00005",
+        "source": "distribution-0003",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00005:source",
+        "targetHandle": "__visual_port__:link-00005:target",
+        "length": 2820.535845588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2902.989013671875
+          },
+          {
+            "x": 434,
+            "y": 2902.989013671875
+          },
+          {
+            "x": 434,
+            "y": 522.989013671875
+          },
+          {
+            "x": 561,
+            "y": 522.989013671875
+          },
+          {
+            "x": 561,
+            "y": 496.45316808363964
+          },
+          {
+            "x": 596,
+            "y": 496.45316808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00006",
+        "source": "distribution-0004",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00006:source",
+        "targetHandle": "__visual_port__:link-00006:target",
+        "length": 2717.926470588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2794.989013671875
+          },
+          {
+            "x": 424,
+            "y": 2794.989013671875
+          },
+          {
+            "x": 424,
+            "y": 512.989013671875
+          },
+          {
+            "x": 551,
+            "y": 512.989013671875
+          },
+          {
+            "x": 551,
+            "y": 491.06254308363964
+          },
+          {
+            "x": 596,
+            "y": 491.06254308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00007",
+        "source": "distribution-0005",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00007:source",
+        "targetHandle": "__visual_port__:link-00007:target",
+        "length": 2615.317095588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2686.989013671875
+          },
+          {
+            "x": 414,
+            "y": 2686.989013671875
+          },
+          {
+            "x": 414,
+            "y": 502.989013671875
+          },
+          {
+            "x": 541,
+            "y": 502.989013671875
+          },
+          {
+            "x": 541,
+            "y": 485.67191808363964
+          },
+          {
+            "x": 596,
+            "y": 485.67191808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00008",
+        "source": "distribution-0006",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00008:source",
+        "targetHandle": "__visual_port__:link-00008:target",
+        "length": 2512.707720588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2578.989013671875
+          },
+          {
+            "x": 404,
+            "y": 2578.989013671875
+          },
+          {
+            "x": 404,
+            "y": 492.989013671875
+          },
+          {
+            "x": 531,
+            "y": 492.989013671875
+          },
+          {
+            "x": 531,
+            "y": 480.28129308363964
+          },
+          {
+            "x": 596,
+            "y": 480.28129308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00009",
+        "source": "distribution-0007",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00009:source",
+        "targetHandle": "__visual_port__:link-00009:target",
+        "length": 2410.098345588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2470.989013671875
+          },
+          {
+            "x": 394,
+            "y": 2470.989013671875
+          },
+          {
+            "x": 394,
+            "y": 482.989013671875
+          },
+          {
+            "x": 521,
+            "y": 482.989013671875
+          },
+          {
+            "x": 521,
+            "y": 474.89066808363964
+          },
+          {
+            "x": 596,
+            "y": 474.89066808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00010",
+        "source": "distribution-0008",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00010:source",
+        "targetHandle": "__visual_port__:link-00010:target",
+        "length": 2307.488970588235,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2362.989013671875
+          },
+          {
+            "x": 384,
+            "y": 2362.989013671875
+          },
+          {
+            "x": 384,
+            "y": 472.989013671875
+          },
+          {
+            "x": 511,
+            "y": 472.989013671875
+          },
+          {
+            "x": 511,
+            "y": 469.50004308363964
+          },
+          {
+            "x": 596,
+            "y": 469.50004308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00011",
+        "source": "distribution-0009",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00011:source",
+        "targetHandle": "__visual_port__:link-00011:target",
+        "length": 2040.8795955882354,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 2090.989013671875
+          },
+          {
+            "x": 374,
+            "y": 2090.989013671875
+          },
+          {
+            "x": 374,
+            "y": 464.10941808363964
+          },
+          {
+            "x": 596,
+            "y": 464.10941808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00012",
+        "source": "distribution-0010",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00012:source",
+        "targetHandle": "__visual_port__:link-00012:target",
+        "length": 1949.7297794117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1982.989013671875
+          },
+          {
+            "x": 364,
+            "y": 1982.989013671875
+          },
+          {
+            "x": 364,
+            "y": 452.989013671875
+          },
+          {
+            "x": 511,
+            "y": 452.989013671875
+          },
+          {
+            "x": 511,
+            "y": 458.71879308363964
+          },
+          {
+            "x": 596,
+            "y": 458.71879308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00013",
+        "source": "distribution-0011",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00013:source",
+        "targetHandle": "__visual_port__:link-00013:target",
+        "length": 1856.3391544117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1874.989013671875
+          },
+          {
+            "x": 354,
+            "y": 1874.989013671875
+          },
+          {
+            "x": 354,
+            "y": 442.989013671875
+          },
+          {
+            "x": 521,
+            "y": 442.989013671875
+          },
+          {
+            "x": 521,
+            "y": 453.32816808363964
+          },
+          {
+            "x": 596,
+            "y": 453.32816808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00014",
+        "source": "distribution-0012",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00014:source",
+        "targetHandle": "__visual_port__:link-00014:target",
+        "length": 1762.9485294117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1766.989013671875
+          },
+          {
+            "x": 344,
+            "y": 1766.989013671875
+          },
+          {
+            "x": 344,
+            "y": 432.989013671875
+          },
+          {
+            "x": 531,
+            "y": 432.989013671875
+          },
+          {
+            "x": 531,
+            "y": 447.93754308363964
+          },
+          {
+            "x": 596,
+            "y": 447.93754308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00015",
+        "source": "distribution-0013",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00015:source",
+        "targetHandle": "__visual_port__:link-00015:target",
+        "length": 1669.5579044117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1658.989013671875
+          },
+          {
+            "x": 334,
+            "y": 1658.989013671875
+          },
+          {
+            "x": 334,
+            "y": 422.989013671875
+          },
+          {
+            "x": 541,
+            "y": 422.989013671875
+          },
+          {
+            "x": 541,
+            "y": 442.54691808363964
+          },
+          {
+            "x": 596,
+            "y": 442.54691808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00016",
+        "source": "distribution-0014",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00016:source",
+        "targetHandle": "__visual_port__:link-00016:target",
+        "length": 1576.1672794117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1550.989013671875
+          },
+          {
+            "x": 324,
+            "y": 1550.989013671875
+          },
+          {
+            "x": 324,
+            "y": 412.989013671875
+          },
+          {
+            "x": 551,
+            "y": 412.989013671875
+          },
+          {
+            "x": 551,
+            "y": 437.15629308363964
+          },
+          {
+            "x": 596,
+            "y": 437.15629308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00017",
+        "source": "distribution-0015",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00017:source",
+        "targetHandle": "__visual_port__:link-00017:target",
+        "length": 1482.7766544117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1442.989013671875
+          },
+          {
+            "x": 314,
+            "y": 1442.989013671875
+          },
+          {
+            "x": 314,
+            "y": 402.989013671875
+          },
+          {
+            "x": 561,
+            "y": 402.989013671875
+          },
+          {
+            "x": 561,
+            "y": 431.76566808363964
+          },
+          {
+            "x": 596,
+            "y": 431.76566808363964
+          }
+        ]
+      },
+      {
+        "id": "link-00018",
+        "source": "distribution-0016",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00018:source",
+        "targetHandle": "__visual_port__:link-00018:target",
+        "length": 1389.3860294117646,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000232025,
+        "points": [
+          {
+            "x": 182,
+            "y": 1334.989013671875
+          },
+          {
+            "x": 304,
+            "y": 1334.989013671875
+          },
+          {
+            "x": 304,
+            "y": 392.989013671875
+          },
+          {
+            "x": 571,
+            "y": 392.989013671875
+          },
+          {
+            "x": 571,
+            "y": 426.37504308363964
+          },
+          {
+            "x": 596,
+            "y": 426.37504308363964
+          }
+        ]
+      },
+      {
+        "id": "link-00019",
+        "source": "distribution-0017",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00019:source",
+        "targetHandle": "__visual_port__:link-00019:target",
+        "length": 1420.1299342105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 1062.989013671875
+          },
+          {
+            "x": 294,
+            "y": 1062.989013671875
+          },
+          {
+            "x": 294,
+            "y": 382.989013671875
+          },
+          {
+            "x": 845,
+            "y": 382.989013671875
+          },
+          {
+            "x": 845,
+            "y": 340.85907946134876
+          },
+          {
+            "x": 880,
+            "y": 340.85907946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00020",
+        "source": "distribution-0018",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00020:source",
+        "targetHandle": "__visual_port__:link-00020:target",
+        "length": 1316.9580592105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 954.989013671875
+          },
+          {
+            "x": 284,
+            "y": 954.989013671875
+          },
+          {
+            "x": 284,
+            "y": 371.989013671875
+          },
+          {
+            "x": 835,
+            "y": 371.989013671875
+          },
+          {
+            "x": 835,
+            "y": 336.03095446134876
+          },
+          {
+            "x": 880,
+            "y": 336.03095446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00021",
+        "source": "distribution-0019",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00021:source",
+        "targetHandle": "__visual_port__:link-00021:target",
+        "length": 1213.7705592105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 846.989013671875
+          },
+          {
+            "x": 274,
+            "y": 846.989013671875
+          },
+          {
+            "x": 274,
+            "y": 360.989013671875
+          },
+          {
+            "x": 825,
+            "y": 360.989013671875
+          },
+          {
+            "x": 825,
+            "y": 331.21845446134876
+          },
+          {
+            "x": 880,
+            "y": 331.21845446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00022",
+        "source": "distribution-0020",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00022:source",
+        "targetHandle": "__visual_port__:link-00022:target",
+        "length": 1110.5986842105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 738.989013671875
+          },
+          {
+            "x": 264,
+            "y": 738.989013671875
+          },
+          {
+            "x": 264,
+            "y": 349.989013671875
+          },
+          {
+            "x": 815,
+            "y": 349.989013671875
+          },
+          {
+            "x": 815,
+            "y": 326.39032946134876
+          },
+          {
+            "x": 880,
+            "y": 326.39032946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00023",
+        "source": "distribution-0021",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00023:source",
+        "targetHandle": "__visual_port__:link-00023:target",
+        "length": 1007.4268092105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 630.989013671875
+          },
+          {
+            "x": 254,
+            "y": 630.989013671875
+          },
+          {
+            "x": 254,
+            "y": 338.989013671875
+          },
+          {
+            "x": 805,
+            "y": 338.989013671875
+          },
+          {
+            "x": 805,
+            "y": 321.56220446134876
+          },
+          {
+            "x": 880,
+            "y": 321.56220446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00024",
+        "source": "distribution-0022",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00024:source",
+        "targetHandle": "__visual_port__:link-00024:target",
+        "length": 904.2393092105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 522.989013671875
+          },
+          {
+            "x": 244,
+            "y": 522.989013671875
+          },
+          {
+            "x": 244,
+            "y": 327.989013671875
+          },
+          {
+            "x": 795,
+            "y": 327.989013671875
+          },
+          {
+            "x": 795,
+            "y": 316.74970446134876
+          },
+          {
+            "x": 880,
+            "y": 316.74970446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00025",
+        "source": "distribution-0023",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00025:source",
+        "targetHandle": "__visual_port__:link-00025:target",
+        "length": 801.0674342105262,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 414.989013671875
+          },
+          {
+            "x": 234,
+            "y": 414.989013671875
+          },
+          {
+            "x": 234,
+            "y": 316.989013671875
+          },
+          {
+            "x": 785,
+            "y": 316.989013671875
+          },
+          {
+            "x": 785,
+            "y": 311.92157946134876
+          },
+          {
+            "x": 880,
+            "y": 311.92157946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00026",
+        "source": "distribution-0024",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00026:source",
+        "targetHandle": "__visual_port__:link-00026:target",
+        "length": 698.1044407894738,
+        "turns": 1,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 306.989013671875
+          },
+          {
+            "x": 880,
+            "y": 306.989013671875
+          },
+          {
+            "x": 880,
+            "y": 307.09345446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00027",
+        "source": "distribution-0025",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00027:source",
+        "targetHandle": "__visual_port__:link-00027:target",
+        "length": 965.2763157894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": 34.989013671875
+          },
+          {
+            "x": 234,
+            "y": 34.989013671875
+          },
+          {
+            "x": 234,
+            "y": 294.989013671875
+          },
+          {
+            "x": 785,
+            "y": 294.989013671875
+          },
+          {
+            "x": 785,
+            "y": 302.26532946134876
+          },
+          {
+            "x": 880,
+            "y": 302.26532946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00028",
+        "source": "distribution-0026",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00028:source",
+        "targetHandle": "__visual_port__:link-00028:target",
+        "length": 1068.4638157894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -73.010986328125
+          },
+          {
+            "x": 244,
+            "y": -73.010986328125
+          },
+          {
+            "x": 244,
+            "y": 283.989013671875
+          },
+          {
+            "x": 795,
+            "y": 283.989013671875
+          },
+          {
+            "x": 795,
+            "y": 297.45282946134876
+          },
+          {
+            "x": 880,
+            "y": 297.45282946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00029",
+        "source": "distribution-0027",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00029:source",
+        "targetHandle": "__visual_port__:link-00029:target",
+        "length": 1171.6356907894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -181.010986328125
+          },
+          {
+            "x": 254,
+            "y": -181.010986328125
+          },
+          {
+            "x": 254,
+            "y": 272.989013671875
+          },
+          {
+            "x": 805,
+            "y": 272.989013671875
+          },
+          {
+            "x": 805,
+            "y": 292.62470446134876
+          },
+          {
+            "x": 880,
+            "y": 292.62470446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00030",
+        "source": "distribution-0028",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00030:source",
+        "targetHandle": "__visual_port__:link-00030:target",
+        "length": 1274.8075657894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -289.010986328125
+          },
+          {
+            "x": 264,
+            "y": -289.010986328125
+          },
+          {
+            "x": 264,
+            "y": 261.989013671875
+          },
+          {
+            "x": 815,
+            "y": 261.989013671875
+          },
+          {
+            "x": 815,
+            "y": 287.79657946134876
+          },
+          {
+            "x": 880,
+            "y": 287.79657946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00031",
+        "source": "distribution-0029",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00031:source",
+        "targetHandle": "__visual_port__:link-00031:target",
+        "length": 1377.9950657894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -397.010986328125
+          },
+          {
+            "x": 274,
+            "y": -397.010986328125
+          },
+          {
+            "x": 274,
+            "y": 250.989013671875
+          },
+          {
+            "x": 825,
+            "y": 250.989013671875
+          },
+          {
+            "x": 825,
+            "y": 282.98407946134876
+          },
+          {
+            "x": 880,
+            "y": 282.98407946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00032",
+        "source": "distribution-0030",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00032:source",
+        "targetHandle": "__visual_port__:link-00032:target",
+        "length": 1481.1669407894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -505.010986328125
+          },
+          {
+            "x": 284,
+            "y": -505.010986328125
+          },
+          {
+            "x": 284,
+            "y": 239.989013671875
+          },
+          {
+            "x": 835,
+            "y": 239.989013671875
+          },
+          {
+            "x": 835,
+            "y": 278.15595446134876
+          },
+          {
+            "x": 880,
+            "y": 278.15595446134876
+          }
+        ]
+      },
+      {
+        "id": "link-00033",
+        "source": "distribution-0031",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00033:source",
+        "targetHandle": "__visual_port__:link-00033:target",
+        "length": 1584.3388157894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -613.010986328125
+          },
+          {
+            "x": 294,
+            "y": -613.010986328125
+          },
+          {
+            "x": 294,
+            "y": 228.989013671875
+          },
+          {
+            "x": 845,
+            "y": 228.989013671875
+          },
+          {
+            "x": 845,
+            "y": 273.32782946134876
+          },
+          {
+            "x": 880,
+            "y": 273.32782946134876
+          }
+        ]
+      },
+      {
+        "id": "link-00034",
+        "source": "distribution-0032",
+        "target": "core-002",
+        "sourceHandle": "__visual_port__:link-00034:source",
+        "targetHandle": "__visual_port__:link-00034:target",
+        "length": 1687.5263157894738,
+        "turns": 4,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 4,
+        "targetEndpointDistance": 4.000000000330219,
+        "points": [
+          {
+            "x": 182,
+            "y": -721.010986328125
+          },
+          {
+            "x": 304,
+            "y": -721.010986328125
+          },
+          {
+            "x": 304,
+            "y": 217.989013671875
+          },
+          {
+            "x": 855,
+            "y": 217.989013671875
+          },
+          {
+            "x": 855,
+            "y": 268.51532946134876
+          },
+          {
+            "x": 880,
+            "y": 268.51532946134876
+          }
+        ]
+      }
+    ],
+    "crossings": 0,
+    "crossingPairs": [],
+    "overlaps": [],
+    "cardCount": 34
+  },
+  "layoutQuality": null
+}

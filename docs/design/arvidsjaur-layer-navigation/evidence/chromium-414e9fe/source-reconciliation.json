@@ -1,0 +1,12 @@
+{
+  "sourceKind": "synthetic-ci-fixture",
+  "sourceSha256": "62da08dec42768fa10ab1937508b044f5a32297812bc5d3d6a51f1076ffc01f7",
+  "canonicalResources": 10000,
+  "canonicalConnections": 10000,
+  "canonicalResourceIdsUnchanged": true,
+  "canonicalConnectionIdsUnchanged": true,
+  "canonicalEndpointsUnchanged": true,
+  "declaredPortsPreserved": true,
+  "unknownPortsRemainUnknown": true,
+  "vlanProvenance": "NOT_DOCUMENTED in source fixture; no VLAN inferred"
+}
