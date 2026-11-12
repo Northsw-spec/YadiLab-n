@@ -305,6 +305,8 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
   const allRects = [...nodes.values()];
   const globalMinX = allRects.length ? Math.min(...allRects.map((rect) => rect.x)) : 0;
   const globalMinY = allRects.length ? Math.min(...allRects.map((rect) => rect.y)) : 0;
+  const globalMaxX = allRects.length ? Math.max(...allRects.map((rect) => rect.x + rect.width)) : 0;
+  const globalMaxY = allRects.length ? Math.max(...allRects.map((rect) => rect.y + rect.height)) : 0;
   for (const bundle of bundles.values()) {
     if (bundle.length < 2) continue;
     const source = nodes.get(bundle[0]!.sourceNode); const target = nodes.get(bundle[0]!.targetNode);
@@ -318,10 +320,19 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
       // target ports. Keep those lanes outside the complete resource envelope
       // so the physical connections remain orthogonal and non-crossing while
       // still using the exact ELK endpoints and canonical edge IDs.
-      const gap = 18 + bundleIndex * 14;
+      const gap = 36 + Math.floor(bundleIndex / 2) * 18;
+      const laneX = horizontal
+        ? (firstBend && Number.isFinite(firstBend.x) ? firstBend.x : (start.x + end.x) / 2)
+        : undefined;
+      const outerY = bundleIndex % 2 === 0
+        ? globalMinY - gap
+        : globalMaxY + gap;
+      const outerX = bundleIndex % 2 === 0
+        ? globalMinX - gap
+        : globalMaxX + gap;
       const repairedRoute = horizontal
-        ? [start, { x: start.x, y: globalMinY - gap }, { x: end.x, y: globalMinY - gap }, end]
-        : [start, { x: globalMinX - gap, y: start.y }, { x: globalMinX - gap, y: end.y }, end];
+        ? [start, { x: laneX!, y: start.y }, { x: laneX!, y: outerY }, { x: end.x, y: outerY }, end]
+        : [start, { x: outerX, y: start.y }, { x: outerX, y: end.y }, end];
       replacements.set(edge.id, {
         ...edge,
         sections: [{ id: edge.sections[0]!.id, startPoint: start, bendPoints: repairedRoute.slice(1, -1), endPoint: end }],
