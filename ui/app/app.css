@@ -1,4 +1,4 @@
-:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #08111f; color: #e7eefb; }
+:root { color-scheme: dark; font-family: "DejaVu Sans", system-ui, sans-serif; background: #08111f; color: #e7eefb; }
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; min-height: 100%; }
 html { overflow-y: auto; overflow-x: hidden; }

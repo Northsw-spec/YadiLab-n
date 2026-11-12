@@ -89,7 +89,12 @@ def case(browser, url, evidence_dir):
         require(device_count.get_attribute("data-topology-active-device-count") == "34", "Overview active device count is not 34")
         require(link_count.get_attribute("data-topology-active-link-count") == "34", "Overview active link count is not 34")
         require(group_count.get_attribute("data-topology-active-group-count") == "5", "Overview presentation group count is not 5")
-        require("10000 · 10000" in page.locator('[data-topology-canonical-counts="true"]').inner_text(), "Canonical inventory counts are not explicit")
+        canonical_counts = page.locator('[data-topology-canonical-counts="true"]')
+        # Pinned Chromium can publish the active-count attributes before the
+        # canonical-count text nodes have painted. Wait for the source-derived
+        # text explicitly so this is a real rendered assertion, not a timing
+        # sample of an intermediate React commit.
+        expect(canonical_counts).to_contain_text("10000 · 10000", timeout=180000)
         page.screenshot(path=str(evidence_dir / "project092-overview-1366x768.png"), full_page=False)
 
         search_and_open(page, dist_id(4))
