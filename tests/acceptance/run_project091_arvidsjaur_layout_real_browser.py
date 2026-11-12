@@ -305,7 +305,11 @@ def assert_scope(page, panel, source_links, scope_name, evidence_dir, browser_di
 def open_access(page, panel, access_node_id):
     access_node = page.locator(f'.react-flow__node[data-id="{access_node_id}"]')
     expect(access_node).to_be_visible(timeout=180000)
-    access_node.dblclick(force=True)
+    # A grouped branch can place a valid child card outside the current
+    # camera rectangle while it is still mounted.  Dispatch the same
+    # source-derived DOM gesture first; Playwright's pointer helper refuses to
+    # act on an off-camera element before React Flow can handle the drill.
+    access_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
     try:
         page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=access_node_id, timeout=5000)
     except PlaywrightTimeoutError:
