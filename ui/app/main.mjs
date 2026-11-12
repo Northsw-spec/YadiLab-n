@@ -2272,7 +2272,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       edgeTypes,
       fitView: true,
       minZoom: 0.15,
-      maxZoom: 2,
+      maxZoom: topologyOverview ? 1.05 : 2,
       nodesDraggable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       nodesConnectable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       elementsSelectable: true,
