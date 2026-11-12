@@ -181,7 +181,7 @@ def group_containment_metrics(page):
             const groupRect = rect(host);
             const memberRects = members.map(id => {
               const node = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
-              return { id, rect: rect(node), parentId: node?.getAttribute('data-parentid') ?? node?.getAttribute('data-parent-id') ?? null };
+              return { id, rect: rect(node), parentId: node?.querySelector('.resource-node')?.getAttribute('data-topology-presentation-group') ?? null };
             });
             const headerRect = rect(group.querySelector('.zone-heading'));
             return { groupId, groupRect, headerRect, members: memberRects };
