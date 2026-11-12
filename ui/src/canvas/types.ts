@@ -26,6 +26,16 @@ export interface CanvasInterfaceHandle {
   readonly targetHandleId: string;
 }
 
+export interface CanvasVisualAttachmentHandle {
+  /** Stable view-only handle; it is never exported as a source interface. */
+  readonly handleId: string;
+  readonly connectionId: string;
+  readonly direction: "source" | "target";
+  readonly side: "NORTH" | "SOUTH" | "EAST" | "WEST";
+  /** ELK-computed handle center expressed as a percentage of the card edge. */
+  readonly topPercent?: number;
+}
+
 export interface CanvasZoneData {
   readonly semanticId: string;
   readonly semanticKind: "zone";
@@ -53,6 +63,7 @@ export interface CanvasResourceData {
   readonly semanticBadges?: readonly string[];
   readonly asset?: AssetRenderDescriptor;
   readonly interfaces: readonly CanvasInterfaceHandle[];
+  readonly visualAttachmentHandles?: readonly CanvasVisualAttachmentHandle[];
   readonly hierarchyRole?: string;
   readonly hierarchyVisual?: true;
   readonly connectionState?: "CONNECTED" | "BOUNDARY_CONNECTED" | "SOURCE_ISOLATED" | "INCOMPLETE_VIEW";
@@ -82,6 +93,7 @@ export interface CanvasEdgeData {
   /** Deterministic visual bend points; canonical endpoints/IDs remain separate. */
   readonly route?: readonly { readonly x: number; readonly y: number }[];
   readonly routeKind?: "orthogonal";
+  readonly routeOrigin?: "elk" | "legacy";
   /** True when this edge belongs to the bounded PROJECT-090 hierarchy view. */
   readonly hierarchyVisual?: true;
   /** True when this edge is a visual overview summary, never a physical link. */

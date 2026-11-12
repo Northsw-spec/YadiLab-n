@@ -319,6 +319,7 @@ import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
 import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.ts";
 import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
+import { createTopologyRequestKey, layoutHierarchicalTopologyView, topologyViewportBucket, TOPOLOGY_LAYOUT_CONFIG_VERSION } from "../src/canvas/topology-elk-adapter.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 import { anchorOrthogonalRoute, orthogonalEdgePath } from "./semantic-edge-routing.mjs";
@@ -368,6 +369,7 @@ const builtinGuidedLabs = guidedLabCatalog.ok ? guidedLabCatalog.labs : [];
 
 function handlesFor(data) {
   const interfaces = Array.isArray(data?.interfaces) ? data.interfaces : [];
+  const visualAttachments = Array.isArray(data?.visualAttachmentHandles) ? data.visualAttachmentHandles : [];
   const activeInterfaces = new Set(Array.isArray(data?.activeInterfaceIds) ? data.activeInterfaceIds : []);
   const result = [
     e(Handle, { key: "generic-in", id: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-in", "data-react-flow-handle-type": "target" }),
@@ -379,6 +381,23 @@ function handlesFor(data) {
     const title = `${iface.label} · ${iface.stateLabel}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`;
     result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: Position.Left, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.targetHandleId, "data-react-flow-handle-type": "target" }));
     result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: Position.Right, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.sourceHandleId, "data-react-flow-handle-type": "source" }));
+  });
+  visualAttachments.forEach((attachment, index) => {
+    const top = `${Number.isFinite(attachment.topPercent) ? attachment.topPercent : 20 + ((index + 1) * 60) / (visualAttachments.length + 1)}%`;
+    const isSource = attachment.direction === "source";
+    result.push(e(Handle, {
+      key: attachment.handleId,
+      id: attachment.handleId,
+      type: isSource ? "source" : "target",
+      position: isSource ? Position.Right : Position.Left,
+      style: { top },
+      className: "semantic-handle visual-attachment-handle",
+      title: "Visual attachment · source port NOT DOCUMENTED",
+      "data-visual-attachment": "true",
+      "data-connection-id": attachment.connectionId,
+      "data-react-flow-handle-id": attachment.handleId,
+      "data-react-flow-handle-type": isSource ? "source" : "target",
+    }));
   });
   return result;
 }
@@ -523,14 +542,14 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
   const isHierarchical = data?.hierarchyVisual === true;
-  const route = hasRoute ? anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: data.route }) : [];
+  const route = hasRoute ? anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: data.route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition }) : [];
   // The route is computed from source geometry, then anchored to the actual
   // live React Flow handles. Hierarchical edges never discard bends for a
   // shared fallback corridor and never fall back to a Bezier path.
   const [basePath, labelX, labelY] = hasRoute
-    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, route })
+    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition })
     : isHierarchical
-      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY })
+      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })
       : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
@@ -594,6 +613,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       "data-link-vlan": visual.vlanLabel ?? "NOT_DOCUMENTED",
       "data-hierarchy-visual": isHierarchical ? "true" : undefined,
       "data-route-kind": hasRoute ? "orthogonal" : isHierarchical ? "orthogonal-fallback" : "bezier",
+      "data-route-origin": data?.routeOrigin ?? (hasRoute ? "legacy" : undefined),
       "aria-label": visual.accessibleLabel,
       ...(summaryOnly ? {
         "data-overview-summary-edge": "true",
@@ -753,6 +773,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
   const [topologyCameraMode, setTopologyCameraMode] = useState("read");
   const topologyFocusRequestRef = useRef(0);
+  const topologyLayoutRequestRef = useRef(0);
+  const [hierarchicalTopologyLayout, setHierarchicalTopologyLayout] = useState(null);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyGroup, setTopologyGroup] = useState(null);
   const [topologyGroupQuery, setTopologyGroupQuery] = useState("");
@@ -947,7 +969,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     try { return buildHierarchicalTopologyIndex(validTenThousandFocus.model); }
     catch { return null; }
   }, [validTenThousandFocus?.model]);
-  const hierarchicalTopologyView = useMemo(() => {
+  const hierarchicalTopologySelection = useMemo(() => {
     if (!tenThousandHierarchyIndex || topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY) return null;
     try {
       return buildHierarchicalTopologyView(
@@ -958,6 +980,47 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       );
     } catch { return null; }
   }, [tenThousandHierarchyIndex, topologyHierarchyScope?.rootId, topologyFocusPage, topologyViewMode]);
+  useEffect(() => {
+    if (!hierarchicalTopologySelection || !tenThousandHierarchyIndex) {
+      topologyLayoutRequestRef.current += 1;
+      setHierarchicalTopologyLayout(null);
+      return undefined;
+    }
+    const panelWidth = topologyViewportState.width || topologyPanelRef.current?.getBoundingClientRect?.().width || 0;
+    const request = {
+      sourceHash: tenThousandHierarchyIndex.sourceHash,
+      scope: hierarchicalTopologySelection.kind,
+      ...(hierarchicalTopologySelection.rootId ? { rootId: hierarchicalTopologySelection.rootId } : {}),
+      page: hierarchicalTopologySelection.page,
+      viewportBucket: topologyViewportBucket(panelWidth),
+      configVersion: TOPOLOGY_LAYOUT_CONFIG_VERSION,
+    };
+    const requestKey = createTopologyRequestKey(request);
+    const token = ++topologyLayoutRequestRef.current;
+    if (hierarchicalTopologyLayout?.requestKey !== requestKey) setHierarchicalTopologyLayout(null);
+    let cancelled = false;
+    void layoutHierarchicalTopologyView(hierarchicalTopologySelection, request)
+      .then((result) => {
+        if (cancelled || token !== topologyLayoutRequestRef.current || result.requestKey !== requestKey) return;
+        setHierarchicalTopologyLayout(result);
+      })
+      .catch((error) => {
+        if (cancelled || token !== topologyLayoutRequestRef.current) return;
+        // Fail closed: an ELK failure must never silently fall back to the
+        // pre-P094 manual grid/cable strategy.  Keep the selection unavailable
+        // until a fresh, identity-matched ELK result is produced.
+        setHierarchicalTopologyLayout(null);
+        setDiagnostics((current) => [...current, {
+          severity: "error",
+          code: "TOPOLOGY_LAYOUT_ELK_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        }]);
+      });
+    return () => { cancelled = true; };
+  }, [hierarchicalTopologySelection, tenThousandHierarchyIndex, topologyViewportState.width]);
+  const hierarchicalTopologyView = hierarchicalTopologySelection && hierarchicalTopologyLayout
+    ? { ...hierarchicalTopologySelection, projection: hierarchicalTopologyLayout.projection, layoutStrategy: "elk.layered" }
+    : null;
   useEffect(() => {
     if (tenThousandHierarchyIndex) {
       topologyFocusRequestRef.current += 1;
@@ -1141,12 +1204,19 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       const instance = flowApi.current;
       if (rect && rect.width > 0 && rect.height > 0 && instance) {
         const overviewCamera = topologyOverview || topologyCameraMode === "overview";
-        instance.fitView?.({
-          duration: 0,
-          padding: overviewCamera ? 0.16 : 0.08,
-          minZoom: topologyOverview ? 0.58 : overviewCamera ? 0.32 : 0.62,
-          maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
-        });
+        const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
+        const readableBranch = Boolean(hierarchicalTopologyView?.kind === "branch" && topologyCameraMode === "read");
+        const rootNode = readableBranch ? baseFlow.nodes.find((node) => node.id === hierarchicalTopologyView?.rootId) : null;
+        if (rootNode && instance.setCenter) {
+          instance.setCenter(rootNode.position.x + (rootNode.width ?? 168) / 2, rootNode.position.y + (rootNode.height ?? 88) / 2, { zoom: 1, duration: 0 });
+        } else {
+          instance.fitView?.({
+            duration: 0,
+            padding: overviewCamera ? 0.2 : 0.08,
+            minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera ? 0.32 : 1,
+            maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
+          });
+        }
         setTopologyGeometryRevision((value) => value + 1);
       }
     };
@@ -1168,7 +1238,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (initialFitSecondFrame !== undefined) globalThis.cancelAnimationFrame?.(initialFitSecondFrame);
       if (initialFitTimer !== undefined) globalThis.clearTimeout(initialFitTimer);
     };
-  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks]);
+  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks, hierarchicalTopologyView?.kind, hierarchicalTopologyView?.rootId, topologyCameraMode]);
   const topologyIndex = useMemo(() => buildTopologySearchIndexFromNetwork(canonicalNetwork), [canonicalNetwork]);
   const topologySearch = useMemo(() => searchTopologyWithCount(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
   const topologySearchResults = topologySearch.results;
@@ -1538,8 +1608,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyCameraMode(mode);
     const instance = flowApi.current;
     if (!instance) return;
-    if (mode === "overview") instance.fitView?.({ duration: 220, padding: 0.16, minZoom: 0.32, maxZoom: 1.05 });
-    else instance.fitView?.({ duration: 220, padding: 0.08, minZoom: 0.62, maxZoom: 1.35 });
+    if (mode === "overview") {
+      // Read the mounted panel identity as well as React state.  Camera
+      // buttons can be clicked during the async ELK commit; a closure from
+      // the pre-layout render must still select the bounded hierarchy fit.
+      const boundedHierarchy = Boolean(document.querySelector(".topology-panel")?.getAttribute("data-topology-layout-bakeoff"));
+      instance.fitView?.({ duration: 0, padding: boundedHierarchy ? 0.2 : 0.16, minZoom: boundedHierarchy ? 0.1 : 0.32, maxZoom: 1.05 });
+    }
+    else instance.fitView?.({ duration: 0, padding: 0.08, minZoom: 0.62, maxZoom: 1.35 });
   };
   const focusTopologyNode = (nodeId, label = nodeId) => {
     const active = liveTopologyWorkspace();
@@ -1770,6 +1846,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
       "data-topology-hierarchy-hidden-boundary-links": String(hierarchicalTopologyView.hiddenBoundaryConnectionCount),
       "data-topology-hierarchy-layout": hierarchicalTopologyView.layoutStrategy,
+      ...(hierarchicalTopologyLayout ? { "data-topology-layout-hard-gate": hierarchicalTopologyLayout.quality.hardGate, "data-topology-layout-winner": hierarchicalTopologyLayout.quality.winnerId } : {}),
     },
       e("strong", null, hierarchicalTopologyView.roleLabel),
       e("p", null, hierarchicalTopologyView.kind === "overview"
@@ -1778,6 +1855,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("small", { "data-topology-hierarchy-groups": String(hierarchicalTopologyView.navigationGroups.length) }, `${hierarchicalTopologyView.navigationGroups.length} Arvidsjaur-stilade presentationsgrupper`),
       e("small", null, `${hierarchicalTopologyView.hiddenConnectionCount} deklarerade länkar ligger utanför vyn; ${hierarchicalTopologyView.hiddenBoundaryConnectionCount} korsar vygränsen och är inte aggregerade.`),
       hierarchicalTopologyView.incompleteView ? e("strong", { className: "topology-hierarchy-incomplete", "data-topology-hierarchy-incomplete": "true" }, "INCOMPLETE VIEW · länkbudget överskriden; inga länkar döljs tyst") : null,
+      hierarchicalTopologyLayout?.diagnostics?.length ? e("strong", { className: "topology-hierarchy-incomplete", "data-topology-layout-diagnostic": "true" }, hierarchicalTopologyLayout.diagnostics[0]?.message) : null,
       hierarchicalTopologyView.pageCount > 1 ? e("small", null, `Grenvy ${hierarchicalTopologyView.page}/${hierarchicalTopologyView.pageCount}`) : null,
     ) : null,
     topologyGroupNavigator,
@@ -2088,6 +2166,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-projection-edge-ids": (visibleProjection?.edges ?? []).map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-react-flow-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-react-flow-edge-handles": JSON.stringify(baseFlow.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourceHandle ?? null, targetHandle: edge.targetHandle ?? null }))),
+      ...(hierarchicalTopologyLayout ? {
+        "data-topology-layout-quality": hierarchicalTopologyLayout.quality.hardGate,
+        "data-topology-layout-quality-gate": hierarchicalTopologyLayout.quality.baselineComparison.qualityGate,
+        "data-topology-layout-winner": hierarchicalTopologyLayout.quality.winnerId,
+        "data-topology-layout-request-key": hierarchicalTopologyLayout.requestKey,
+        "data-topology-layout-bakeoff": JSON.stringify(hierarchicalTopologyLayout.quality),
+      } : {}),
       ...(hierarchicalTopologyView ? {
         "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
         "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),

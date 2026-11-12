@@ -1,7 +1,7 @@
 import type { LayoutDocument, NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { buildLayoutGraph } from "./projection.js";
 import type { AutoLayoutOptions, AutoLayoutResult, LayoutBackendNode } from "./types.js";
-import { validateBackendResult } from "./validation.js";
+import { validateBackendEdges, validateBackendPorts, validateBackendResult } from "./validation.js";
 import { validateVisualLayout } from "./visual-validation.js";
 import type { LayoutBackend } from "./types.js";
 
@@ -17,7 +17,12 @@ export async function runAutoLayout(
   } catch (cause) {
     return { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] };
   }
-  const diagnostics = [...validateBackendResult(graph, raw.nodes)];
+  const diagnostics = [
+    ...(raw.diagnostics ?? []),
+    ...validateBackendResult(graph, raw.nodes),
+    ...(raw.ports ? validateBackendPorts(graph, raw.ports) : []),
+    ...(raw.edges ? validateBackendEdges(graph, raw.edges) : []),
+  ];
   if (diagnostics.some((d) => d.severity === "error")) return { ok: false, diagnostics };
 
   const overrides = new Map((options.manualOverrides ?? []).map((x) => [x.id, x] as const));

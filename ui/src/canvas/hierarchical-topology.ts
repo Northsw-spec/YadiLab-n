@@ -57,7 +57,7 @@ export interface HierarchicalTopologyView {
   readonly navigationGroups: readonly NavigationGroup[];
   readonly partition: LinkPartition;
   readonly incompleteView: boolean;
-  readonly layoutStrategy: "arvidsjaur-grouped-orthogonal";
+  readonly layoutStrategy: "arvidsjaur-grouped-orthogonal" | "elk.layered";
   readonly roleLabel: string;
 }
 

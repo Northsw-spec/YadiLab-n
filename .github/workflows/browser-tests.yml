@@ -204,6 +204,12 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project093_semantic_explorer_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project093-semantic-explorer"
+          # PROJECT-094: one ELK node/port/edge pipeline, A/B/C quality bake-off,
+          # exact source reconciliation, route geometry and real screenshots.
+          npm run test:project094-engine
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project094_topology_engine_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project094-topology-engine"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -28,49 +28,41 @@ function dedupe(points) {
  * first/last bend is aligned to the measured source/target handle axis and
  * any malformed diagonal is made Manhattan before rendering.
  */
-export function anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route = [] }) {
+export function anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route = [], routeOrigin = "legacy", sourcePosition, targetPosition }) {
   const source = finitePoint({ x: sourceX, y: sourceY });
   const target = finitePoint({ x: targetX, y: targetY });
   if (!source || !target) return [];
-  const bends = route.map(finitePoint).filter(Boolean);
-  if (!bends.length) return [
-    { x: source.x, y: source.y },
-    { x: (source.x + target.x) / 2, y: source.y },
-    { x: (source.x + target.x) / 2, y: target.y },
-    { x: target.x, y: target.y },
-  ];
-  // React Flow's topology handles are right/left in the canonical projection;
-  // preserve a vertical first/last leg when the router explicitly requested
-  // one, otherwise align the horizontal leg to the live handle y.
-  const adjusted = bends.map((point) => ({ ...point }));
-  const first = adjusted[0];
-  if (first && first.x !== source.x && first.y !== source.y) first.y = source.y;
-  const last = adjusted.at(-1);
-  if (last && last.x !== target.x && last.y !== target.y) last.y = target.y;
-  const raw = [source, ...adjusted, target];
+  const measured = route.map(finitePoint).filter(Boolean);
+  if (!measured.length) return [source, { x: (source.x + target.x) / 2, y: source.y }, { x: (source.x + target.x) / 2, y: target.y }, target];
+  const raw = routeOrigin === "elk" && measured.length >= 2
+    ? [source, ...measured.slice(1, -1), target]
+    : [source, ...measured, target];
+  const verticalSource = sourcePosition === "top" || sourcePosition === "bottom";
+  const verticalTarget = targetPosition === "top" || targetPosition === "bottom";
+  if (raw.length > 2) {
+    if (verticalSource) raw[1] = { x: source.x, y: raw[1].y };
+    else raw[1] = { x: raw[1].x, y: source.y };
+    const lastIndex = raw.length - 2;
+    if (verticalTarget) raw[lastIndex] = { x: target.x, y: raw[lastIndex].y };
+    else raw[lastIndex] = { x: raw[lastIndex].x, y: target.y };
+  }
   const orthogonal = [];
   for (const point of raw) {
     const previous = orthogonal.at(-1);
     if (previous && previous.x !== point.x && previous.y !== point.y) {
-      // Prefer a horizontal first leg. This matches right/left handles and is
-      // deterministic for a route that was measured before React Flow mounted.
-      orthogonal.push({ x: point.x, y: previous.y });
+      // Endpoint reconciliation is the only allowed post-ELK repair. A
+      // malformed intermediate point is surfaced as a deterministic Manhattan
+      // correction rather than silently selecting another router.
+      orthogonal.push(verticalSource ? { x: previous.x, y: point.y } : { x: point.x, y: previous.y });
     }
     orthogonal.push(point);
   }
   return dedupe(orthogonal);
 }
 
-export function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [], route = undefined }) {
+export function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [], route = undefined, routeOrigin = "legacy", sourcePosition, targetPosition }) {
   const supplied = Array.isArray(route) ? route : points;
-  const pathPoints = (Array.isArray(route)
-    ? route.map(finitePoint).filter(Boolean)
-    : anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: supplied }))
-    .filter(Boolean);
-  const anchored = Array.isArray(route) && pathPoints.length
-    ? anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: pathPoints.slice(1, -1) })
-    : pathPoints;
-  const finalPoints = dedupe(anchored.length ? anchored : anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: [] }));
+  const finalPoints = dedupe(anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: supplied, routeOrigin, sourcePosition, targetPosition }));
   const pathPointsWithEndpoints = finalPoints[0]?.x === sourceX && finalPoints[0]?.y === sourceY
     ? finalPoints
     : [{ x: sourceX, y: sourceY }, ...finalPoints, { x: targetX, y: targetY }];
