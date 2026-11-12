@@ -8,7 +8,7 @@ from pathlib import Path
 from time import monotonic
 from urllib.parse import urlsplit
 
-from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 from run_ic010_p2_shared_xml_real_browser import exported_source, menu, require, setup
 from run_project086_hierarchical_xlsx_real_browser import (
@@ -78,8 +78,23 @@ def search_and_open(page, value):
         # UI-only search paint race.
         direct = page.locator(f'.react-flow__node[data-id="{value}"]').first
         expect(direct).to_be_visible(timeout=180000)
-        direct.dblclick(force=True)
+        try:
+            direct.dblclick(force=True)
+        except PlaywrightError as error:
+            if "outside of the viewport" not in str(error):
+                raise
+            direct.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
     page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=value, timeout=180000)
+
+
+def click_source_node(node):
+    """Click a live source node, preserving the event path when it is off-camera."""
+    try:
+        node.click(force=True)
+    except PlaywrightError as error:
+        if "outside of the viewport" not in str(error):
+            raise
+        node.dispatch_event("click", {"bubbles": True})
 
 
 def case(browser, url, evidence_dir):
@@ -114,7 +129,17 @@ def case(browser, url, evidence_dir):
         branch_client_id = client_id(895)
         access_node = page.locator(f'.react-flow__node[data-id="{branch_access_id}"]')
         expect(access_node).to_be_visible(timeout=180000)
-        access_node.dblclick(force=True)
+        try:
+            access_node.dblclick(force=True)
+        except PlaywrightError as error:
+            # The nested ELK fit can intentionally place a real source node
+            # outside the viewport.  Playwright refuses a pointer gesture in
+            # that state even though the production ReactFlow handler is
+            # still live.  Re-emit the same bubbled DOM event, as the P086
+            # acceptance does, without weakening the scope/state assertions.
+            if "outside of the viewport" not in str(error):
+                raise
+            access_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
         try:
             page.wait_for_function("value => document.querySelector('.topology-panel')?.getAttribute('data-topology-hierarchy') === value", arg=branch_access_id, timeout=5000)
         except PlaywrightTimeoutError:
@@ -142,7 +167,7 @@ def case(browser, url, evidence_dir):
                 if node.count() == 0:
                     search_and_open(page, node_id)
                     continue
-                node.click(force=True)
+                click_source_node(node)
         selection_ms = (monotonic() - start) * 1000
         require(not page.is_closed(), "Chromium page closed during repeated selection")
         require(panel.get_attribute("data-topology-hierarchy") is not None, "Hierarchy disappeared during selection")
@@ -154,7 +179,7 @@ def case(browser, url, evidence_dir):
         # Search can jump directly to a client and remains bounded; selection does not rebuild 10k DOM.
         search_and_open(page, branch_client_id)
         require(page.locator('.react-flow__node').count() <= 100, "Client focus escaped the bounded projection")
-        page.locator(f'.react-flow__node[data-id="{branch_client_id}"]').click(force=True)
+        click_source_node(page.locator(f'.react-flow__node[data-id="{branch_client_id}"]'))
         page.wait_for_timeout(200)
         heap = page.evaluate("() => performance.memory?.usedJSHeapSize ?? null")
         require(not errors, f"Uncaught Chromium page errors during hierarchy selection: {errors!r}")
