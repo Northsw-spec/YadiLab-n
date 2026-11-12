@@ -9,6 +9,7 @@ import type {
   CanvasProjectionDiagnostic,
 } from "./types.js";
 import { describeDeviceVisual, describeSemanticLink } from "./device-visuals.js";
+import { classifyResourceIcon } from "./icon-registry.js";
 
 const DEFAULT_ZONE: CanvasDimensions = { width: 720, height: 480 };
 const DEFAULT_RESOURCE: CanvasDimensions = { width: 180, height: 96 };
@@ -108,6 +109,7 @@ export function projectScenarioToCanvas(
     const l = layoutById.get(resource.id);
     const resolvedAsset = resolveResourceAsset(scenario, resource);
     const deviceVisual = describeDeviceVisual(resource.type);
+    const icon = classifyResourceIcon(resource.type, resource.properties);
     if (!resolvedAsset.ok) diagnostics.push({ severity: "error", code: resolvedAsset.code, objectId: resource.id, message: resolvedAsset.message });
     if (!l) diagnostics.push({ severity: "warning", code: "CANVAS_NODE_UNPLACED", objectId: resource.id, message: `Resource '${resource.id}' has no resolved layout.` });
     nodes.push({
@@ -126,6 +128,11 @@ export function projectScenarioToCanvas(
         ...(resource.product !== undefined ? { product: resource.product } : {}),
         deviceFamily: deviceVisual.family,
         deviceRoleLabel: deviceVisual.roleLabel,
+        iconKey: icon.key,
+        iconClass: icon.className,
+        iconTitle: icon.title,
+        iconAccessibleName: icon.accessibleName,
+        semanticBadges: icon.badges,
         ...(resolvedAsset.ok ? { asset: resolvedAsset.asset } : {}),
         interfaces: handles(resource),
       },

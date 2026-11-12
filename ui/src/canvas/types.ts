@@ -1,6 +1,7 @@
 import type { NormalizedScenario } from "../../../core-model/src/generated/contracts.js";
 import type { AssetRenderDescriptor } from "../../../asset-library/src/index.js";
 import type { DeviceVisualFamily, SemanticLinkDescriptor } from "./device-visuals.js";
+import type { ResourceIconClassification, SemanticIconKey } from "./icon-registry.js";
 
 export type CanvasNodeKind = "zone" | "resource";
 export type LayoutStatus = "resolved" | "unplaced";
@@ -45,6 +46,11 @@ export interface CanvasResourceData {
   readonly product?: string;
   readonly deviceFamily: DeviceVisualFamily;
   readonly deviceRoleLabel: string;
+  readonly iconKey?: SemanticIconKey;
+  readonly iconClass?: ResourceIconClassification["className"];
+  readonly iconTitle?: string;
+  readonly iconAccessibleName?: string;
+  readonly semanticBadges?: readonly string[];
   readonly asset?: AssetRenderDescriptor;
   readonly interfaces: readonly CanvasInterfaceHandle[];
   readonly hierarchyRole?: string;

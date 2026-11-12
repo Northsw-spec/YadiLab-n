@@ -74,16 +74,32 @@ function dedupe(points: readonly CanvasPosition[]): CanvasRoutePoint[] {
     .map((point) => ({ x: point.x, y: point.y }));
 }
 
+function handleY(rect: Rect, node: CanvasNode, handleId: string | undefined): number {
+  const interfaces = node.data.semanticKind === "resource" ? node.data.interfaces : [];
+  const index = handleId?.startsWith("out:") || handleId?.startsWith("in:")
+    ? interfaces.findIndex((iface) => iface.interfaceId === handleId.slice(4))
+    : -1;
+  if (index < 0 || !interfaces.length) return rect.y + rect.height / 2;
+  // Mirrors handlesFor(): handles occupy the central 60% of the card. The
+  // calculation is deterministic and is only a routing hint; the renderer
+  // re-anchors to the measured handle coordinates after React Flow mounts.
+  return rect.y + rect.height * (0.2 + (index + 1) * 0.6 / (interfaces.length + 1));
+}
+
 function routeForEdge(
   edge: CanvasEdge,
   source: Rect,
   target: Rect,
+  sourceNode: CanvasNode,
+  targetNode: CanvasNode,
   allRects: readonly Rect[],
   parallelIndex: number,
   parallelCount: number,
 ): readonly CanvasRoutePoint[] {
-  const sourcePoint = { x: source.x + source.width, y: source.y + source.height / 2 };
-  const targetPoint = { x: target.x, y: target.y + target.height / 2 };
+  const sourceOffsetY = handleY(source, sourceNode, edge.sourceHandle);
+  const targetOffsetY = handleY(target, targetNode, edge.targetHandle);
+  const sourcePoint = { x: source.x + source.width, y: sourceOffsetY };
+  const targetPoint = { x: target.x, y: targetOffsetY };
   const offset = parallelCount > 1 ? (parallelIndex - (parallelCount - 1) / 2) * PARALLEL_GAP : 0;
   // Zones are visual containers, not physical resources. Treating their
   // enclosing rectangles as obstacles would make every valid inter-zone
@@ -116,6 +132,7 @@ function routeForEdge(
 
 export function computeOrthogonalRoutes(nodes: readonly CanvasNode[], edges: readonly CanvasEdge[]): ReadonlyMap<string, readonly CanvasRoutePoint[]> {
   const rects = absoluteRects(nodes);
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
   const groups = new Map<string, CanvasEdge[]>();
   for (const edge of edges) {
     if (edge.data.summaryOnly) continue;
@@ -132,7 +149,10 @@ export function computeOrthogonalRoutes(nodes: readonly CanvasNode[], edges: rea
     const pair = [edge.source, edge.target].sort((a, b) => a.localeCompare(b, "en")).join("\u0000");
     const siblings = groups.get(pair) ?? [edge];
     const index = siblings.findIndex((candidate) => candidate.id === edge.id);
-    routes.set(edge.id, routeForEdge(edge, source, target, [...rects.values()], Math.max(0, index), siblings.length));
+    const sourceNode = nodesById.get(edge.source);
+    const targetNode = nodesById.get(edge.target);
+    if (!sourceNode || !targetNode) continue;
+    routes.set(edge.id, routeForEdge(edge, source, target, sourceNode, targetNode, [...rects.values()], Math.max(0, index), siblings.length));
   }
   return routes;
 }

@@ -793,21 +793,6 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .workspace-menu-panel > button, .workspace-menu-panel > .file-button { width: 100%; min-height: 2.25rem; }
 .workspace-menu-export .workspace-menu-panel { width: min(20rem, calc(100vw - 1rem)); }
 .workspace-menu-advanced .workspace-menu-panel { width: min(46rem, calc(100vw - 1rem)); }
-/* Backward-compatible menu hooks stay out of the visual layout. They retain
-   the established DOM callbacks for existing automation while the operator
-   sees only the compact toolbar and searchable Advanced panel. A one-pixel
-   fixed rail keeps Playwright/native file controls addressable without
-   reflowing or covering the actual workspace. */
-.legacy-workspace-menus { position: fixed; z-index: 100000; left: auto; right: 0; top: auto; bottom: 48px; width: 400px; height: 1px; opacity: 0; overflow: visible; pointer-events: auto; }
-.legacy-workspace-menus > .legacy-network-import-button { position: absolute; z-index: 100001; left: 0; bottom: 1px; width: 96px; min-width: 96px; height: 36px; min-height: 36px; padding: 0; margin: 0; overflow: visible; white-space: nowrap; }
-.legacy-workspace-menus .workspace-menu { position: absolute; left: 0; top: 0; width: 96px; min-width: 96px; height: 1px; }
-.legacy-workspace-menus > .workspace-menu:nth-child(3) { left: 100px; }
-.legacy-workspace-menus > .workspace-menu:nth-child(4) { left: 200px; }
-.legacy-workspace-menus > .workspace-menu:nth-child(5) { left: 300px; }
-.legacy-workspace-menus .workspace-menu > summary { width: 96px; min-width: 96px; height: 1px; min-height: 1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
-.legacy-workspace-menus .workspace-menu-panel { position: absolute; left: 0; right: auto; top: auto; bottom: 1px; width: 96px; min-width: 96px; max-width: 96px; height: min(672px, calc(100vh - 96px)); max-height: calc(100vh - 96px); overflow-y: auto; overflow-x: visible; padding: 0; margin: 0; gap: 0; box-shadow: none; }
-.legacy-workspace-menus .workspace-menu-panel > button, .legacy-workspace-menus .workspace-menu-panel > .file-button { display: block; width: 96px; min-width: 96px; max-width: 96px; min-height: 2.25rem; height: 2.25rem; padding: 0; margin: 0; overflow: visible; white-space: nowrap; }
-.legacy-workspace-menus .workspace-menu-panel input { display: none; }
 .menu-heading, .advanced-tools-heading { display: grid; gap: .12rem; margin-bottom: .15rem; }
 .menu-heading { padding: .1rem .15rem .45rem; border-bottom: 1px solid #29445f; }
 .menu-heading small, .advanced-tools-heading small { color: #8faac1; font-size: .7rem; }
@@ -824,7 +809,10 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .workspace-grid { gap: .8rem; padding: .8rem 1rem 1.2rem; }
 .workspace-grid > .topology-column { order: 1; }
 .workspace-grid > .control-center { order: 2; }
-.topology-column { gap: .65rem; }
+.topology-column { display: flex; flex-direction: column; gap: .65rem; }
+.topology-column > .topology-panel { order: -3; }
+.topology-column > .topology-navigation { order: -2; }
+.topology-column > .topology-active-summary { order: -1; }
 .topology-panel { min-height: clamp(500px, 67vh, 900px); height: clamp(500px, 67vh, 900px); }
 .topology-active-summary { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) minmax(0, 1.4fr); gap: .55rem; align-items: center; padding: .45rem .7rem; border: 1px solid #31506d; border-radius: 8px; background: linear-gradient(110deg, rgba(11, 31, 48, .96), rgba(7, 20, 34, .92)); color: #dcefff; }
 .topology-active-summary strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -843,6 +831,36 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .topology-stat-canonical { border-color: #3f7898; }
 .topology-stat-note { color: #9eb8cd; font-size: .68rem; }
 .topology-explorer-sidebar section[data-topology-overview] { margin-top: .15rem; }
+.topology-icon-overview { display: grid; gap: .28rem; margin-top: .15rem; padding: .42rem .48rem; border: 1px solid #29445f; border-radius: 7px; background: rgba(7, 25, 42, .54); }
+.topology-icon-overview > strong { color: #e7f5ff; font-size: .75rem; }
+.topology-icon-overview > small { color: #9ebbd0; font-size: .64rem; line-height: 1.3; }
+.topology-icon-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.2rem, 1fr)); gap: .28rem; }
+.topology-icon-overview-item { display: inline-flex; align-items: center; gap: .28rem; min-width: 0; padding: .2rem .26rem; border: 1px solid #29445f; border-radius: 5px; background: rgba(16, 38, 58, .72); color: #cfe7f4; }
+.topology-icon-overview-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .59rem; }
+.topology-icon-overview-item .semantic-icon { width: 1.05rem; height: 1.05rem; }
+.topology-camera-switcher { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .35rem 0 0; border-top: 1px solid #244764; }
+.topology-camera-switcher strong { color: #d7ebf8; font-size: .72rem; margin-right: .25rem; }
+.topology-camera-switcher button { min-height: 1.8rem; padding: .25rem .55rem; border: 1px solid #31506d; background: #10263a; color: #d7ebf8; font-size: .72rem; }
+.topology-camera-switcher button[aria-pressed="true"] { border-color: #7ad7ff; background: #16445d; color: #fff; box-shadow: inset 0 -2px 0 #7ad7ff; }
+.topology-link-inspector { display: grid; gap: .2rem; padding: .5rem; border: 1px solid #5f83a3; border-radius: 8px; background: rgba(18, 50, 74, .72); }
+.topology-link-inspector strong { color: #f4fbff; font: 800 .88rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.topology-link-inspector small { color: #c5d9e8; overflow-wrap: anywhere; }
+.topology-link-inspector button { justify-self: start; margin-top: .15rem; }
+.semantic-icon { display: inline-grid; place-items: center; width: 1.45rem; height: 1.45rem; flex: 0 0 auto; color: #9bdcff; }
+.semantic-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
+.semantic-icon-resource { color: #9bdcff; }
+.semantic-icon-logical { color: #f0c878; }
+.semantic-icon-presentation { color: #b9a5e9; }
+.semantic-icon-place { color: #82d5b1; }
+.semantic-icon-service { color: #efa3df; }
+.device-icon-stack { display: inline-flex; align-items: center; gap: .18rem; min-width: 3.5rem; }
+.device-icon-stack .device-chassis { width: 44px; height: 34px; }
+.semantic-badge { display: inline-flex; width: fit-content; padding: .08rem .28rem; border: 1px solid rgba(238, 200, 120, .6); border-radius: 4px; color: #f4d992; font-size: .56rem; letter-spacing: .03em; text-transform: uppercase; }
+[data-topology-readable-mode="true"] .semantic-edge-label { font-size: .82rem; }
+.semantic-edge-label { font-size: .78rem; font-weight: 800; }
+.semantic-edge-hit-area { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; }
+.topology-panel:has(.semantic-edge.selected) .semantic-edge:not(.selected) { opacity: .3; }
+.semantic-edge.selected + .semantic-edge-label { opacity: 1; }
 .project-file-controls { margin: .25rem 1rem; padding: .45rem .65rem; }
 
 @media (max-width: 900px) {

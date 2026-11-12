@@ -87,8 +87,10 @@ function resourceRole(resource: NormalizedScenario["resources"][number]): Hierar
   const explicit = [properties.role, properties.networkRole, properties.deviceRole, properties.layer]
     .map(normalized).filter(Boolean).join(" ");
   const type = normalized(resource.type);
-  const label = normalized(resource.label);
-  const value = `${explicit} ${type} ${label}`;
+  // A display name such as "Access 4-3" is not evidence of a network role.
+  // Only explicit role fields and verified type identifiers may classify a
+  // hierarchy node; otherwise the neutral device role is retained.
+  const value = `${explicit} ${type}`;
   if (/\bcore\b/.test(value)) return "core";
   if (/\bdistribution\b|\bdist(?:ribution)?[-_ ]?(?:switch|sw)?\b/.test(value)) return "distribution";
   if (/\baccess\b/.test(value)) return "access";
@@ -309,13 +311,21 @@ function buildNavigationGroups(index: HierarchicalTopologyIndex, nodeIds: readon
     if (assigned.has(id)) continue;
     const role = index.roleById.get(id) ?? "device";
     const level = levels.get(id) ?? 0;
-    const key = `${level}:${role}`;
+    const selectedNeighbors = (index.adjacency.get(id) ?? [])
+      .filter((neighbor) => selected.has(neighbor.neighborId))
+      .map((neighbor) => neighbor.neighborId)
+      .sort(compareId);
+    // Keep resources that share a real parent/anchor together. This remains a
+    // presentation-only key; it never alters the canonical zone or link.
+    const anchor = selectedNeighbors.find((neighborId) => (levels.get(neighborId) ?? 0) < level)
+      ?? "isolated";
+    const key = `${level}:${role}:${anchor}`;
     const list = buckets.get(key) ?? [];
     list.push(id);
     buckets.set(key, list);
   }
   for (const [key, memberIds] of [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b, "en"))) {
-    const [levelText, roleText] = key.split(":");
+    const [levelText, roleText, anchor] = key.split(":");
     const role = (roleText as HierarchyRole) || "device";
     const level = Number(levelText);
     const sorted = memberIds.sort(compareId);
@@ -323,7 +333,7 @@ function buildNavigationGroups(index: HierarchicalTopologyIndex, nodeIds: readon
       const members = sorted.slice(offset, offset + 8);
       groups.push({
         id: `navigation-group-${kind}-${level}-${role}-${String(groups.length + 1).padStart(2, "0")}`,
-        label: groupLabel(index, members, role, kind, rootId),
+        label: `${groupLabel(index, members, role, kind, rootId)}${anchor && anchor !== "isolated" ? ` · linked to ${index.resourcesById.get(anchor)?.label ?? anchor}` : ""}`,
         memberIds: members,
         kind: "derived-navigation",
         presentationOnly: true,

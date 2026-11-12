@@ -321,7 +321,8 @@ import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.t
 import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
-import { orthogonalEdgePath, resolveHierarchicalFallbackLaneX } from "./semantic-edge-routing.mjs";
+import { anchorOrthogonalRoute, orthogonalEdgePath } from "./semantic-edge-routing.mjs";
+import { iconDescriptor, iconRegistry } from "../src/canvas/icon-registry.ts";
 
 const e = React.createElement;
 const NORMAL_TOPOLOGY_RESOURCE_BUDGET = 200;
@@ -403,6 +404,12 @@ function DeviceChassis({ family, active }) {
     e("i", { className: `device-activity-led${active ? " active" : ""}` }));
 }
 
+function SemanticIcon({ iconKey = "unknown-resource", label, className = "" }) {
+  const icon = iconDescriptor(iconKey);
+  return e("span", { className: `semantic-icon semantic-icon-${icon.className} ${className}`.trim(), "data-icon-key": icon.key, "data-icon-class": icon.className, title: label ?? icon.title, "aria-label": label ?? icon.accessibleName, role: "img" },
+    e("svg", { viewBox: icon.viewBox, width: 22, height: 22, focusable: "false", "aria-hidden": "true" }, e("path", { d: icon.path })));
+}
+
 function ResourceNode({ data, selected }) {
   if (data.overviewGroup) {
     const members = Array.isArray(data.overviewMembers) ? data.overviewMembers : [];
@@ -414,6 +421,7 @@ function ResourceNode({ data, selected }) {
     },
       e(Handle, { key: "overview-in", id: "overview-in", type: "target", position: Position.Top, className: "overview-handle overview-handle-in", title: "Visual summary input", "data-overview-handle": "in" }),
       e(Handle, { key: "overview-out", id: "overview-out", type: "source", position: Position.Bottom, className: "overview-handle overview-handle-out", title: "Visual summary output", "data-overview-handle": "out" }),
+      e(SemanticIcon, { iconKey: "presentation-group", label: "Visningsgrupp" }),
       e("strong", null, data.label ?? data.overviewGroupId),
       e("span", { className: "overview-group-role" }, data.deviceRoleLabel ?? "DOCUMENTED TYPE · NEUTRAL VIEW"),
       e("span", { className: "overview-group-summary" }, data.overviewSummary ?? "Visual summary of declared source data; not a physical link or resource."),
@@ -430,14 +438,17 @@ function ResourceNode({ data, selected }) {
   const omittedConnectionCount = Number(data.omittedConnectionCount ?? 0);
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
+  const semanticBadges = Array.isArray(data.semanticBadges) ? data.semanticBadges : [];
+  const icon = iconDescriptor(data.iconKey ?? "unknown-resource");
   return e("div", { className: `resource-node device-${family}${hierarchyVisual ? ` topology-connection-${connectionState.toLowerCase()}` : ""}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family, ...(hierarchyVisual ? { "data-topology-connection-state": connectionState, "data-topology-visible-links": String(visibleConnectionCount), "data-topology-boundary-links": String(boundaryCount), "data-topology-omitted-links": String(omittedConnectionCount) } : {}) },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
-      e(DeviceChassis, { family, active }),
+      e("div", { className: "device-icon-stack" }, e(SemanticIcon, { iconKey: icon.key, label: data.iconAccessibleName ?? icon.accessibleName }), e(DeviceChassis, { family, active })),
       e("span", { className: "device-identity" },
         e("strong", null, data.label ?? data.semanticId),
         e("small", null, data.deviceRoleLabel ?? data.resourceType ?? "Resource"),
-        data.vendor ? e("small", { className: "device-vendor" }, `${data.vendor}${data.product ? ` · ${data.product}` : ""}`) : null)),
+        data.vendor ? e("small", { className: "device-vendor" }, `${data.vendor}${data.product ? ` · ${data.product}` : ""}`) : null,
+        ...semanticBadges.map((badge) => e("span", { key: badge, className: "semantic-badge", "data-semantic-badge": badge }, badge)))),
     data.asset ? e("img", { className: "resource-asset", src: `./${data.asset.path}`, alt: "", "aria-hidden": "true", draggable: false }) : null,
     interfaces.length ? e("div", { className: "resource-port-strip", "aria-label": "Declared interfaces" },
       ...interfaces.slice(0, 3).map((iface) => e("span", { key: iface.interfaceId, className: `compact-port${data.activeInterfaceIds?.includes(iface.interfaceId) ? " active" : ""}`, title: `${iface.label}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`, "data-port-state": "declared" },
@@ -466,7 +477,7 @@ function ZoneNode({ data, selected }) {
       minHeight: BUILDER_ZONE_RESIZE_LIMITS.minHeight,
       onResizeEnd: (_event, params) => data.onResizeEnd?.(params),
     }) : null,
-    e("div", { className: "zone-heading" }, e("i", { className: "zone-status", "aria-hidden": "true" }), e("span", null,
+    e("div", { className: "zone-heading" }, presentationOnly ? e(SemanticIcon, { iconKey: "presentation-group", label: "Visningsgrupp" }) : e(SemanticIcon, { iconKey: "place", label: "Dokumenterad zon" }), e("i", { className: "zone-status", "aria-hidden": "true" }), e("span", null,
       e("strong", null, data.label ?? data.semanticId),
       e("small", null, presentationOnly ? `${data.navigationGroupKind ?? "derived-navigation"} · ${members.length} devices` : (data.zoneKind ?? "zone")))),
   );
@@ -511,17 +522,15 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
 
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
-  const { isHierarchical, route, fallbackLaneX } = resolveHierarchicalFallbackLaneX({ data, sourceX, targetX });
-  // Layout routes are calculated in canvas coordinates before React Flow has
-  // measured interface handles. Re-anchor the hierarchy lane to the live
-  // endpoint coordinates so every rendered segment remains truly orthogonal.
-  const renderRoute = isHierarchical
-    ? [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }]
-    : route;
+  const isHierarchical = data?.hierarchyVisual === true;
+  const route = hasRoute ? anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: data.route }) : [];
+  // The route is computed from source geometry, then anchored to the actual
+  // live React Flow handles. Hierarchical edges never discard bends for a
+  // shared fallback corridor and never fall back to a Bezier path.
   const [basePath, labelX, labelY] = hasRoute
-    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: renderRoute })
+    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, route })
     : isHierarchical
-      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: [{ x: fallbackLaneX, y: sourceY }, { x: fallbackLaneX, y: targetY }] })
+      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY })
       : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
@@ -565,6 +574,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
         e("path", { d: "M 0 0 L 10 5 L 0 10 z", className: "path-comparison-arrowhead forward" })),
       e("marker", { id: comparisonReturnMarkerId, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: "auto-start-reverse" },
         e("path", { d: "M 0 0 L 10 5 L 0 10 z", className: "path-comparison-arrowhead return" }))),
+    e("path", { className: "semantic-edge-hit-area", d: basePath, fill: "none", "aria-hidden": "true", focusable: "false" }),
     e("path", {
       id,
       d: basePath,
@@ -581,7 +591,9 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       "data-connection-source-port": sourceHandleId?.startsWith("out:") ? sourceHandleId.slice(4) : undefined,
       "data-connection-target-port": targetHandleId?.startsWith("in:") ? targetHandleId.slice(3) : undefined,
       "data-link-enabled": visual.enabled ? "true" : "false",
+      "data-link-vlan": visual.vlanLabel ?? "NOT_DOCUMENTED",
       "data-hierarchy-visual": isHierarchical ? "true" : undefined,
+      "data-route-kind": hasRoute ? "orthogonal" : isHierarchical ? "orthogonal-fallback" : "bezier",
       "aria-label": visual.accessibleLabel,
       ...(summaryOnly ? {
         "data-overview-summary-edge": "true",
@@ -589,7 +601,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
         "data-overview-summary-label": visual.accessibleLabel,
       } : {}),
     }),
-    e("text", { x: labelX, y: labelY - 7, className: `semantic-edge-label tone-${visual.tone}`, textAnchor: "middle", "aria-hidden": "true" }, visual.accessibleLabel),
+    selected || data?.showEdgeLabel === true ? e("text", { x: labelX, y: labelY - 8, className: `semantic-edge-label tone-${visual.tone}`, textAnchor: "middle" }, visual.accessibleLabel) : null,
     pathComparison?.forward ? e("path", {
       d: comparisonPath(pathComparison.forwardDirection),
       fill: "none",
@@ -739,6 +751,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
   const [topologyHierarchyScope, setTopologyHierarchyScope] = useState(null);
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
+  const [topologyCameraMode, setTopologyCameraMode] = useState("read");
   const topologyFocusRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyGroup, setTopologyGroup] = useState(null);
@@ -776,6 +789,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
+    setTopologyCameraMode("read");
     setTopologyGroup(null);
     setTopologyGroupQuery("");
     setTopologyGroupPage(1);
@@ -1304,6 +1318,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         selected: selectedIds.has(edge.id),
         data: {
           ...edge.data,
+          showEdgeLabel: selectedIds.has(edge.id),
           ...(comparisonForward || comparisonReturn ? {
             pathComparison: {
               forward: Boolean(comparisonForward),
@@ -1440,9 +1455,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   };
   const onEdgeClick = (_event, edge) => {
     const active = liveTopologyWorkspace();
-    if (!active || active.mode !== "runtime") return;
+    if (!active || denyUnappliedCanvasChange(active, `edge-click:${edge.id}`)) return;
     if (active.selection?.primary === edge.id && active.selection?.ids?.length === 1) return;
-    setWorkspace(setRuntimeSelection(active, [edge.id], edge.id));
+    setWorkspace(active.mode === "builder"
+      ? applyBuilderCanvasSelection(active, { edgeIds: [edge.id], primary: edge.id })
+      : setRuntimeSelection(active, [edge.id], edge.id));
   };
   const onNodeContextMenu = (event, node) => node.data?.overviewGroup
     ? openTopologyContextMenu(event, { kind: "group", groupId: node.data?.overviewGroupId ?? node.id })
@@ -1509,6 +1526,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         : "INVENTORY SUMMARY";
     setTopologyViewHistory([{ kind: "overview", label }]);
     globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY ? 0.16 : 0.12 }));
+  };
+  const changeTopologyCameraMode = (mode) => {
+    if (mode !== "read" && mode !== "overview") return;
+    setTopologyCameraMode(mode);
+    const instance = flowApi.current;
+    if (!instance) return;
+    if (mode === "overview") instance.fitView?.({ duration: 220, padding: 0.16, minZoom: 0.32, maxZoom: 1.05 });
+    else instance.fitView?.({ duration: 220, padding: 0.08, minZoom: 0.62, maxZoom: 1.35 });
   };
   const focusTopologyNode = (nodeId, label = nodeId) => {
     const active = liveTopologyWorkspace();
@@ -1603,6 +1628,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     return () => document.removeEventListener("contextmenu", onNativeContextMenu, true);
   }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById]);
   const selectedCanonicalResource = workspace.selection.primary ? canonicalResourceById.get(workspace.selection.primary) : undefined;
+  const selectedCanonicalConnection = workspace.selection.primary ? canonicalConnectionById.get(workspace.selection.primary) : undefined;
   const canonicalIncidentLinkCounts = useMemo(() => {
     const counts = new Map();
     for (const connection of canonicalNetwork.connections) {
@@ -1634,6 +1660,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     ? canonicalNetwork.connections.filter((connection) => connection.from.resource === contextResource.id || connection.to.resource === contextResource.id).length
     : 0;
   const selectedResourceAddresses = selectedCanonicalResource?.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [];
+  const selectedLinkProperties = selectedCanonicalConnection?.properties ?? {};
+  const selectedLinkSourcePort = selectedCanonicalConnection?.from.port;
+  const selectedLinkTargetPort = selectedCanonicalConnection?.to.port;
   const topologyGroupNavigator = activeTopologyGroup ? e("section", {
     className: "topology-group-navigator",
     "data-topology-group-navigator": activeTopologyGroup.id,
@@ -1718,6 +1747,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         : "Neutral type bands are used because the source does not prove Core / Distribution / Access roles."),
       e("small", null, "Group cards and dashed summary edges are visual summaries; click a group to open a real source device."),
     ) : null,
+    e("section", { className: "topology-icon-overview", "data-topology-icon-overview": "true", "aria-label": "Ikonöversikt" },
+      e("strong", null, "Ikonöversikt"),
+      e("small", null, "Ikonerna följer dokumenterad semantik; VLAN och länkattribut visas som metadata, inte som extra enheter."),
+      e("div", { className: "topology-icon-overview-grid" },
+        ...iconRegistry().filter((icon) => ["switch", "router", "firewall", "server", "client", "hypervisor", "wireless", "storage", "vlan", "network-segment", "place", "presentation-group", "link-attribute", "service"].includes(icon.key)).map((icon) =>
+          e("span", { key: icon.key, className: "topology-icon-overview-item", "data-icon-overview-key": icon.key, title: icon.title },
+            e(SemanticIcon, { iconKey: icon.key, label: icon.accessibleName }),
+            e("small", null, icon.title),
+          )),
+      ),
+    ),
     hierarchicalTopologyView ? e("section", {
       className: "topology-hierarchy-status",
       "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
@@ -1736,13 +1776,20 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     ) : null,
     topologyGroupNavigator,
     hierarchicalFocusCounts ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(hierarchicalFocusCounts.totalRootLinks), "data-topology-visible-root-links": String(hierarchicalFocusCounts.visibleRootLinks), "data-topology-hidden-root-links": String(hierarchicalFocusCounts.hiddenRootLinks), "data-topology-visible-neighbor-links": String(hierarchicalFocusCounts.visibleNeighborLinks), "data-topology-total-visible-links": String(hierarchicalFocusCounts.totalVisibleLinks) }, `${hierarchicalFocusCounts.visibleNeighbors} synliga av ${hierarchicalFocusCounts.totalNeighbors} direktanslutna grannar · ${hierarchicalFocusCounts.visibleRootLinks} av ${hierarchicalFocusCounts.totalRootLinks} direktlänkar synliga · ${hierarchicalFocusCounts.visibleNeighborLinks} synliga grannlänkar · ${hierarchicalFocusCounts.totalVisibleLinks} länkar totalt i vyn`) : localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
-    selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
+    selectedCanonicalConnection ? e("section", { className: "topology-link-inspector", "data-topology-selected-link": selectedCanonicalConnection.id, "aria-label": `Vald länk ${selectedCanonicalConnection.id}` },
+      e("strong", null, selectedCanonicalConnection.id),
+      e("small", null, `${selectedCanonicalConnection.from.resource} → ${selectedCanonicalConnection.to.resource}`),
+      e("small", null, `Källport: ${selectedLinkSourcePort ?? "NOT DOCUMENTED"} · Målport: ${selectedLinkTargetPort ?? "NOT DOCUMENTED"}`),
+      e("small", null, `Typ: ${selectedCanonicalConnection.kind} · VLAN: ${typeof selectedLinkProperties.vlan === "number" || typeof selectedLinkProperties.vlan === "string" ? `VLAN ${selectedLinkProperties.vlan}` : "NOT DOCUMENTED"}`),
+      e("small", null, `Status: ${selectedLinkProperties.enabled === false ? "DISABLED" : "DECLARED"}`),
+      e("button", { type: "button", "data-topology-focus-link": selectedCanonicalConnection.id, onClick: () => { focusTopologyNode(selectedCanonicalConnection.from.resource, selectedCanonicalConnection.from.resource); } }, "Fokusera båda ändpunkter"),
+    ) : selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
       e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
       e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
       selectedResourceAddresses.length ? e("small", null, selectedResourceAddresses.join(", ")) : null,
       e("small", null, `${selectedCanonicalLinkCount} deklarerade länkar`),
       e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
-    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer."),
+    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet eller länk för detaljer."),
   );
   const topologyActiveSummary = e("section", {
     className: "topology-active-summary",
@@ -1768,6 +1815,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           "aria-pressed": topologyViewMode === mode,
           onClick: () => changeTopologyViewMode(mode),
         }, label)),
+      ),
+      e("div", { className: "topology-camera-switcher", "data-topology-camera-mode": topologyCameraMode, role: "group", "aria-label": "Kameraläge" },
+        e("strong", null, "Kameraläge"),
+        e("button", { type: "button", "data-topology-camera": "read", "aria-pressed": topologyCameraMode === "read", onClick: () => changeTopologyCameraMode("read") }, "Läsvy"),
+        e("button", { type: "button", "data-topology-camera": "overview", "aria-pressed": topologyCameraMode === "overview", onClick: () => changeTopologyCameraMode("overview") }, "Översikt"),
       ),
       e("nav", { className: "topology-breadcrumbs", "data-topology-breadcrumbs": "true", "aria-label": "Topology breadcrumb" },
         ...topologyViewHistory.map((item, index) => e(React.Fragment, { key: `${item.kind}:${item.rootId ?? "overview"}:${index}` },
@@ -2021,6 +2073,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       ref: topologyPanelRef,
       className: "topology-panel",
       "aria-label": "Topology",
+      "data-topology-camera-mode": topologyCameraMode,
+      "data-topology-readable-mode": topologyCameraMode === "read" ? "true" : "false",
       "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
@@ -5095,7 +5149,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         finally { event.currentTarget.value = ""; }
       },
       hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
-  const advancedFileAction = (label, accept, onChange) => fileAction(label, accept, onChange, null);
+  const advancedFileAction = (label, accept, onChange, dataAttribute = null) => fileAction(label, accept, onChange, dataAttribute);
   const networkPickerRef = useRef(null);
   // Opening the native picker happens synchronously within the user's click,
   // not from an effect: browsers reject deferred file dialogs.
@@ -5129,15 +5183,15 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     : [
       { label: "Exportera framsteg", searchTerms: "progress", node: actionButton("Exportera framsteg", exportProgress, { "data-export-action": "progress" }) },
       { label: "Exportera sessionsbackup", searchTerms: "session troubleshooting backup", node: actionButton("Exportera sessionsbackup", exportTroubleshootingSession, { "data-export-action": "session" }) },
-      { label: "Läs in framsteg", searchTerms: "load progress", node: advancedFileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0])) },
-      { label: "Importera sessionsbackup", searchTerms: "load session", node: advancedFileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0])) },
+      { label: "Läs in framsteg", searchTerms: "load progress", node: advancedFileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress") },
+      { label: "Importera sessionsbackup", searchTerms: "load session", node: advancedFileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") },
     ];
   const scenarioItems = [
     { label: "Starta enterprise-labb", searchTerms: "enterprise scenario", node: actionButton("Starta enterprise-labb", () => openEnterpriseScenario(true), { disabled: !enterpriseScenarioId }) },
     { label: "Starta verifierad demo", searchTerms: "verified delivery", node: actionButton("Starta verifierad demo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
     { label: "Starta valt labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta valt labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
-    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: advancedFileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0])) },
-    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: advancedFileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0])) },
+    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: advancedFileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json") },
+    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: advancedFileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab") },
   ];
   const builderItems = [
     { label: "Öppna enterprise i byggläget", searchTerms: "enterprise builder", node: actionButton("Öppna enterprise i byggläget", () => openEnterpriseScenario(false), { disabled: !enterpriseScenarioId }) },
@@ -5227,62 +5281,9 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         category("exports", "Exportgenvägar", "Samma validerade exportcallbacks är även åtkomliga här.", standardExportItems),
       ),
     ),
-    // Keep the established menu contract as a zero-layout compatibility
-    // surface for existing integrations and acceptance flows. The visible
-    // operator path is the compact toolbar above; these controls retain the
-    // original callbacks and data hooks without reintroducing a large menu.
-    e("div", { className: "legacy-workspace-menus", "data-legacy-workspace-menus": "true" },
-      e("button", { type: "button", className: "legacy-network-import-button", onClick: openNetworkPicker }, "Import JSON / Excel / CSV → Network Topology"),
-      e(WorkspaceMenu, { label: "Lab & Scenario", closeOnAction: false, alwaysOpen: true },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(true), disabled: busy || !enterpriseScenarioId }, busy ? "Startar enterprise-labb…" : "Starta enterprise-labb"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(true), disabled: busy || !verifiedDeliveryScenarioId }, busy ? "Startar verifierad demo…" : "Starta verifierad leveransdemo"),
-        e("button", { type: "button", onClick: () => openGuidedLab(true), disabled: busy || !guidedLabId }, busy ? "Startar labb…" : "Starta guidad labb"),
-        fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json"),
-        fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab"),
-      ),
-      e(WorkspaceMenu, { label: "Builder", closeOnAction: false, alwaysOpen: true },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(false), disabled: busy || !enterpriseScenarioId }, "Öppna enterprise i byggläget"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(false), disabled: busy || !verifiedDeliveryScenarioId }, "Öppna verifierad demo i byggläget"),
-        e("button", { type: "button", onClick: () => openGuidedLab(false), disabled: busy || !guidedLabId }, "Öppna labb i byggläget"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: compileAndLayout, disabled: busy }, busy ? "Kompilerar…" : "Kompilera + layout") : null,
-      ),
-      e(WorkspaceMenu, { label: "Run & Preview", closeOnAction: false, alwaysOpen: true },
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: preview, disabled: workspace.compile?.status !== "valid" }, "Förhandsvisa körläge") : e("button", { type: "button", onClick: backToBuilder }, "Tillbaka till byggläget"),
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: autosaveProgress, disabled: !workspace }, "Autospara nu") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: restoreAutosave, disabled: !workspace }, "Återställ autosparning") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: clearAutosave, disabled: !workspace }, "Rensa autosparning") : null,
-      ),
-      e(WorkspaceMenu, { label: "Import / Export", closeOnAction: false, alwaysOpen: true },
-        e("button", { type: "button", "data-ic010-p2-open": "true", onClick: onInspectStructuredXml }, "Inspect structured documents (XML + static Ansible, read-only)"),
-        e("button", { type: "button", "data-import-network-action": "true", onClick: openNetworkPicker }, "Import Network from Excel / CSV"),
-        e("button", { type: "button", "data-inspect-graphml": "PREVIEW_ONLY", onClick: onInspectGraphml }, "Inspect GraphML (read-only preview)"),
-        e("button", { type: "button", "data-inspect-nmap": "EVIDENCE_ONLY", onClick: onInspectNmap }, "Inspect Nmap XML (observations only)"),
-        e("button", { type: "button", "data-inspect-nmap-replay": "EVIDENCE_OBSERVED", onClick: onInspectNmapReplay }, "Inspect saved Nmap XML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-nessus": "EVIDENCE_ONLY", onClick: onInspectNessus }, "Inspect Nessus .nessus (severity summary only)"),
-        e("button", { type: "button", "data-inspect-nessus-replay": "EVIDENCE_OBSERVED", onClick: onInspectNessusReplay }, "Inspect saved Nessus references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-drawio": "PREVIEW_ONLY", onClick: onInspectDrawio }, "Inspect draw.io .drawio (uncompressed structure)"),
-        e("button", { type: "button", "data-review-drawio-builder": "REVIEW_REQUIRED", onClick: onReviewDrawioBuilder }, "Review diagrams.net (.drawio) into Builder"),
-        e("button", { type: "button", "data-inspect-drawio-replay": "TOPOLOGY_DECLARED", onClick: onInspectDrawioReplay }, "Inspect saved draw.io references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible": "CONFIG_DOCUMENTED", onClick: onInspectAnsible }, "Inspect Ansible YAML (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-yaml-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleYamlReplay }, "Inspect saved Ansible YAML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible-ini": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIni }, "Inspect Ansible INI (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIniReplay }, "Inspect saved Ansible INI references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-docx": "CONFIG_DOCUMENTED", onClick: onInspectDocx }, "Inspect Word DOCX (structure only)"),
-        e("button", { type: "button", "data-review-office-builder": "REVIEW_REQUIRED", onClick: onReviewOfficeBuilder }, "Review DOCX / ODT nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeBuilder }, "Review 100 DOCX / ODT source-declared network nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeThousandBuilder }, "Review 1,000 original DOCX / ODT network devices into focused Builder"),
-        e("button", { type: "button", "data-review-scaled-office-five-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeFiveThousandBuilder }, "Review 5,000 original DOCX / ODT devices and 5,000 port-linked source rows into bounded Builder"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-preflight": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandPreflight }, "Review 10,000 original DOCX / ODT source devices + 10,000 original Links (source-only; no Builder activation)"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandBuilder }, "Review and explicitly load 10,000 original DOCX / ODT devices + port-linked original Links into bounded editable Builder"),
-        e("button", { type: "button", "data-inspect-docx-replay": "CONFIG_DOCUMENTED", onClick: onInspectDocxReplay }, "Inspect saved DOCX references (read-only)"),
-        e("button", { type: "button", "data-inspect-odt": "CONFIG_DOCUMENTED", onClick: onInspectOdt }, "Inspect OpenDocument ODT (structure only)"),
-        e("button", { type: "button", "data-inspect-odt-replay": "CONFIG_DOCUMENTED", onClick: onInspectOdtReplay }, "Inspect saved ODT references (read-only)"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: exportSource }, "Exportera källfil") : e("button", { type: "button", onClick: exportProgress }, "Exportera framsteg"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("student"), disabled: workspace.compile?.status !== "valid" }, "Exportera elevpaket") : fileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("author"), disabled: workspace.compile?.status !== "valid" }, "Exportera författarpaket") : e("button", { type: "button", onClick: exportTroubleshootingSession }, "Exportera sessionsbackup"),
-        workspace.mode === "runtime" ? fileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") : null,
-      ),
-    ),
+    // PROJECT-093 removes the former zero-opacity compatibility rail. All
+    // callbacks and selectors are now owned by the visible Import, Export and
+    // Avancerade verktyg controls above.
   );
 }
 
@@ -6708,6 +6709,27 @@ function App() {
     try { const gate = await createPromotionVerificationGate({ caseId: troubleshootingCase?.caseId ?? "builder-case", caseWorkingSourceIdentity: await computeCaseSourceIdentity(troubleshootingCase?.workingSource ?? selectedExperiment.workingSource), candidateId: selectedExperiment.experimentId, candidateSourceIdentity: await computeCanonicalSourceIdentity(selectedExperiment.workingSource), baselineId: selectedBaseline.baselineId, suiteIdentity: selectedCampaign.suite.identity, campaign: selectedCampaign }); setPromotionVerificationGate(gate); setDiagnostics([{ severity: "warning", code: "PROMOTION_VERIFICATION_GATE_BUILT", message: `Verification gate: ${gate.state}. This is factual evidence only; explicit Promotion confirmation remains required.` }]); } catch (error) { setDiagnostics([{ severity: "error", code: "PROMOTION_VERIFICATION_GATE_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
   const transitionRows = transitionMatrix ? filterResultTransitionMatrix(transitionMatrix, transitionFilter ? { transition: transitionFilter } : {}) : [];
+  const topologyElement = e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+    getPendingDraftChanges: hasPendingBuilderDrafts,
+    projectGeneration: scenarioTransitionRef.current,
+    getScenarioTransitionId: () => scenarioTransitionRef.current,
+    setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
+    scaledThousandFocus: scaledOfficeThousandFocus,
+    scaledFiveThousandFocus: scaledOfficeFiveThousandFocus,
+    scaledTenThousandFocus, scaledTenThousandSessionActive,
+    scaledTenThousandFocusBusy, onScaledTenThousandFocusPage: showScaledTenThousandFocusPage,
+    onReviewEditedTenThousandFocus: reviewEditedTenThousandBoundedFocus,
+    scaledFiveThousandSessionActive: scaledOfficeFiveThousandSessionActive,
+    scaledFiveThousandSafeCompileAttempted: scaledOfficeFiveThousandSafeCompileAttempted,
+    onReviewEditedFiveThousandFocus: reviewEditedFiveThousandBoundedFocus,
+    scaledFiveThousandFocusBusy: scaledOfficeFiveThousandFocusBusy,
+    onScaledFiveThousandFocusPage: showScaledFiveThousandFocusPage,
+    scaledThousandFocusBusy: scaledOfficeThousandFocusBusy,
+    onScaledThousandFocusPage: showScaledThousandFocusPage,
+    declaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy,
+    onFocusDeclaredOfficeHierarchy: showDeclaredOfficeHierarchyFocus,
+    onRestoreDeclaredOfficeHierarchyFocus: restoreDeclaredOfficeHierarchyFocus,
+    onReviewDeclaredOfficeHierarchy: () => setDeclaredOfficePanelOpen(true) });
 
   return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
     e("header", { className: "app-header" },
@@ -6715,6 +6737,7 @@ function App() {
     ),
     e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
       onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+    topologyElement,
     e(ProjectFileControls, {
       workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
       setWorkspace, onReplace: replaceProjectDocument,
@@ -8235,27 +8258,6 @@ function App() {
           e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
         ) : null,
       ),
-      e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
-        getPendingDraftChanges: hasPendingBuilderDrafts,
-        projectGeneration: scenarioTransitionRef.current,
-        getScenarioTransitionId: () => scenarioTransitionRef.current,
-        setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
-        scaledThousandFocus: scaledOfficeThousandFocus,
-        scaledFiveThousandFocus:scaledOfficeFiveThousandFocus,
-        scaledTenThousandFocus,scaledTenThousandSessionActive,
-        scaledTenThousandFocusBusy,onScaledTenThousandFocusPage:showScaledTenThousandFocusPage,
-        onReviewEditedTenThousandFocus:reviewEditedTenThousandBoundedFocus,
-        scaledFiveThousandSessionActive:scaledOfficeFiveThousandSessionActive,
-        scaledFiveThousandSafeCompileAttempted:scaledOfficeFiveThousandSafeCompileAttempted,
-        onReviewEditedFiveThousandFocus:reviewEditedFiveThousandBoundedFocus,
-        scaledFiveThousandFocusBusy:scaledOfficeFiveThousandFocusBusy,
-        onScaledFiveThousandFocusPage:showScaledFiveThousandFocusPage,
-        scaledThousandFocusBusy: scaledOfficeThousandFocusBusy,
-        onScaledThousandFocusPage: showScaledThousandFocusPage,
-        declaredOfficeHierarchy,declaredOfficeFocus,declaredOfficeFocusBusy,
-        onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
-        onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
-        onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
         workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled: handleDiagnosticSourceRequest, onDiagnoseFromSource: requestDiagnoseFromSource, nextCheckPreparation, onNextCheckPreparationHandled: handleNextCheckPreparation, onPrepareNextCheck: prepareNextCheck, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,
