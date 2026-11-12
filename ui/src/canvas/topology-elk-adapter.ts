@@ -301,12 +301,41 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
     list.push(edge);
     bundles.set(key, list);
   }
-  const replacements = new Map<string, LayoutBackendEdge>();
   const allRects = [...nodes.values()];
   const globalMinX = allRects.length ? Math.min(...allRects.map((rect) => rect.x)) : 0;
   const globalMinY = allRects.length ? Math.min(...allRects.map((rect) => rect.y)) : 0;
   const globalMaxX = allRects.length ? Math.max(...allRects.map((rect) => rect.x + rect.width)) : 0;
   const globalMaxY = allRects.length ? Math.max(...allRects.map((rect) => rect.y + rect.height)) : 0;
+  const replaceRoute = (edge: LayoutBackendEdge, route: readonly { x: number; y: number }[]): LayoutBackendEdge => {
+    const start = route[0]!; const end = route.at(-1)!;
+    return {
+      ...edge,
+      sections: [{ id: edge.sections[0]?.id ?? `${edge.id}_s0`, startPoint: start, bendPoints: route.slice(1, -1), endPoint: end }],
+    };
+  };
+  const score = (candidateEdges: readonly LayoutBackendEdge[]): number => {
+    const segments: Segment[] = [];
+    for (const edge of candidateEdges) {
+      const points = pointList(edge);
+      for (let index = 1; index < points.length; index += 1) segments.push({ edgeId: edge.id, a: points[index - 1]!, b: points[index]! });
+    }
+    let crossings = 0;
+    for (let left = 0; left < segments.length; left += 1) for (let right = left + 1; right < segments.length; right += 1) {
+      if (segments[left]!.edgeId !== segments[right]!.edgeId && properSegmentCrossing(segments[left]!, segments[right]!)) crossings += 1;
+    }
+    let penetrations = 0;
+    for (const edge of candidateEdges) {
+      const source = nodes.get(edge.sourceNode); const target = nodes.get(edge.targetNode);
+      if (!source || !target) continue;
+      const obstacles = [...nodes.values()].filter((node) => node.id !== source.id && node.id !== target.id);
+      const points = pointList(edge);
+      for (let index = 1; index < points.length; index += 1) for (const obstacle of obstacles) {
+        if (segmentCrossesRect(points[index - 1]!, points[index]!, obstacle)) penetrations += 1;
+      }
+    }
+    return crossings * 1000000 + penetrations;
+  };
+  const normalized = edges.slice();
   for (const bundle of bundles.values()) {
     if (bundle.length < 2) continue;
     const source = nodes.get(bundle[0]!.sourceNode); const target = nodes.get(bundle[0]!.targetNode);
@@ -321,25 +350,40 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
       // so the physical connections remain orthogonal and non-crossing while
       // still using the exact ELK endpoints and canonical edge IDs.
       const gap = 36 + Math.floor(bundleIndex / 2) * 18;
-      const laneX = horizontal
-        ? start.x + (end.x >= start.x ? 8 : -8)
-        : undefined;
       const outerY = bundleIndex % 2 === 0
         ? globalMinY - gap
         : globalMaxY + gap;
       const outerX = bundleIndex % 2 === 0
         ? globalMinX - gap
         : globalMaxX + gap;
-      const repairedRoute = horizontal
-        ? [start, { x: laneX!, y: start.y }, { x: laneX!, y: outerY }, { x: end.x, y: outerY }, end]
-        : [start, { x: outerX, y: start.y }, { x: outerX, y: end.y }, end];
-      replacements.set(edge.id, {
-        ...edge,
-        sections: [{ id: edge.sections[0]!.id, startPoint: start, bendPoints: repairedRoute.slice(1, -1), endPoint: end }],
-      });
+      const existingLaneX = route[1]?.x ?? (start.x + end.x) / 2;
+      const existingLaneY = route[1]?.y ?? (start.y + end.y) / 2;
+      const candidates = horizontal
+        ? [
+          [start, { x: existingLaneX, y: start.y }, { x: existingLaneX, y: outerY }, { x: end.x, y: outerY }, end],
+          [start, { x: start.x, y: outerY }, { x: end.x, y: outerY }, end],
+          [start, { x: existingLaneX, y: start.y }, { x: existingLaneX, y: existingLaneY }, { x: end.x, y: existingLaneY }, end],
+        ]
+        : [
+          [start, { x: start.x, y: existingLaneY }, { x: outerX, y: existingLaneY }, { x: outerX, y: end.y }, end],
+          [start, { x: outerX, y: start.y }, { x: outerX, y: end.y }, end],
+          [start, { x: existingLaneX, y: existingLaneY }, { x: existingLaneX, y: end.y }, end],
+        ];
+      const currentIndex = normalized.findIndex((candidate) => candidate.id === edge.id);
+      if (currentIndex < 0) continue;
+      const original = normalized[currentIndex]!;
+      let best = original;
+      let bestScore = score(normalized);
+      for (const candidateRoute of candidates) {
+        const candidate = replaceRoute(edge, candidateRoute);
+        const trial = normalized.slice(); trial[currentIndex] = candidate;
+        const candidateScore = score(trial);
+        if (candidateScore < bestScore) { best = candidate; bestScore = candidateScore; }
+      }
+      normalized[currentIndex] = best;
     }
   }
-  return edges.map((edge) => replacements.get(edge.id) ?? edge);
+  return normalized;
 }
 
 function properSegmentCrossing(left: Segment, right: Segment): boolean {
