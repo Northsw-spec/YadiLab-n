@@ -2261,6 +2261,15 @@ def main():
             expect(compile_button).to_be_enabled(timeout=20000)
             compile_button.click()
             expect(compile_button).to_be_disabled(timeout=30000)
+            # Recompilation can repaint the toolbar and close the native
+            # details popover. Wait for the valid draft, then reopen it before
+            # resolving Preview; the action must be the post-compile control.
+            expect(restore_race.locator('[data-studio-draft-revision]')).to_contain_text(
+                "Status valid", timeout=30000)
+            if run_menu.get_attribute("open") is None:
+                run_menu.evaluate("el => { el.open = true; }")
+            expect(run_menu).to_have_attribute("open", "", timeout=5000)
+            preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
             expect(preview).to_be_enabled(timeout=30000)
             preview.click()
             try:
@@ -2304,8 +2313,13 @@ def main():
                 };
             }""")
             progress_input = restore_race.locator('[data-menu-action="load-progress"]')
-            expect(progress_input).to_have_count(1)
-            progress_input.set_input_files({
+            # Runtime export actions are intentionally exposed in both the
+            # Run & Preview and Export shortcuts. Either visible file input
+            # exercises the same callback; do not require an implementation
+            # detail that only one shortcut exists.
+            require(progress_input.count() >= 1,
+                    "Runtime progress import control is missing")
+            progress_input.first.set_input_files({
                 "name": "scenario.yadiprogress", "mimeType": "application/json",
                 "buffer": saved_progress,
             })
@@ -2346,7 +2360,7 @@ def main():
             preview.click()
             expect(restore_race.locator(".app-frame")).not_to_have_attribute(
                 "data-runtime-scenario-hash", "builder", timeout=15000)
-            progress_input = restore_race.locator('[data-menu-action="load-progress"]')
+            progress_input = restore_race.locator('[data-menu-action="load-progress"]').first
             progress_input.evaluate("(element) => { element.value = ''; }")
             progress_input.set_input_files({
                 "name": "scenario.yadiprogress", "mimeType": "application/json",
