@@ -1,0 +1,227 @@
+{
+  "formatId": "yadilab.arvidsjaur-navigation-acceptance",
+  "schemaVersion": "1.0.0",
+  "status": "SPECIFICATION_NOT_IMPLEMENTED",
+  "referenceImage": "03_EVIDENS/Arvidsjaur_Standarden_2026-11-12.png",
+  "referenceSha256": "8eb2417aef038a2c02dc9866f49709874c4e2ded2c88fd5442df98d8bfed834c",
+  "historicalReview": {
+    "repository": "Northsw-spec/YadiLab-n",
+    "pr": 105,
+    "head": "945465b61b77948764364b5fc61355287f15ca5f",
+    "main": "8b75e344b702a3ad645759b89ef47720952ec424",
+    "visualApproved": "PENDING_USER",
+    "note": "Historical baseline only: refetch current GitHub for every coding session"
+  },
+  "gates": [
+    {
+      "id": "AV-01",
+      "requirement": "SHA-256 för exakt originalbild följer rapport och versionshanteras med kontraktet.",
+      "blockingFailure": "Fel/äldre referens.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-02",
+      "requirement": "Topologiscopes har entydiga ID:n; `READ`/`OVERVIEW` är kamera, inte scope.",
+      "blockingFailure": "Zoom används som navigationslager.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-03",
+      "requirement": "Globalt lager: grupper, rubricerade containrar, ordnade medlemskort; manuell Arvidsjaur-jämförelse.",
+      "blockingFailure": "Endast platt graf.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-04",
+      "requirement": "Distribution-/mellanlager: egen karta med samma visuell grammatik.",
+      "blockingFailure": "Bara `setCenter` på global graf.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-05",
+      "requirement": "Access-/detaljlager: egen karta med samma grammatik, root synlig.",
+      "blockingFailure": "Access25 som befintlig READ-bild.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-06",
+      "requirement": "Ännu ett faktiskt existerande djupsteg eller visad saklig terminalnivå; ingen fabricerad hierarki.",
+      "blockingFailure": "Hittar på ett extra lager.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-07",
+      "requirement": "Grupper har stabilt medlemskap/ID och deklarerad/deriverad proveniens.",
+      "blockingFailure": "Byter källzon eller roller.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-08",
+      "requirement": "Alla verkliga gruppmedlemskort ligger helt i sin grupps innehållsyta.",
+      "blockingFailure": "Post-hoc overlay som skär genom kort.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-09",
+      "requirement": "Grupphuvuden skär inte kort, länkändpunkter eller etiketter.",
+      "blockingFailure": "Rubriker maskerar data.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-10",
+      "requirement": "Ordning och mellanspacing återger Arvidsjaurs visuella grammatik i varje scope; är deterministisk.",
+      "blockingFailure": "En lång, diffus kabel-/nodlinje.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-11",
+      "requirement": "READ root-kort helt inne i panel, ≥16 px margin desktop.",
+      "blockingFailure": "Root utanför ytan.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-12",
+      "requirement": "Faktisk primär etikett ≥13 skärmpixlar på läsbara READ-kort.",
+      "blockingFailure": "Endast CSS-font PASS.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-13",
+      "requirement": "Faktisk sekundär etikett ≥11 skärmpixlar på läsbara READ-kort.",
+      "blockingFailure": "Endast CSS-font PASS.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-14",
+      "requirement": "OVERVIEW innehåller rimlig gruppläsbar översikt och klar READ-ingång.",
+      "blockingFailure": "Oläsbar overview kallas READ.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-15",
+      "requirement": "Breadcrumb/back/drill visar rätt lager och återställer dess relevanta state.",
+      "blockingFailure": "Fel fokus/scope/historik.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-16",
+      "requirement": "Visa/dölj/isolation av presentationsgrupper ändrar aldrig kanoniskt nätverk och visar utelämnade antal.",
+      "blockingFailure": "Källa eller fysiska länkar raderas tyst.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-17",
+      "requirement": "Snabba scopebyten och ELK-async race ger aldrig äldre bild med ny breadcrumb.",
+      "blockingFailure": "Stale layout committad.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-18",
+      "requirement": "1366×768, 1280×800, 1920×1080, 390×844 verifieras med verkliga screenshots.",
+      "blockingFailure": "Endast en desktopbild.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-19",
+      "requirement": "Resource-ID:n, connection-ID:n och endpoints i projektion är exakt källhärledda; inga dubletter.",
+      "blockingFailure": "Tillverkad/försvunnen fysisk länk.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-20",
+      "requirement": "Håll isär interna, boundary och externa länkar, samt alla utelämnade antal.",
+      "blockingFailure": "Tysta bortfall.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-21",
+      "requirement": "Ortogonala kabelsträckor, inga kortpenetrationer; separat metrics för crossings och collinear overlaps.",
+      "blockingFailure": "Metrik döljer kablar ovanpå varandra.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-22",
+      "requirement": "Riktiga källportar vs view-only handles hålls åtskilda; inga fabrikationer av VLAN, switchport, route eller Engine TRUE.",
+      "blockingFailure": "Källa förfalskad för estetiken.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-23",
+      "requirement": "Röd regression reproducerar y≈52–107 vs panel från y≈208 före fix; grön efter i exakt samma scen.",
+      "blockingFailure": "Test tillagt först efter patch och är falskt positivt.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-24",
+      "requirement": "`.yadilab`, Builder/Runtime, import och 10k/10k canonical fixture fortsätter fungera.",
+      "blockingFailure": "Navigationsfix sabbar kärnflöden.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-25",
+      "requirement": "Access25 40 resurser, 39 källbaserade länkar, 38 klienter; befintlig PROJECT-094-mätning redovisas före/efter.",
+      "blockingFailure": "Förlorade kort/kablar, falska vinstpåståenden.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-26",
+      "requirement": "Källa kontra layout: deklarerade och härledda presentationsgrupper inte likställs med fysisk topologi.",
+      "blockingFailure": "Gruppen betraktas som verifierad zon.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-27",
+      "requirement": "Ingen visuellt osynlig eller utanför scope associerad nod kan markeras av misstag.",
+      "blockingFailure": "Fel canvas-/inspectorval.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-28",
+      "requirement": "Verklig Chromium evidence innehåller per-lager READ och OVERVIEW, med DOM-geometri och kamera-state.",
+      "blockingFailure": "Endast JSON-layoutpoäng.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-29",
+      "requirement": "`source-and-security`, `compiled-chromium` och `yadilab-required-ci` SUCCESS på **exakt slutlig PR HEAD**.",
+      "blockingFailure": "Test på gammal SHA.",
+      "verification": "PENDING",
+      "evidence": []
+    },
+    {
+      "id": "AV-30",
+      "requirement": "Resultatet jämförs sida-vid-sida med **nya** Arvidsjaur-originalet; användarens visuella beslut `PENDING_USER` tills explicit godkänt.",
+      "blockingFailure": "AI markerar själv `visualApproved: PASS`.",
+      "verification": "PENDING",
+      "evidence": []
+    }
+  ]
+}

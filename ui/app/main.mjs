@@ -1286,10 +1286,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         instance.fitView?.({
           duration: 0,
           padding: overviewCamera ? 0.2 : 0.08,
-          // A hierarchy overview is a readable map, not a miniature full-graph
-          // thumbnail. Keep the same bounded fit, but refuse the sub-pixel
-          // scales that made every Arvidsjaur group unreadable.
-          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.28 : overviewCamera || compactMobileRead ? 0.32 : 1,
+          // A hierarchy overview must keep every source-derived group/card in
+          // the overview camera.  READ is the camera mode with the effective
+          // label-size gate; OVERVIEW is allowed to be a true map overview
+          // rather than cropping the lower Arvidsjaur groups.
+          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.08 : overviewCamera || compactMobileRead ? 0.32 : 1,
           maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
         });
       }
@@ -1727,7 +1728,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       // buttons can be clicked during the async ELK commit; a closure from
       // the pre-layout render must still select the bounded hierarchy fit.
       const boundedHierarchy = Boolean(document.querySelector(".topology-panel")?.getAttribute("data-topology-layout-bakeoff"));
-      instance.fitView?.({ duration: 0, padding: boundedHierarchy ? 0.2 : 0.16, minZoom: boundedHierarchy ? 0.28 : 0.32, maxZoom: 1.05 });
+      instance.fitView?.({ duration: 0, padding: boundedHierarchy ? 0.2 : 0.16, minZoom: boundedHierarchy ? 0.08 : 0.32, maxZoom: 1.05 });
     }
     else instance.fitView?.({ duration: 0, padding: 0.08, minZoom: 0.62, maxZoom: 1.35 });
   };

@@ -11,6 +11,8 @@ A developer, coding agent or scheduled automation must be able to start from a f
 3. **This versioned `AGENTS.md`** defines the development policy and entrypoints. `README.md` is the user-facing overview. GitHub issues and PR descriptions record intentions and historical decisions, not present-day behavior until code is merged.
 4. **Older `docs/` snapshots and historical repository artifacts** may help explain design but are never a substitute for inspecting fresh code and CI. If any summary conflicts with current code or GitHub status, correct the stale summary; do not treat it as technical truth.
 
+The binding AV-001 Arvidsjaur navigation standard, its reference image, provenance record and machine-readable P0 controls are versioned in [`docs/design/arvidsjaur-layer-navigation/`](docs/design/arvidsjaur-layer-navigation/). Read those artifacts alongside the live topology code and active regressions when changing navigation layers.
+
 Do not hardcode the “latest main SHA,” latest CI result or active PR list into versioned guidance. Retrieve them afresh every run. If GitHub cannot be inspected, disclose the precise blocker and do not invent work, checks or outcomes.
 
 ## Mandatory cold-start sequence for every coding session
