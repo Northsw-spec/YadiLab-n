@@ -1257,31 +1257,52 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const runInitialFit = () => {
       const rect = topologyPanelRef.current?.getBoundingClientRect();
       const instance = flowApi.current;
-      if (rect && rect.width > 0 && rect.height > 0 && instance) {
-        const overviewCamera = topologyOverview || topologyCameraMode === "overview";
-        const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
-        const readableBranch = Boolean(hierarchicalTopologyView?.kind === "branch" && topologyCameraMode === "read");
-        const rootNode = readableBranch ? baseFlow.nodes.find((node) => node.id === hierarchicalTopologyView?.rootId) : null;
-        if (rootNode && instance.setCenter) {
-          instance.setCenter(rootNode.position.x + (rootNode.width ?? 168) / 2, rootNode.position.y + (rootNode.height ?? 88) / 2, { zoom: 1, duration: 0 });
-        } else {
-          instance.fitView?.({
-            duration: 0,
-            padding: overviewCamera ? 0.2 : 0.08,
-            minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera ? 0.32 : 1,
-            maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
-          });
-        }
-        setTopologyGeometryRevision((value) => value + 1);
+      if (!rect || rect.width <= 0 || rect.height <= 0 || !instance) return false;
+      // React Flow exposes the instance before its node internals have been
+      // measured. Fitting at that point records a stale transform (often
+      // scale=1 with the left side of the graph off-screen), and the old
+      // one-shot identity guard then prevents the real fit. Wait until every
+      // mounted node has usable measured geometry before consuming the fit
+      // identity.
+      const measured = baseFlow.nodes.every((node) => {
+        const internal = instance.getInternalNode?.(node.id);
+        const dimensions = internal?.measured ?? internal?.internals?.measured;
+        return Number(dimensions?.width ?? internal?.width ?? node.width ?? 0) > 0 &&
+          Number(dimensions?.height ?? internal?.height ?? node.height ?? 0) > 0;
+      });
+      if (!measured) return false;
+      const overviewCamera = topologyOverview || topologyCameraMode === "overview";
+      const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
+      const readableBranch = Boolean(hierarchicalTopologyView?.kind === "branch" && topologyCameraMode === "read");
+      const rootNode = readableBranch ? baseFlow.nodes.find((node) => node.id === hierarchicalTopologyView?.rootId) : null;
+      if (rootNode && instance.setCenter) {
+        instance.setCenter(rootNode.position.x + (rootNode.width ?? 168) / 2, rootNode.position.y + (rootNode.height ?? 88) / 2, { zoom: 1, duration: 0 });
+      } else {
+        instance.fitView?.({
+          duration: 0,
+          padding: overviewCamera ? 0.2 : 0.08,
+          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.1 : overviewCamera ? 0.32 : 1,
+          maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
+        });
       }
+      setTopologyGeometryRevision((value) => value + 1);
+      return true;
     };
     measure(false);
     if (topologyInitialFitIdentityRef.current !== topologyGeometryIdentity) {
-      topologyInitialFitIdentityRef.current = topologyGeometryIdentity;
+      const fitIdentity = topologyGeometryIdentity;
+      const tryInitialFit = () => {
+        if (topologyInitialFitIdentityRef.current === fitIdentity) return;
+        if (runInitialFit()) {
+          topologyInitialFitIdentityRef.current = fitIdentity;
+          return;
+        }
+        initialFitTimer = globalThis.setTimeout(tryInitialFit, 32);
+      };
       initialFitFrame = globalThis.requestAnimationFrame?.(() => {
-        initialFitSecondFrame = globalThis.requestAnimationFrame?.(runInitialFit);
+        initialFitSecondFrame = globalThis.requestAnimationFrame?.(tryInitialFit);
       });
-      initialFitTimer = globalThis.setTimeout(runInitialFit, 120);
+      initialFitTimer = globalThis.setTimeout(tryInitialFit, 120);
     }
     return () => {
       resizeObserver?.disconnect();
