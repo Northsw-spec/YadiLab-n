@@ -618,6 +618,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       ...(summaryOnly ? {
         "data-overview-summary-edge": "true",
         "data-overview-declared-links": String(Number.isFinite(declaredLinkCount) ? declaredLinkCount : 0),
+        "data-overview-source-hash": String(data?.overviewSourceHash ?? ""),
         "data-overview-summary-label": visual.accessibleLabel,
       } : {}),
     }),
@@ -1100,7 +1101,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     const checkRenderedEdges = () => {
       const panel = topologyPanelRef.current;
-      const rendered = panel?.querySelectorAll('path[data-overview-summary-edge="true"]').length ?? 0;
+      const rendered = [...(panel?.querySelectorAll('path[data-overview-summary-edge="true"]') ?? [])]
+        .filter((edge) => edge.getAttribute("data-overview-source-hash") === topologyOverview.sourceHash).length;
       if (rendered >= topologyOverview.edges.length) {
         stableFrames += 1;
         // React Flow can finish its internal edge commit one frame after the
@@ -1111,7 +1113,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           readyTimer = globalThis.setTimeout(() => {
             readyTimer = undefined;
             const latestPanel = topologyPanelRef.current;
-            const latestRendered = latestPanel?.querySelectorAll('path[data-overview-summary-edge="true"]').length ?? 0;
+            const latestRendered = [...(latestPanel?.querySelectorAll('path[data-overview-summary-edge="true"]') ?? [])]
+              .filter((edge) => edge.getAttribute("data-overview-source-hash") === topologyOverview.sourceHash).length;
             if (latestRendered >= topologyOverview.edges.length) {
               if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
               setTopologyOverviewReadyIdentity(topologyOverviewIdentity);

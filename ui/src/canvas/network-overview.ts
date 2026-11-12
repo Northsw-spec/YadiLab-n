@@ -221,6 +221,7 @@ export function buildNetworkOverviewProjection(args: {
         connectionKind: "network",
         summaryOnly: true,
         declaredLinkCount: count,
+        overviewSourceHash: args.sourceHash ?? "",
         properties: { summaryOnly: true, declaredLinkCount: count },
         visual: { ...describeSemanticLink("network", {}), accessibleLabel: `VISUAL SUMMARY · ${count} declared links · not a physical link` },
       },
