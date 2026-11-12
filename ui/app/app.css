@@ -863,6 +863,15 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .semantic-edge.selected + .semantic-edge-label { opacity: 1; }
 .project-file-controls { margin: .25rem 1rem; padding: .45rem .65rem; }
 
+@media (min-width: 901px) {
+  /* Keep the three source selectors on the same compact desktop toolbar row;
+     this is what puts the real canvas inside the first 240px of the viewport. */
+  .main-actions-heading { flex-wrap: nowrap; }
+  .main-actions-heading > div:first-child { flex: 0 0 15rem; min-width: 15rem; }
+  .main-actions-context { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
+  .context-select { flex: 1 1 0; min-width: 0; }
+}
+
 @media (max-width: 900px) {
   .main-actions-heading { align-items: stretch; }
   .main-actions-context { justify-content: flex-start; }
