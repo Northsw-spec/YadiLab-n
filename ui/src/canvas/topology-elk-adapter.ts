@@ -201,7 +201,7 @@ function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCand
     : profile === "B-flat-down-high-degree"
       ? { "elk.direction": "DOWN", "org.eclipse.elk.layered.highDegreeNodes.treatment": "true", "org.eclipse.elk.layered.highDegreeNodes.threshold": "16", "elk.spacing.nodeNode": "40", "elk.layered.spacing.nodeNodeBetweenLayers": "80" }
       : {
-        "elk.direction": "RIGHT",
+        "elk.direction": "DOWN",
         "org.eclipse.elk.layered.highDegreeNodes.treatment": "true",
         "org.eclipse.elk.layered.highDegreeNodes.threshold": "12",
         "elk.spacing.nodeNode": "0",
