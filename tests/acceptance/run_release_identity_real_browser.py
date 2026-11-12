@@ -44,13 +44,12 @@ def inspect_mounted(page, marker):
             'Actual React app frame never mounted')
     require(page.locator('[data-network-import-primary="true"]').count() == 1,
             'Functional primary import control missing')
-    menus = page.locator('.workspace-menu',
-                         has=page.locator('summary', has_text='Import / Export'))
-    require(menus.count() == 1, 'Functional Import / Export menu missing')
+    menus = page.locator('.workspace-menu-advanced')
+    require(menus.count() == 1, 'Functional visible Advanced tools menu missing')
     if menus.get_attribute('open') is None:
         menus.locator('summary').click()
     require(menus.locator('[data-inspect-nessus="EVIDENCE_ONLY"]').is_visible(),
-            'Opened import menu has no real application actions')
+            'Opened Advanced tools menu has no real application actions')
 
 
 def test(browser, url, marker):

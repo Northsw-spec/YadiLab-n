@@ -77,7 +77,7 @@ def main():
             expect(page.locator('[data-project-file-controls="ready"]')).to_be_visible(timeout=30000)
 
             # Start the real built-in gateway lab through the visible application menu.
-            page.locator(".workspace-menu").filter(has_text="Lab & Scenario").locator("summary").click()
+            page.locator(".workspace-menu-advanced").locator("summary").click()
             page.get_by_role("button", name="Starta guidad labb").click()
             page.wait_for_function(
                 """() => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id')

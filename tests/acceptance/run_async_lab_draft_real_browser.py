@@ -62,9 +62,7 @@ def main():
                 page.evaluate("""({ buttonLabel, value }) => {
                   const input = document.querySelector(
                     '[data-builder-inspector="mission"] label.inspector-field input');
-                  const menu = [...document.querySelectorAll('.workspace-menu')]
-                    .find(el => el.querySelector('summary')?.textContent?.trim()
-                      === 'Lab & Scenario');
+                  const menu = document.querySelector('.workspace-menu-advanced');
                   const button = [...(menu?.querySelectorAll('button') ?? [])]
                     .find(el => el.textContent?.trim() === buttonLabel);
                   if (!input || !button || button.disabled)
@@ -96,9 +94,7 @@ def main():
 
             # Positive control: a clean Builder switch must still succeed.
             page.evaluate("""() => {
-              const menu = [...document.querySelectorAll('.workspace-menu')]
-                .find(el => el.querySelector('summary')?.textContent?.trim()
-                  === 'Builder');
+              const menu = document.querySelector('.workspace-menu-advanced');
               const button = [...(menu?.querySelectorAll('button') ?? [])]
                 .find(el => el.textContent?.trim() === 'Öppna labb i byggläget');
               if (!button || button.disabled)

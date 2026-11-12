@@ -152,7 +152,7 @@ def main():
             expect(page.locator('[data-project-file-controls="ready"]')).to_be_visible(timeout=30000)
 
             choose(page.locator('[data-guided-lab-catalog="wave1"]'), "guided_win_dns")
-            page.locator(".workspace-menu").filter(has_text="Lab & Scenario").locator("summary").click()
+            page.locator(".workspace-menu-advanced").locator("summary").click()
             page.get_by_role("button", name="Starta guidad labb").click()
             page.wait_for_function(
                 """() => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id')

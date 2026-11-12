@@ -27,8 +27,7 @@ def create_extra(page,identifier):
     panel.get_by_role('button',name='Skapa objekt').click()
 
 def compile_only(page):
-    menu=page.locator('.workspace-menu').filter(
-        has=page.locator('summary').filter(has_text='Builder'))
+    menu=page.locator('.workspace-menu-advanced')
     if menu.get_attribute('open') is None:
         menu.locator('summary').click()
     menu.get_by_role('button',name='Kompilera + layout').click()

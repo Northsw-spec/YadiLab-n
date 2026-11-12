@@ -62,9 +62,7 @@ def main():
               button.click();
             }""")
             page.wait_for_function("""() => {
-              const menu = [...document.querySelectorAll('.workspace-menu')]
-                .find(el => el.querySelector('summary')?.textContent?.trim()
-                  === 'Import / Export');
+              const menu = document.querySelector('.workspace-menu-advanced');
               const button = [...(menu?.querySelectorAll('button') ?? [])]
                 .find(el => el.textContent?.trim() === 'Exportera elevpaket');
               return button && !button.disabled;
@@ -73,9 +71,7 @@ def main():
             # Positive control: a compiled, clean Builder may produce a package.
             def export_package():
                 page.evaluate("""() => {
-                  const menu = [...document.querySelectorAll('.workspace-menu')]
-                    .find(el => el.querySelector('summary')?.textContent?.trim()
-                      === 'Import / Export');
+                  const menu = document.querySelector('.workspace-menu-advanced');
                   const button = [...(menu?.querySelectorAll('button') ?? [])]
                     .find(el => el.textContent?.trim() === 'Exportera elevpaket');
                   if (!button || button.disabled) throw new Error('PROJECT068_EXPORT_UNAVAILABLE');
@@ -104,9 +100,7 @@ def main():
             # Same JavaScript task: package I/O starts and only then does a
             # new draft appear. The workspace/source identity is unchanged.
             page.evaluate("""() => {
-              const menu = [...document.querySelectorAll('.workspace-menu')]
-                .find(el => el.querySelector('summary')?.textContent?.trim()
-                  === 'Import / Export');
+              const menu = document.querySelector('.workspace-menu-advanced');
               const button = [...(menu?.querySelectorAll('button') ?? [])]
                 .find(el => el.textContent?.trim() === 'Exportera elevpaket');
               const input = document.querySelector(

@@ -32,7 +32,7 @@ def setup(browser,url):
     return page,scenario,errors,external
 
 def menu(page):
-    item=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    item=page.locator(".workspace-menu-advanced")
     require(item.count()==1,"Import / Export menu missing or ambiguous")
     if item.get_attribute("open") is None:
         item.locator("summary").click()

@@ -47,8 +47,11 @@ def setup(browser,url):
     return page,errors,outside
 
 def menu(page):
-    item=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
-    require(item.count()==1,"Expected unique Import / Export menu")
+    # PROJECT-093 removed the zero-opacity legacy rail. All inspection and
+    # export actions are now exercised through the visible Advanced tools
+    # popover that operators use in the compiled UI.
+    item=page.locator(".workspace-menu-advanced")
+    require(item.count()==1,"Expected unique visible Advanced tools menu")
     if item.get_attribute("open") is None:
         item.locator("summary").click()
     return item

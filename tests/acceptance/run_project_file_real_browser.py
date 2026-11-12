@@ -1562,8 +1562,7 @@ def main():
             expect(compile_button).to_be_visible(timeout=15000)
             compile_button.click()
             expect(compile_button).to_be_disabled(timeout=30000)
-            run_menu = page.locator(".workspace-menu", has=page.locator(
-                "summary", has_text="Run & Preview"))
+            run_menu = page.locator(".workspace-menu-advanced")
             expect(run_menu).to_have_count(1)
             if run_menu.get_attribute("open") is None:
                 run_menu.locator("summary").click()
@@ -1589,11 +1588,9 @@ def main():
             race_before_writes = page.evaluate(
                 "window.__yadilabProjectStore.writes")
             preview_race = page.evaluate("""() => {
-                const menus = [...document.querySelectorAll('.workspace-menu')];
-                const menu = name => menus.find(item =>
-                    item.querySelector('summary')?.textContent.trim() === name);
-                const builder = menu('Builder');
-                const run = menu('Run & Preview');
+                const menu = document.querySelector('.workspace-menu-advanced');
+                const builder = menu;
+                const run = menu;
                 const recompile = [...(builder?.querySelectorAll('button') || [])]
                     .find(button => button.textContent.trim() === 'Kompilera + layout');
                 const preview = [...(run?.querySelectorAll('button') || [])]
@@ -1642,8 +1639,7 @@ def main():
             page.evaluate("window.__yadilabProjectStore.cancelOpen = false")
             # An unrelated built-in Builder must receive a fresh file
             # association after explicit operator discard consent.
-            builder_menu = page.locator(".workspace-menu", has=page.locator(
-                "summary", has_text="Builder"))
+            builder_menu = page.locator(".workspace-menu-advanced")
             expect(builder_menu).to_have_count(1)
             if builder_menu.get_attribute("open") is None:
                 builder_menu.locator("summary").click()
@@ -2025,8 +2021,7 @@ def main():
                 launch_controls = launch_race.locator('[data-project-file-controls="ready"]')
                 expect(launch_controls).to_be_visible(timeout=45000)
                 launch_race.evaluate("""(name) => {
-                    const menu = [...document.querySelectorAll('.workspace-menu')]
-                        .find(e => e.querySelector('summary')?.textContent?.includes('Lab & Scenario'));
+                    const menu = document.querySelector('.workspace-menu-advanced');
                     const start = [...(menu?.querySelectorAll('button') ?? [])]
                         .find(e => e.textContent?.trim() === name);
                     const fresh = document.querySelector('[data-project-action="new"]');
@@ -2179,8 +2174,7 @@ def main():
                     '[data-studio-draft-revision]').text_content() or ""
                 raise AssertionError(
                     "Runtime fixture compilation did not become valid: " + status) from error
-            run_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
-                "summary", has_text="Run & Preview"))
+            run_menu = restore_race.locator(".workspace-menu-advanced")
             if run_menu.get_attribute("open") is None:
                 run_menu.locator("summary").click()
             preview = run_menu.get_by_role("button", name="Förhandsvisa körläge")
@@ -2195,7 +2189,7 @@ def main():
                 const apply = document.querySelector(
                     '[data-builder-inspector="mission"] button');
                 const preview = [...document.querySelectorAll(
-                    '.workspace-menu button')].find(
+                    '.workspace-menu-advanced button')].find(
                     button => button.textContent.trim() === 'Förhandsvisa körläge');
                 if (!apply || !preview || preview.disabled)
                     throw new Error("PROJECT047_STALE_PREVIEW_CONTROLS_UNAVAILABLE");
@@ -2216,8 +2210,7 @@ def main():
             # An immediate Source export must contain the new canonical
             # title, not the previous render's source. Keep it an actual
             # browser download, with no file write or manual source override.
-            export_menu = restore_race.locator(".workspace-menu", has=
-                restore_race.locator("summary", has_text="Import / Export"))
+            export_menu = restore_race.locator(".workspace-menu-advanced")
             if export_menu.get_attribute("open") is None:
                 export_menu.locator("summary").click()
             fill_value(inspector.locator("label.inspector-field", has_text="Title").locator(
@@ -2227,7 +2220,7 @@ def main():
                     const apply = document.querySelector(
                         '[data-builder-inspector="mission"] button');
                     const exportButton = [...document.querySelectorAll(
-                        '.workspace-menu button')].find(
+                        '.workspace-menu-advanced button')].find(
                         button => button.textContent.trim() === 'Exportera källfil');
                     if (!apply || !exportButton || exportButton.disabled)
                         throw new Error("PROJECT047_LIVE_EXPORT_CONTROLS_UNAVAILABLE");
@@ -2269,8 +2262,7 @@ def main():
                 raise AssertionError(
                     "PROJECT_RUNTIME_PREVIEW_BLOCKED: " + draft_status
                     + " | diagnostics=" + repr(diagnostic_text[-20:])) from error
-            export_menu = restore_race.locator(".workspace-menu", has=restore_race.locator(
-                "summary", has_text="Import / Export"))
+            export_menu = restore_race.locator(".workspace-menu-advanced")
             if export_menu.get_attribute("open") is None:
                 export_menu.locator("summary").click()
             with restore_race.expect_download(timeout=15000) as progress_download:
@@ -2307,9 +2299,7 @@ def main():
             # if React batches the repaint. Release the pending progress File
             # in that SAME event turn; old Runtime may not reappear.
             restore_race.evaluate("""() => {
-                const menus = [...document.querySelectorAll('.workspace-menu')];
-                const menu = menus.find(item =>
-                    item.querySelector('summary')?.textContent.trim() === 'Run & Preview');
+                const menu = document.querySelector('.workspace-menu-advanced');
                 const back = [...(menu?.querySelectorAll('button') || [])].find(
                     button => button.textContent.trim() === 'Tillbaka till byggläget');
                 const release = window.__staleRuntimeFileRead?.release;

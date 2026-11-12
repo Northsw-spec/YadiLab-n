@@ -69,7 +69,7 @@ def setup(browser,url):
     return page, page.locator(".app-frame").get_attribute("data-runtime-scenario-id"), errors, external
 
 def menu(page):
-    item=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    item=page.locator(".workspace-menu-advanced")
     require(item.count()==1,"Import / Export menu not unique")
     if item.get_attribute("open") is None: item.locator("summary").click()
     return item

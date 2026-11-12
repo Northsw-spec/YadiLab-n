@@ -22,7 +22,7 @@ def choose(page,selector,name,raw):
     page.locator(selector).set_input_files({"name":name,"mimeType":"application/octet-stream","buffer":raw})
 
 def open_replay(page):
-    menu=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    menu=page.locator(".workspace-menu-advanced")
     require(menu.count()==1,"Import/Export menu must be unique")
     if menu.get_attribute("open") is None:menu.locator("summary").click()
     menu.locator('[data-inspect-ansible-yaml-replay="CONFIG_DOCUMENTED"]').click()

@@ -7,7 +7,7 @@ from playwright.sync_api import expect, sync_playwright
 from run_ansible_yaml_p2_real_browser import setup,inspect,select,unchanged,export_builder_source,FIXTURES,require
 
 def open_replay(page):
-    menu=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    menu=page.locator(".workspace-menu-advanced")
     require(menu.count()==1,"Import/Export menu is missing")
     if menu.get_attribute("open") is None:menu.locator("summary").click()
     menu.locator('[data-inspect-ansible-yaml-replay="CONFIG_DOCUMENTED"]').click()

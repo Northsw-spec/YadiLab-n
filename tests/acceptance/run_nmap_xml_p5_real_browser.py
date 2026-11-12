@@ -8,7 +8,7 @@ from run_nmap_xml_p2_real_browser import setup,inspect,export_builder_source,con
 from run_nmap_xml_p3_real_browser import original,upload,goto
 
 def open_replay(page):
-    menu=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    menu=page.locator(".workspace-menu-advanced")
     require(menu.count()==1,"Import / Export must exist")
     if menu.get_attribute("open") is None:menu.locator("summary").click()
     menu.locator('[data-inspect-nmap-replay="EVIDENCE_OBSERVED"]').click()

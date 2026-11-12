@@ -51,7 +51,7 @@ def fill_value(control, value):
 
 def start_lab(page, scenario_id):
     choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
-    page.locator(".workspace-menu").filter(has_text="Lab & Scenario").evaluate("el => { el.open = true; }")
+    page.locator(".workspace-menu-advanced").evaluate("el => { el.open = true; }")
     page.get_by_role("button", name="Starta guidad labb").click()
     page.wait_for_function(
         """scenario => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id') === scenario""",
