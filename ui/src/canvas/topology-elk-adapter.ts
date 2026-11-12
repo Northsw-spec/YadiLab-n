@@ -313,8 +313,8 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
     if (!source || !target) continue;
     const ordered = bundle.slice().sort((left, right) => left.id.localeCompare(right.id, "en"));
     for (const [bundleIndex, edge] of ordered.entries()) {
-      const route = pointList(edge); const start = route[0]; const end = route.at(-1); const firstBend = route[1];
-      if (!start || !end || !firstBend) continue;
+      const route = pointList(edge); const start = route[0]; const end = route.at(-1);
+      if (!start || !end) continue;
       const horizontal = Math.abs(source.x - target.x) >= Math.max(source.width, target.width);
       // Parallel source ports can be presented in the opposite order to the
       // target ports. Keep those lanes outside the complete resource envelope
@@ -322,7 +322,7 @@ function normalizeParallelElkSections(edges: readonly LayoutBackendEdge[], nodes
       // still using the exact ELK endpoints and canonical edge IDs.
       const gap = 36 + Math.floor(bundleIndex / 2) * 18;
       const laneX = horizontal
-        ? (firstBend && Number.isFinite(firstBend.x) ? firstBend.x : (start.x + end.x) / 2)
+        ? start.x + (end.x >= start.x ? 8 : -8)
         : undefined;
       const outerY = bundleIndex % 2 === 0
         ? globalMinY - gap
