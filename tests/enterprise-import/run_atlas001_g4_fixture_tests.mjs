@@ -54,4 +54,30 @@ missingEndpoint.tables.find(table => table.tableId === "Links").records[1].field
 assert.ok(validateNetworkWorkbook(missingEndpoint).some(diagnostic => diagnostic.code === "WORKBOOK_LINK_ENDPOINT_UNKNOWN"));
 
 console.log(`ATLAS-001 G4 synthetic-xlsx-fixture: PASS (${mapped.source.resources.length} resources, ${mapped.source.connections.length} links, ${atlas.pages.length} pages, sha256=${sha})`);
+
+const fixtureBPath = "tests/fixtures/import/atlas001-g4b-500.xlsx";
+const bytesB = new Uint8Array(fs.readFileSync(fixtureBPath));
+const digestB = await globalThis.crypto.subtle.digest("SHA-256", bytesB);
+const shaB = Array.from(new Uint8Array(digestB), value => value.toString(16).padStart(2, "0")).join("");
+assert.equal(shaB, "9dabeae5901931845059bba4a380b7b543192f06948d270a615fdf765031e8ed", "independent G4.1 fixture bytes changed");
+const parsedB = await createXlsxImportAdapter(nodeZipArchiveBackend).parse({ bytes: bytesB, mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }, { options: {} });
+const normalizedB = normalizeNetworkInventoryDocument(parsedB.document);
+const mappedB = mapNetworkWorkbookToScenario(normalizedB.document);
+assert.equal(mappedB.ok, true, JSON.stringify([...parsedB.diagnostics, ...normalizedB.diagnostics, ...mappedB.diagnostics]));
+assert.equal(mappedB.preview.profile, "standard");
+assert.equal(mappedB.source?.scenarioId, "atlas_g4_b_synthetic_500");
+assert.equal(mappedB.source?.resources.length, 500);
+assert.equal(mappedB.source?.connections.length, 500);
+assert.equal(mappedB.source?.zones.length, 4);
+assert.equal(mappedB.source?.resources.some(resource => !resource.zone), true, "fixture B retains ungrouped resources");
+assert.equal(mappedB.source?.connections.filter(connection => connection.from.resource === "b4_device_001" && connection.to.resource === "b4_device_002").length, 2, "fixture B retains parallel links");
+assert.equal(mappedB.source?.connections.some(connection => connection.from.resource === "b4_device_491" && connection.to.resource === "b4_device_492"), true, "fixture B retains disconnected component");
+assert.ok(mappedB.source?.connections.every(connection => connection.from.port && connection.to.port), "fixture B endpoints retain ports");
+const atlasB = buildAtlasIndex({ sourceIdentity: "atlas_g4_b_synthetic_500", resources: mappedB.source.resources, connections: mappedB.source.connections, zones: mappedB.source.zones }, { version: "atlas-001-g4.1-v1", targetNodesPerPage: 60, maxNodesPerPage: 100, maxInternalLinksPerPage: 250 });
+assert.equal(atlasB.pages.reduce((sum, page) => sum + page.resourceIds.length, 0), 500);
+assert.equal(new Set(atlasB.pages.flatMap(page => page.resourceIds)).size, 500);
+assert.equal([...atlasB.connectionById.keys()].length, 500);
+assert.ok(atlasB.pages.some(page => page.basis === "neutral-chunk"), "fixture B has a real ungrouped page");
+assert.ok(atlasB.pages.flatMap(page => page.boundaryReferences).length > 0, "fixture B has boundary references");
+console.log(`ATLAS-001 G4.1 independent-xlsx-fixture: PASS (${mappedB.source.resources.length} resources, ${mappedB.source.connections.length} links, ${atlasB.pages.length} pages, sha256=${shaB})`);
 rmSync(temp, { recursive: true, force: true });
