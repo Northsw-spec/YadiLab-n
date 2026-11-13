@@ -1295,6 +1295,21 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       });
     return () => { cancelled = true; };
   }, [atlasPageProjection?.sourceIdentity, atlasPageProjection?.page.id, atlasPageView, atlasTopologyCanvas, projectGeneration, topologyViewMode, topologyViewportState.width]);
+  // Do not present pre-ELK fallback cards/edge stubs as a connected Atlas
+  // graph. The layout must belong to the current page AND viewport bucket.
+  // Pending and stale geometry remain measurable for React Flow, but hidden
+  // until the exact reviewed route and its attachment handles are ready.
+  const expectedAtlasLayoutKey = atlasPageProjection ? createTopologyRequestKey({
+    sourceHash: `${projectGeneration}:${atlasPageProjection.sourceIdentity}:${atlasPageProjection.page.id}`,
+    scope: "overview", page: 1,
+    viewportBucket: topologyViewportBucket(topologyViewportState.width || 0),
+    configVersion: "atlas-001-elk-v1",
+  }) : null;
+  const atlasRenderReady = Boolean(atlasPageProjection && atlasLayout &&
+    atlasLayout.requestKey === expectedAtlasLayoutKey &&
+    atlasLayout.quality?.hardGate === "PASS" &&
+    atlasLayout.projection.nodes.filter((node) => node.type === "resource").length === atlasPageProjection.resources.length &&
+    atlasLayout.projection.edges.length === atlasPageProjection.connections.length);
   const activeAtlasCanvas = atlasLayout?.projection ?? atlasTopologyCanvas;
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
@@ -2588,6 +2603,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-edge-count": String(baseFlow.edges.length),
       ...(atlasPageProjection ? {
         "data-atlas-activation-mode": "BOUNDED_SOURCE_PAGE",
+        "data-atlas-render-ready": atlasRenderReady ? "true" : "false",
         "data-atlas-global-builder-layout": "NOT_RUN",
         "data-atlas-active-page": atlasPageProjection.page.id,
         "data-atlas-page-count": String(atlasPageRows.length),
