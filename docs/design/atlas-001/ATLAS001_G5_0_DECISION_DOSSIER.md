@@ -111,6 +111,14 @@ The physical qualification and negative suite are wired into the existing
 `browser-regressions / compiled-chromium` job after installing the declared
 renderer packages. No fourth workflow was added.
 
+The first strict GitHub-hosted verification of this hardening change is run
+`43458131651` on the exact PR head `bef457ac6eddd7e22371429d1bbcd0b67808c7fa`.
+Its browser job is
+[131997626109](https://github.com/Northsw-spec/YadiLab-n/actions/runs/43458131651/job/131997626109),
+and the uploaded artifact is `yadilab-chromium-evidence` (containing
+`atlas001-g5-0-evidence.json`). The renderer step itself is an explicit named
+step in that job; the full job and the fail-closed required gate are green.
+
 ## D. Source-integrity matrix
 
 | Concern | Current evidence | G5.0 result |
@@ -193,15 +201,15 @@ Required G5.1 tests (all must be negative-tested as well as positive-tested):
 | Gate | Status | Evidence / limitation |
 |---|---|---|
 | `FORMAT_SELECTED` | **PASS** | DOCX selected; no third format/PDF path |
-| `PHYSICAL_PAGE_COUNT` | **PASS (local; CI evidence required)** | Both synthetic controls render to exactly 500 pages; strict GitHub evidence is required on final HEAD |
-| `PAGE_ORDER` | **PASS (local; CI evidence required)** | All 500 markers and six neighboring pages are checked from rendered PDF text |
-| `DECLARATION_PAGE_LOCATION` | **PASS (local; CI evidence required)** | Control-B pages 101/251/401 are independently checked, including neighbors |
+| `PHYSICAL_PAGE_COUNT` | **PASS** | Both controls render to exactly 500 pages in the accepted profile; strict GitHub run `43458131651` passed |
+| `PAGE_ORDER` | **PASS** | All 500 markers and six neighboring pages are checked from rendered PDF text in the GitHub job |
+| `DECLARATION_PAGE_LOCATION` | **PASS** | Control-B pages 101/251/401 are independently checked, including neighbors, in the GitHub job |
 | `SOURCE_STRUCTURE` | **PASS** | Safe structural preview, exact table/cell counts and fail-closed barriers |
 | `PROVENANCE` | **PASS with G5.1 page-ref gap** | SHA, XML locators and renderer evidence are preserved; physical-page refs are not yet product output |
 | `NETWORK_FACT_EXTRACTION` | **REVIEW_REQUIRED** | Explicit reviewed candidate exists; no inference and no live activation |
 | `ATLAS_COMPATIBILITY` | **PENDING_G5.1** | Existing Atlas projection is ready for canonical input; DOCX→Atlas integration is not implemented |
-| `NEGATIVE_TESTS` | **PASS (local; CI evidence required)** | Dedicated fail-closed regression suite covers source, renderer, PDF and pagination drift |
-| `GITHUB_CI_EVIDENCE` | **PENDING** | Must be proven by the final PR run's explicit job logs and uploaded evidence artifact |
+| `NEGATIVE_TESTS` | **PASS** | Dedicated fail-closed regression suite covers source, renderer, PDF and pagination drift; GitHub renderer step passed |
+| `GITHUB_CI_EVIDENCE` | **PASS** | Run `43458131651`; source job `131997625597`, browser job `131997626109`, gate job `132002356179` |
 | `G5.1_READY` | **CONDITIONAL / NO-GO for implementation** | Contract and tests are specified, but implementation requires a new explicit review |
 
 ## Verification commands run
@@ -223,6 +231,6 @@ node tests/enterprise-import/run_odt_tables_p1_tests.mjs
 
 The local qualification run uses the managed Debian renderer with an explicit
 unaccepted-profile override, so it is evidence of functional checks but not a
-renderer-profile PASS. The strict GitHub run is authoritative for
+renderer-profile PASS. The strict GitHub run above is authoritative for
 `RENDERER_FINGERPRINT`, `GITHUB_CI_EVIDENCE` and final acceptance. No product
 import path, merge or visual approval was changed by G5.0.
