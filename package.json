@@ -16,6 +16,7 @@
     "test:project090-hierarchy": "rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_project090_hierarchy_tests.mjs",
     "test:project093-contract": "node tests/browser/run_project093_contract_tests.mjs",
     "test:project094-engine": "node tests/browser/run_project094_topology_engine_tests.mjs",
+    "test:atlas001": "node tests/browser/run_atlas001_g1_red_tests.mjs",
     "test:av001-nested-elk": "node tests/browser/run_av001_nested_elk_tests.mjs",
     "test:project091-layout": "rm -rf dist-browser-test && tsc -p tests/tsconfig.browser.json && node tests/browser/run_project091_layout_tests.mjs",
     "test:project091-edge-renderer": "node tests/browser/run_project091_edge_renderer_tests.mjs",

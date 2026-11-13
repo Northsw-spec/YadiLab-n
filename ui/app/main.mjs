@@ -321,6 +321,7 @@ import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.t
 import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
 import { createTopologyRequestKey, layoutHierarchicalTopologyView, topologyViewportBucket, TOPOLOGY_LAYOUT_CONFIG_VERSION } from "../src/canvas/topology-elk-adapter.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
+import { atlasPageForResource, buildAtlasIndex, projectAtlasPage } from "../src/canvas/atlas-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 import { anchorOrthogonalRoute, orthogonalEdgePath } from "./semantic-edge-routing.mjs";
 import { iconDescriptor, iconRegistry } from "../src/canvas/icon-registry.ts";
@@ -331,6 +332,7 @@ const TOPOLOGY_VIEW_MODES = Object.freeze({
   NORMAL: "normal",
   CONNECTED_EXPLORER: "connected-explorer",
   INVENTORY_SUMMARY: "inventory-summary",
+  ATLAS: "atlas",
 });
 const packageIO = new SafePackageIO(
   new ZipJsArchiveBackend(),
@@ -453,13 +455,14 @@ function ResourceNode({ data, selected }) {
   const hierarchyVisual = data.hierarchyVisual === true;
   const connectionState = hierarchyVisual ? (data.connectionState ?? "SOURCE_ISOLATED") : undefined;
   const boundaryCount = Number(data.boundaryConnectionCount ?? 0);
+  const atlasBoundaryReferences = Array.isArray(data.atlasBoundaryReferences) ? data.atlasBoundaryReferences : [];
   const visibleConnectionCount = Number(data.visibleConnectionCount ?? 0);
   const omittedConnectionCount = Number(data.omittedConnectionCount ?? 0);
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
   const semanticBadges = Array.isArray(data.semanticBadges) ? data.semanticBadges : [];
   const icon = iconDescriptor(data.iconKey ?? "unknown-resource");
-  return e("div", { className: `resource-node device-${family}${hierarchyVisual ? ` topology-connection-${connectionState.toLowerCase()}` : ""}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family, ...(hierarchyVisual ? { "data-topology-connection-state": connectionState, "data-topology-visible-links": String(visibleConnectionCount), "data-topology-boundary-links": String(boundaryCount), "data-topology-omitted-links": String(omittedConnectionCount), ...(data.presentationGroupId ? { "data-topology-presentation-group": data.presentationGroupId } : {}) } : {}) },
+  return e("div", { className: `resource-node device-${family}${hierarchyVisual ? ` topology-connection-${connectionState.toLowerCase()}` : ""}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family, ...(hierarchyVisual ? { "data-topology-connection-state": connectionState, "data-topology-visible-links": String(visibleConnectionCount), "data-topology-boundary-links": String(boundaryCount), "data-topology-omitted-links": String(omittedConnectionCount), ...(data.presentationGroupId ? { "data-topology-presentation-group": data.presentationGroupId } : {}) } : {}), ...(data.atlasPageId ? { "data-atlas-page-id": data.atlasPageId, "data-atlas-boundary-count": String(atlasBoundaryReferences.length) } : {}) },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
       e("div", { className: "device-icon-stack" }, e(SemanticIcon, { iconKey: icon.key, label: data.iconAccessibleName ?? icon.accessibleName }), e(DeviceChassis, { family, active })),
@@ -482,6 +485,7 @@ function ResourceNode({ data, selected }) {
           ? `${omittedConnectionCount} links omitted — view incomplete`
           : "Source isolated") : null,
     hierarchyVisual && boundaryCount > 0 ? e("span", { className: "topology-boundary-badge", "data-topology-boundary-indicator": "true" }, `${boundaryCount} boundary link${boundaryCount === 1 ? "" : "s"}`) : null,
+    data.atlasPageId && atlasBoundaryReferences.length > 0 ? e("span", { className: "atlas-boundary-badge", "data-atlas-boundary-indicator": "true" }, `${atlasBoundaryReferences.length} fortsättningslänk${atlasBoundaryReferences.length === 1 ? "" : "ar"}`) : null,
     data.journeyState && data.journeyState !== "idle" ? e("span", { className: `journey-node-badge ${data.journeyState}`, "aria-hidden": "true" }, data.journeyState === "current" ? "●" : data.journeyState === "source" ? "▶" : data.journeyState === "destination" ? "◎" : data.journeyState === "uncertain" ? "?" : "●") : null,
   );
 }
@@ -772,11 +776,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
   const [topologyHierarchyScope, setTopologyHierarchyScope] = useState(null);
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
+  const [atlasPageId, setAtlasPageId] = useState(null);
+  const [atlasPageHistory, setAtlasPageHistory] = useState([]);
   const [topologyOverviewReadyIdentity, setTopologyOverviewReadyIdentity] = useState("");
   const [topologyCameraMode, setTopologyCameraMode] = useState("read");
   const topologyFocusRequestRef = useRef(0);
   const topologyLayoutRequestRef = useRef(0);
   const [hierarchicalTopologyLayout, setHierarchicalTopologyLayout] = useState(null);
+  const [atlasLayout, setAtlasLayout] = useState(null);
+  const atlasLayoutRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyGroup, setTopologyGroup] = useState(null);
   const [topologyGroupQuery, setTopologyGroupQuery] = useState("");
@@ -797,16 +805,38 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const reducedMotion = useMemo(() => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true, []);
   const journeyKey = journey ? `${journey.scenarioHash}:${journey.stateRevision}:${journey.playbackIdentity ?? journey.flowId}` : "";
   const canonicalNetwork = useMemo(() => workspace.mode === "builder"
-    ? { resources: workspace.source.resources, connections: workspace.source.connections }
-    : { resources: workspace.scenario.resources, connections: workspace.scenario.connections }, [workspace.mode, workspace.mode === "builder" ? workspace.source : workspace.scenario]);
+    ? { resources: workspace.source.resources, connections: workspace.source.connections, zones: workspace.source.zones }
+    : { resources: workspace.scenario.resources, connections: workspace.scenario.connections, zones: workspace.scenario.zones }, [workspace.mode, workspace.mode === "builder" ? workspace.source : workspace.scenario]);
   const canonicalResourceById = useMemo(() => new Map(canonicalNetwork.resources.map((resource) => [resource.id, resource])), [canonicalNetwork]);
   const canonicalConnectionById = useMemo(() => new Map(canonicalNetwork.connections.map((connection) => [connection.id, connection])), [canonicalNetwork]);
   const sourceIdentity = workspace.mode === "builder" ? `${workspace.sourceRevision}:${workspace.source.scenarioId}` : workspace.scenario.sourceHash;
+  const atlasIndex = useMemo(() => {
+    try {
+      return buildAtlasIndex({
+        resources: canonicalNetwork.resources,
+        connections: canonicalNetwork.connections,
+        zones: canonicalNetwork.zones,
+        sourceIdentity,
+      }, { version: "atlas-001-v1" });
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [canonicalNetwork, sourceIdentity]);
+  const validAtlasIndex = atlasIndex && !atlasIndex.error ? atlasIndex : null;
+  const firstAtlasPageId = validAtlasIndex?.pages[0]?.id ?? null;
+  const atlasPage = validAtlasIndex?.pageById.get(atlasPageId ?? firstAtlasPageId ?? "") ?? null;
+  const atlasPageProjection = useMemo(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !validAtlasIndex || !atlasPage) return null;
+    try { return projectAtlasPage(canonicalNetwork, validAtlasIndex, atlasPage.id); }
+    catch { return null; }
+  }, [canonicalNetwork, topologyViewMode, validAtlasIndex, atlasPage]);
   useEffect(() => {
     const defaultMode = canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET
       ? TOPOLOGY_VIEW_MODES.NORMAL
       : TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER;
     setTopologyViewMode(defaultMode);
+    setAtlasPageId(null);
+    setAtlasPageHistory([]);
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
@@ -1149,19 +1179,123 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const boundedTopologyGroupPage = Math.min(Math.max(1, topologyGroupPage), topologyGroupPageCount);
   const topologyGroupPageItems = filteredTopologyGroupMembers.slice((boundedTopologyGroupPage - 1) * 50, boundedTopologyGroupPage * 50);
   // An edited 5000 model with stale focus must never fall back to unbounded layout.
-  const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
-    workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
+  const vm = useMemo(() => validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
+    workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace),
+    [workspace, validThousandFocus, fiveThousandWorkspace, tenThousandGuard]);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
   const normalTopologyCanvas = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
     vm?.canvas && !hasManualLayoutOverrides
     ? compactNormalTopologyProjection(vm.canvas)
     : vm?.canvas;
+  const atlasTopologyCanvas = useMemo(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !atlasPageProjection || !vm?.canvas) return null;
+    const resourceIds = new Set(atlasPageProjection.page.resourceIds);
+    const included = new Set(resourceIds);
+    // Keep the documented zone/group containers that own an active page
+    // resource.  No new container or network object is fabricated here.
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const node of vm.canvas.nodes) {
+        if (node.type !== "zone" || included.has(node.id)) continue;
+        if (vm.canvas.nodes.some((child) => child.parentId === node.id && included.has(child.id))) {
+          included.add(node.id);
+          changed = true;
+        }
+      }
+    }
+    const internalIds = new Set(atlasPageProjection.page.internalConnectionIds);
+    return {
+      ...vm.canvas,
+      nodes: vm.canvas.nodes
+        .filter((node) => included.has(node.id))
+        .map((node) => node.type === "resource" ? {
+          ...node,
+          data: {
+            ...node.data,
+            atlasPageId: atlasPageProjection.page.id,
+            atlasPageBasis: atlasPageProjection.page.basis,
+            atlasBoundaryReferences: atlasPageProjection.boundaryReferences.filter((reference) => reference.localResourceId === node.id),
+          },
+        } : node),
+      edges: vm.canvas.edges.filter((edge) => internalIds.has(edge.id) && included.has(edge.source) && included.has(edge.target)),
+    };
+  }, [atlasPageProjection, topologyViewMode, vm]);
+  const atlasPageView = useMemo(() => {
+    if (!atlasTopologyCanvas || !atlasPageProjection) return null;
+    const directMembers = new Map();
+    for (const node of atlasTopologyCanvas.nodes) {
+      if (node.type !== "resource" || !node.parentId) continue;
+      const members = directMembers.get(node.parentId) ?? [];
+      members.push(node.id);
+      directMembers.set(node.parentId, members);
+    }
+    const projection = {
+      ...atlasTopologyCanvas,
+      nodes: atlasTopologyCanvas.nodes.map((node) => node.type === "zone" ? {
+        ...node,
+        data: {
+          ...node.data,
+          presentationOnly: true,
+          navigationGroupKind: "declared-zone",
+          memberIds: (directMembers.get(node.id) ?? []).slice().sort((left, right) => left.localeCompare(right, "en")),
+        },
+      } : node),
+    };
+    return {
+      kind: "overview",
+      page: 1,
+      pageCount: 1,
+      nodeIds: atlasPageProjection.page.resourceIds,
+      edgeIds: atlasPageProjection.page.internalConnectionIds,
+      hiddenNodeCount: 0,
+      hiddenConnectionCount: atlasPageProjection.page.boundaryConnectionIds.length + atlasPageProjection.page.externalConnectionIds.length,
+      hiddenNeighborCount: 0,
+      hiddenBoundaryConnectionCount: atlasPageProjection.page.boundaryConnectionIds.length,
+      visibleConnectionCount: atlasPageProjection.page.internalConnectionIds.length,
+      projection,
+      navigationGroups: atlasTopologyCanvas.nodes.filter((node) => node.type === "zone").map((node) => ({ id: node.id, label: node.data.label, memberIds: directMembers.get(node.id) ?? [], kind: "declared-zone", presentationOnly: true, level: 0 })),
+      partition: { internal: atlasPageProjection.connections, boundary: atlasPageProjection.page.boundaryConnectionIds.map((id) => validAtlasIndex.connectionById.get(id)).filter(Boolean), external: atlasPageProjection.page.externalConnectionIds.map((id) => validAtlasIndex.connectionById.get(id)).filter(Boolean) },
+      incompleteView: atlasPageProjection.page.renderMode === "link-list",
+      layoutStrategy: "elk.layered",
+      roleLabel: `ATLAS · ${atlasPageProjection.page.label}`,
+    };
+  }, [atlasPageProjection, atlasTopologyCanvas, validAtlasIndex]);
+  useEffect(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !atlasPageView) {
+      atlasLayoutRequestRef.current += 1;
+      setAtlasLayout(null);
+      return undefined;
+    }
+    const request = {
+      sourceHash: `${projectGeneration}:${atlasPageProjection?.sourceIdentity ?? "unknown-source"}:${atlasPageProjection?.page.id ?? "unknown-page"}`,
+      scope: "overview",
+      page: 1,
+      viewportBucket: topologyViewportBucket(topologyViewportState.width || 0),
+      configVersion: "atlas-001-elk-v1",
+    };
+    const token = ++atlasLayoutRequestRef.current;
+    const requestKey = createTopologyRequestKey(request);
+    setAtlasLayout((current) => current?.requestKey === requestKey ? current : null);
+    let cancelled = false;
+    void layoutHierarchicalTopologyView(atlasPageView, request)
+      .then((result) => {
+        if (cancelled || token !== atlasLayoutRequestRef.current || result.requestKey !== requestKey) return;
+        setAtlasLayout(result);
+      })
+      .catch((error) => {
+        if (cancelled || token !== atlasLayoutRequestRef.current) return;
+        setAtlasLayout({ requestKey, engine: "elk.layered", projection: atlasTopologyCanvas, quality: null, diagnostics: [{ severity: "error", code: "ATLAS_LAYOUT_ELK_FAILED", message: error instanceof Error ? error.message : String(error) }] });
+      });
+    return () => { cancelled = true; };
+  }, [atlasPageProjection?.sourceIdentity, atlasPageProjection?.page.id, atlasPageView, atlasTopologyCanvas, projectGeneration, topologyViewMode, topologyViewportState.width]);
+  const activeAtlasCanvas = atlasLayout?.projection ?? atlasTopologyCanvas;
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
     ? topologyFocusProjection
     : null;
-  const projection = topologyOverview ?? hierarchicalTopologyView?.projection ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
+  const projection = activeAtlasCanvas ?? topologyOverview ?? hierarchicalTopologyView?.projection ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? normalTopologyCanvas;
@@ -1209,6 +1343,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
     : validFiveThousandFocus
       ? `scale001-p3c2:${validFiveThousandFocus.sourceModelHash}:${validFiveThousandFocus.page}`
+      : atlasPageProjection
+        ? `atlas-001:${atlasPageProjection.sourceIdentity}:${atlasPageProjection.page.id}:${atlasPageProjection.page.internalConnectionIds.join(",")}:${atlasLayout?.requestKey ?? "pending"}`
       : "regular-topology");
   const baseFlow = useMemo(() => visibleProjection ? toReactFlowProjection(visibleProjection) : { nodes: [], edges: [] }, [visibleProjection]);
   void topologyGeometryRevision;
@@ -1653,7 +1789,43 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, {}));
     else setWorkspace(setRuntimeSelection(active, []));
   };
+  const openAtlasPage = (pageId, focusResourceId = null) => {
+    if (!validAtlasIndex) return;
+    const page = validAtlasIndex.pageById.get(pageId);
+    if (!page) return;
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(page.id);
+    setAtlasPageHistory((history) => history.at(-1)?.pageId === page.id ? history : [...history, { pageId: page.id, label: page.label }]);
+    setTopologyFocusRoot(null);
+    setTopologyFocusPage(1);
+    setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
+    topologyFocusRequestRef.current += 1;
+    setTopologyGroup(null);
+    setTopologyViewHistory((history) => history.at(-1)?.kind === "atlas" && history.at(-1)?.pageId === page.id
+      ? history
+      : [...history, { kind: "atlas", pageId: page.id, label: `Atlas · ${page.label}` }]);
+    setTopologyContextMenu(null);
+    setTopologyContextDetails(null);
+    globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: 0.12 }));
+    if (focusResourceId && page.resourceIds.includes(focusResourceId)) {
+      globalThis.requestAnimationFrame?.(() => {
+        const target = baseFlow.nodes.find((node) => node.id === focusResourceId);
+        if (target) flowApi.current?.setCenter?.(target.position.x + (target.width ?? 160) / 2, target.position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 220 });
+      });
+    }
+  };
   const navigateOverview = () => {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS && firstAtlasPageId) {
+      const first = validAtlasIndex?.pageById.get(firstAtlasPageId);
+      setAtlasPageId(firstAtlasPageId);
+      setAtlasPageHistory(first ? [{ pageId: first.id, label: first.label }] : []);
+      setTopologyViewHistory(first ? [{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }] : [{ kind: "overview", label: "Nätverksöversikt" }]);
+      setTopologyContextMenu(null);
+      setTopologyContextDetails(null);
+      globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 220, padding: 0.12 }));
+      return;
+    }
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
@@ -1698,14 +1870,26 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyGroup(null);
     setTopologyGroupQuery("");
     setTopologyGroupPage(1);
+    if (mode === TOPOLOGY_VIEW_MODES.ATLAS) {
+      const first = firstAtlasPageId ? validAtlasIndex?.pageById.get(firstAtlasPageId) : null;
+      setAtlasPageId(first?.id ?? null);
+      setAtlasPageHistory(first ? [{ pageId: first.id, label: first.label }] : []);
+    } else {
+      setAtlasPageId(null);
+      setAtlasPageHistory([]);
+    }
     setTopologyContextMenu(null);
     setTopologyContextDetails(null);
     const label = mode === TOPOLOGY_VIEW_MODES.NORMAL
       ? "NORMAL TOPOLOGY"
       : mode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
         ? "CONNECTED EXPLORER"
-        : "INVENTORY SUMMARY";
-    setTopologyViewHistory([{ kind: "overview", label }]);
+        : mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY
+          ? "INVENTORY SUMMARY"
+          : `Atlas · ${firstAtlasPageId ? validAtlasIndex?.pageById.get(firstAtlasPageId)?.label ?? firstAtlasPageId : "ingen sida"}`;
+    setTopologyViewHistory(mode === TOPOLOGY_VIEW_MODES.ATLAS && firstAtlasPageId
+      ? [{ kind: "atlas", pageId: firstAtlasPageId, label }]
+      : [{ kind: "overview", label }]);
     globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY ? 0.16 : 0.12 }));
   };
   const changeTopologyCameraMode = (mode) => {
@@ -1736,7 +1920,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
-    if (tenThousandHierarchyIndex) {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS && validAtlasIndex) {
+      const page = atlasPageForResource(validAtlasIndex, nodeId);
+      if (page) openAtlasPage(page.id, nodeId);
+    } else if (tenThousandHierarchyIndex) {
       const role = tenThousandHierarchyIndex.roleById.get(nodeId) ?? "device";
       const hierarchyLabel = role === "distribution" ? `Distribution branch: ${label}` : role === "access" ? `Access network: ${label}` : `Connected branch: ${label}`;
       setTopologyHierarchyScope({ rootId: nodeId });
@@ -1781,6 +1968,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     return () => document.removeEventListener("dblclick", onNativeDoubleClick, true);
   }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById, topologyFocusRoot]);
   const goTopologyBack = () => {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS) {
+      const previous = atlasPageHistory.at(-2);
+      if (!previous) return;
+      setAtlasPageHistory((history) => history.slice(0, -1));
+      setAtlasPageId(previous.pageId);
+      setTopologyViewHistory((history) => history.length > 1 ? history.slice(0, -1) : history);
+      setTopologyContextMenu(null);
+      return;
+    }
     setTopologyViewHistory((history) => {
       if (history.length <= 1) return history;
       const next = history.slice(0, -1);
@@ -1892,7 +2088,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("button", { type: "button", "data-topology-group-page": "next", disabled: boundedTopologyGroupPage >= topologyGroupPageCount, onClick: () => setTopologyGroupPage((page) => Math.min(topologyGroupPageCount, page + 1)) }, "Nästa"),
     ),
   ) : null;
-  const activeTopologyStats = hierarchicalTopologyView
+  const atlasBoundaryReferences = atlasPageProjection?.boundaryReferences ?? [];
+  const atlasPageRows = validAtlasIndex?.pages ?? [];
+  const activeTopologyStats = atlasPageProjection
+    ? {
+      devices: atlasPageProjection.resources.length,
+      links: atlasPageProjection.connections.length,
+      groups: baseFlow.nodes.filter((node) => node.type === "zone").length,
+      hiddenLinks: atlasPageProjection.page.boundaryConnectionIds.length + atlasPageProjection.page.externalConnectionIds.length,
+      canonical: false,
+    }
+    : hierarchicalTopologyView
     ? {
       devices: hierarchicalTopologyView.nodeIds.length,
       links: hierarchicalTopologyView.visibleConnectionCount,
@@ -1921,7 +2127,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       ? "Verkliga resurser, zoner och deklarerade länkar · redigerbar Builder-yta"
       : topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
         ? "Anslutningsbaserad, bunden delgraf · sök, fokusera och expandera verkliga grannar"
-        : "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar")),
+        : topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY
+          ? "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar"
+          : "ATLAS · aktiv sida med interna deklarerade länkar och klickbara fortsättningsreferenser")),
       e("span", { className: "topology-truth-badge" }, activeTopologyStats.canonical ? "CANONICAL INVENTORY" : "VISIBLE SOURCE VIEW"),
     ),
     e("div", { className: "topology-stat-strip", "data-topology-active-stats": "true" },
@@ -1955,6 +2163,43 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           )),
       ),
     ),
+    atlasPageProjection ? e("section", {
+      className: "atlas-page-status",
+      "data-atlas-page": atlasPageProjection.page.id,
+      "data-atlas-page-basis": atlasPageProjection.page.basis,
+      "data-atlas-render-mode": atlasPageProjection.page.renderMode,
+      "data-atlas-page-count": String(atlasPageRows.length),
+    },
+      e("strong", null, `ATLAS · ${atlasPageProjection.page.label}`),
+      e("p", null, `${atlasPageProjection.resources.length} dokumenterade enheter · ${atlasPageProjection.connections.length} interna deklarerade länkar`),
+      e("small", null, `${atlasPageProjection.page.boundaryConnectionIds.length} boundary-länkar · ${atlasPageProjection.page.externalConnectionIds.length} externa länkar i denna sida; inget är tyst borttaget.`),
+      atlasPageProjection.page.renderMode === "link-list" ? e("strong", { className: "topology-hierarchy-incomplete", "data-atlas-link-list": "true" }, atlasPageProjection.page.blockedReason) : null,
+      atlasLayout?.quality ? e("small", { "data-atlas-layout-quality": atlasLayout.quality.hardGate, "data-atlas-layout-winner": atlasLayout.quality.winnerId }, `ELK bake-off: ${atlasLayout.quality.hardGate} · ${atlasLayout.quality.winnerId}`) : e("small", { "data-atlas-layout-status": "PENDING" }, "ELK-layout: väntar på identitetsmatchat svar"),
+      atlasLayout?.diagnostics?.length ? e("small", { "data-atlas-layout-diagnostic": "true" }, atlasLayout.diagnostics[0].message) : null,
+      e("div", { className: "atlas-page-list", "data-atlas-page-list": "true", role: "listbox", "aria-label": "ATLAS-sidor" },
+        ...atlasPageRows.map((page) => e("button", {
+          key: page.id,
+          type: "button",
+          role: "option",
+          "aria-selected": page.id === atlasPageProjection.page.id,
+          "data-atlas-page-option": page.id,
+          onClick: () => openAtlasPage(page.id),
+        }, `${page.label} · ${page.resourceIds.length} enheter`)),
+      ),
+      e("div", { className: "atlas-boundary-list", "data-atlas-boundary-list": "true" },
+        e("strong", null, "Fortsättningsreferenser"),
+        atlasBoundaryReferences.length
+          ? atlasBoundaryReferences.map((reference) => e("button", {
+            key: `${reference.originalConnectionId}:${reference.localResourceId}:${reference.localPortId ?? ""}`,
+            type: "button",
+            className: "atlas-boundary-button",
+            "data-atlas-boundary-connection": reference.originalConnectionId,
+            "data-atlas-destination-page": reference.destinationPageId,
+            onClick: () => openAtlasPage(reference.destinationPageId, reference.remoteResourceId),
+          }, `${reference.originalConnectionId} · ${reference.remoteResourceId}${reference.remotePortId ? `:${reference.remotePortId}` : ""}`))
+          : e("small", null, "Inga boundary-länkar på denna sida."),
+      ),
+    ) : null,
     hierarchicalTopologyView ? e("section", {
       className: "topology-hierarchy-status",
       "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
@@ -2007,6 +2252,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           [TOPOLOGY_VIEW_MODES.NORMAL, "NORMAL TOPOLOGY"],
           [TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER, "CONNECTED EXPLORER"],
           [TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY, "INVENTORY SUMMARY"],
+          [TOPOLOGY_VIEW_MODES.ATLAS, "ATLAS PAGES"],
         ].map(([mode, label]) => e("button", {
           key: mode,
           type: "button",
@@ -2025,7 +2271,20 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           index > 0 ? e("span", { "aria-hidden": "true" }, " › ") : null,
           e("button", { type: "button", "data-topology-breadcrumb": item.kind, onClick: () => {
             setTopologyViewHistory((history) => history.slice(0, index + 1));
-            if (item.kind === "group") {
+            if (item.kind === "atlas") {
+              if (item.pageId) {
+                setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+                setAtlasPageId(item.pageId);
+                setAtlasPageHistory((history) => {
+                  const position = history.findIndex((entry) => entry.pageId === item.pageId);
+                  return position >= 0 ? history.slice(0, position + 1) : [...history, { pageId: item.pageId, label: item.label }];
+                });
+              }
+              setTopologyFocusRoot(null);
+              setTopologyFocusPage(1);
+              setTopologyHierarchyScope(null);
+              setTopologyGroup(null);
+            } else if (item.kind === "group") {
               const group = findTopologyGroup(item.groupId);
               if (group) setTopologyGroup({ id: group.id, label: group.label, role: group.role, members: [...group.members] });
               setTopologyGroupQuery("");
@@ -2277,6 +2536,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
+      ...(atlasPageProjection ? {
+        "data-atlas-active-page": atlasPageProjection.page.id,
+        "data-atlas-page-count": String(atlasPageRows.length),
+        "data-atlas-page-node-count": String(atlasPageProjection.resources.length),
+        "data-atlas-page-link-count": String(atlasPageProjection.connections.length),
+        "data-atlas-boundary-count": String(atlasBoundaryReferences.length),
+        "data-atlas-boundary-connection-ids": atlasPageProjection.page.boundaryConnectionIds.join(","),
+        ...(atlasLayout?.quality ? { "data-atlas-layout-quality": atlasLayout.quality.hardGate, "data-atlas-layout-winner": atlasLayout.quality.winnerId, "data-atlas-layout-request-key": atlasLayout.requestKey } : {}),
+      } : {}),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-projection-edge-ids": (visibleProjection?.edges ?? []).map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
       "data-topology-react-flow-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
