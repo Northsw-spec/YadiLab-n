@@ -14,7 +14,7 @@ from run_ic010_p2_shared_xml_real_browser import exported_source, require, setup
 ROOT = Path(__file__).resolve().parents[2]
 MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 FIXTURES = {
-    "normal": (ROOT / "tests/fixtures/import/atlas001-g4-2-normal-10.xlsx", "dccddcf8c675bf86192865137a8fcf754b27299d38645c39a10edc48677c1a", 10, 9),
+    "normal": (ROOT / "tests/fixtures/import/atlas001-g4-2-normal-10.xlsx", "dccddcf8c675bf86192865137a8fcf754b27299d38645c39b9a10edc48677c1a", 10, 9),
     "bounded": (ROOT / "tests/fixtures/import/atlas001-g4-500.xlsx", "84a32fb149903e89488ec656d036622b5b81b7086c84b8352f24138273e48fde", 500, 499),
     "blocked": (ROOT / "tests/fixtures/import/atlas001-g4-2-blocked-1200.xlsx", "286fd2aaee26e80c426e8bd35bb8100fbc22d494190da7ed83f7550e8bee34d7", 1200, 1200),
 }
