@@ -37,6 +37,18 @@ def wait_for_final_layout(page, panel, expected_page: str) -> str:
     expect(panel).to_have_attribute("data-atlas-layout-quality-gate", "PASS", timeout=60000)
     expect(panel).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
     expect(panel.locator('.atlas-page-status [data-atlas-layout-status="PENDING"]')).to_have_count(0, timeout=30000)
+    # Boundary/page-list clicks may scroll a sidebar control into view.  The
+    # evidence must be measured in the real screen coordinate system with the
+    # topology panel restored to the initial READ context.
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_function(
+        """() => {
+          const panel = document.querySelector('.topology-panel');
+          const rect = panel?.getBoundingClientRect();
+          return Boolean(rect && rect.top >= 0 && rect.bottom <= window.innerHeight + 1);
+        }""",
+        timeout=5000,
+    )
     request_key = panel.get_attribute("data-atlas-layout-request-key") or ""
     source_identity = panel.get_attribute("data-atlas-layout-source-identity") or ""
     if not source_identity or expected_page not in request_key:
@@ -64,6 +76,13 @@ def rect_snapshot(page, panel):
 
 def assert_geometry(page, panel, resource_ids, parent_map, routes, viewport):
     panel_box, nodes = rect_snapshot(page, panel)
+    if not (
+        panel_box["x"] >= 0
+        and panel_box["y"] >= 0
+        and panel_box["x"] + panel_box["width"] <= viewport[0]
+        and panel_box["y"] + panel_box["height"] <= viewport[1]
+    ):
+        raise AssertionError(f"Topology panel is not wholly visible in screen coordinates: panel={panel_box!r}, viewport={viewport!r}")
     actual_resource_ids = sorted(node_id for node_id, value in nodes.items() if value["resource"])
     if actual_resource_ids != sorted(resource_ids):
         raise AssertionError(f"Rendered resource IDs differ: expected={sorted(resource_ids)!r}, actual={actual_resource_ids!r}")
@@ -79,6 +98,10 @@ def assert_geometry(page, panel, resource_ids, parent_map, routes, viewport):
             and root_rect["y"] >= panel_box["y"] + margin
             and root_rect["x"] + root_rect["width"] <= panel_box["x"] + panel_box["width"] - margin
             and root_rect["y"] + root_rect["height"] <= panel_box["y"] + panel_box["height"] - margin
+            and root_rect["x"] >= 0
+            and root_rect["y"] >= 0
+            and root_rect["x"] + root_rect["width"] <= viewport[0]
+            and root_rect["y"] + root_rect["height"] <= viewport[1]
         ):
             raise AssertionError(f"Focused Atlas resource {root_id} is outside the usable panel: root={root_rect!r}, panel={panel_box!r}")
 
