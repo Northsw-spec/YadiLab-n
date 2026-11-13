@@ -746,7 +746,7 @@ function pretty(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, getPendingDraftChanges, setWorkspace, setDiagnostics, journey, stateFocus, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
+function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, getPendingDraftChanges, setWorkspace, setDiagnostics, journey, stateFocus, openAtlasRequest = 0, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
   // ReactFlow may deliver an onSelectionChange/pane click or drag callback
   // from a render that predates an inspector Apply, New/Open, or source import.
   // Never publish the closed-over workspace: it may silently restore a stale
@@ -854,6 +854,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     setTopologyQuery("");
   }, [projectGeneration, getScenarioTransitionId(), sourceIdentity, canonicalNetwork.resources.length]);
+  useEffect(() => {
+    if (!openAtlasRequest || !validAtlasIndex) return;
+    const first = validAtlasIndex.pages[0];
+    if (!first) return;
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(first.id);
+    setAtlasPageHistory([{ pageId: first.id, label: first.label }]);
+    setTopologyViewHistory([{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }]);
+  }, [openAtlasRequest, validAtlasIndex?.pages?.length, sourceIdentity]);
   useEffect(() => {
     if (!topologyContextMenu) return undefined;
     const onKeyDown = (event) => { if (event.key === "Escape") setTopologyContextMenu(null); };
@@ -5710,7 +5719,7 @@ function formatNetworkImportDiagnostic(d) {
     (location ? " (" + location + ")" : "") + " – " + d.message;
 }
 
-function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
+function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewOfficeAtlas, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
   const fileAction = (label, accept, onChange, dataAttribute) => e("label",
     { className: "workspace-menu-action file-button" }, label,
     e("input", { type: "file", accept,
@@ -5802,6 +5811,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     { label: "Replay saved Ansible INI", searchTerms: "ansible ini replay", node: actionButton("Inspect saved Ansible INI references (read-only replay)", onInspectAnsibleIniReplay, { "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED" }) },
     { label: "Inspect Word DOCX", searchTerms: "docx structure office", node: actionButton("Inspect Word DOCX (structure only)", onInspectDocx, { "data-inspect-docx": "CONFIG_DOCUMENTED" }) },
     { label: "Review DOCX / ODT", searchTerms: "office builder review", node: actionButton("Review DOCX / ODT nodes into Builder", onReviewOfficeBuilder, { "data-review-office-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review DOCX / ODT into Atlas", searchTerms: "office atlas g5.1 canonical", node: actionButton("Review DOCX / ODT into canonical Builder and Atlas", onReviewOfficeAtlas, { "data-review-office-g5-1": "REVIEW_REQUIRED" }) },
     { label: "Inspect saved DOCX", searchTerms: "docx replay", node: actionButton("Inspect saved DOCX references (read-only)", onInspectDocxReplay, { "data-inspect-docx-replay": "CONFIG_DOCUMENTED" }) },
     { label: "Inspect OpenDocument ODT", searchTerms: "odt structure office", node: actionButton("Inspect OpenDocument ODT (structure only)", onInspectOdt, { "data-inspect-odt": "CONFIG_DOCUMENTED" }) },
     { label: "Inspect saved ODT", searchTerms: "odt replay", node: actionButton("Inspect saved ODT references (read-only)", onInspectOdtReplay, { "data-inspect-odt-replay": "CONFIG_DOCUMENTED" }) },
@@ -6058,6 +6068,8 @@ function App() {
   const [ansibleIniReplayOpen, setAnsibleIniReplayOpen] = useState(false);
   const [docxStructureOpen, setDocxStructureOpen] = useState(false);
   const [officeReviewedBuilderOpen, setOfficeReviewedBuilderOpen] = useState(false);
+  const [officeReviewedAtlasOpen, setOfficeReviewedAtlasOpen] = useState(false);
+  const [atlasOpenRequest, setAtlasOpenRequest] = useState(0);
   const [scaledOfficeBuilderOpen, setScaledOfficeBuilderOpen] = useState(false);
   const [scaledOfficeThousandOpen, setScaledOfficeThousandOpen] = useState(false);
   const [scaledOfficeFiveThousandOpen, setScaledOfficeFiveThousandOpen] = useState(false);
@@ -7283,6 +7295,7 @@ function App() {
   };
   const transitionRows = transitionMatrix ? filterResultTransitionMatrix(transitionMatrix, transitionFilter ? { transition: transitionFilter } : {}) : [];
   const topologyElement = e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+    openAtlasRequest: atlasOpenRequest,
     getPendingDraftChanges: hasPendingBuilderDrafts,
     projectGeneration: scenarioTransitionRef.current,
     getScenarioTransitionId: () => scenarioTransitionRef.current,
@@ -7309,7 +7322,7 @@ function App() {
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
     ),
     e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
-      onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+      onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewOfficeAtlas: () => setOfficeReviewedAtlasOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
     topologyElement,
     e(ProjectFileControls, {
       workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
@@ -8202,6 +8215,88 @@ function App() {
         }]);
         setWorkspace(layout.workspace);
         setScaledOfficeBuilderOpen(false);
+      },
+    }) : null,
+    officeReviewedAtlasOpen ? e(OfficeReviewedBuilderPanel, {
+      inspectFile: previewOfficeNodesFile,
+      manualRoleOptions: GRAPHML_MANUAL_ROLE_OPTIONS,
+      atlasActivation: true,
+      onClose: () => setOfficeReviewedAtlasOpen(false),
+      onConfirm: async (expected, decision, originalFile, isCurrentSelection) => {
+        const liveBefore = latestDrawioWorkspaceRef.current;
+        const workspaceIdentity = JSON.stringify(liveBefore);
+        const transitionIdentity = scenarioTransitionRef.current;
+        const blocked = code => { const error = new Error(code); error.code = code; throw error; };
+        const checkCurrent = () => {
+          if (scenarioTransitionRef.current !== transitionIdentity ||
+              JSON.stringify(latestDrawioWorkspaceRef.current) !== workspaceIdentity)
+            blocked("ATLAS_G5_1_WORKSPACE_CHANGED");
+          if (typeof isCurrentSelection !== "function" || !isCurrentSelection()) blocked("ATLAS_G5_1_STALE");
+        };
+        checkCurrent();
+        const mapped = await verifyOfficeCandidateFile(originalFile, expected, decision, isCurrentSelection);
+        checkCurrent();
+        const expectedConnections = Array.isArray(decision.linkRows)
+          ? decision.linkRows.length
+          : Array.isArray(decision.connections) ? decision.connections.length : 0;
+        if (mapped.status !== "READY_FOR_COMPILATION" || !mapped.source ||
+            mapped.source.connections.length !== expectedConnections || mapped.source.tests.length ||
+            mapped.canActivate !== false || mapped.engineVerified !== false)
+          blocked("ATLAS_G5_1_CANDIDATE_BLOCKED");
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(mapped.source), compilerOptions);
+        checkCurrent();
+        if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
+        return {
+          status: "STAGED",
+          sourceSha256: mapped.sourceSha256,
+          expected,
+          decision,
+          originalFile,
+          workspaceIdentity,
+          transitionIdentity,
+          isCurrentSelection,
+          summary: {
+            resources: mapped.source.resources.length,
+            connections: mapped.source.connections.length,
+            ports: mapped.source.connections.reduce((count, link) => count + (link.from?.port ? 1 : 0) + (link.to?.port ? 1 : 0), 0),
+            resourceIds: mapped.source.resources.map(resource => resource.id),
+            connectionDetails: mapped.source.connections.map(link => ({ from: link.from.resource, to: link.to.resource, fromPort: link.from.port, toPort: link.to.port })),
+          },
+        };
+      },
+      onApprove: async staged => {
+        const blocked = code => { const error = new Error(code); error.code = code; throw error; };
+        const isCurrent = () => scenarioTransitionRef.current === staged.transitionIdentity &&
+          JSON.stringify(latestDrawioWorkspaceRef.current) === staged.workspaceIdentity &&
+          typeof staged.isCurrentSelection === "function" && staged.isCurrentSelection();
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        const mapped = await verifyOfficeCandidateFile(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (mapped.sourceSha256 !== staged.sourceSha256) blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(mapped.source), compilerOptions);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
+        const layout = await autoLayoutBuilder(compiled, new ElkLayoutBackend());
+        if (!layout.ok) blocked("ATLAS_G5_1_LAYOUT_BLOCKED");
+        const refreshed = await verifyOfficeCandidateFile(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (JSON.stringify(refreshed.source) !== JSON.stringify(mapped.source) ||
+            JSON.stringify(refreshed.origins) !== JSON.stringify(mapped.origins) ||
+            JSON.stringify(refreshed.connectionOrigins ?? []) !== JSON.stringify(mapped.connectionOrigins ?? []) ||
+            JSON.stringify(refreshed.portOrigins ?? []) !== JSON.stringify(mapped.portOrigins ?? []) ||
+            JSON.stringify(refreshed.linkRowOrigins ?? []) !== JSON.stringify(mapped.linkRowOrigins ?? []) ||
+            refreshed.sourceSha256 !== mapped.sourceSha256)
+          blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        if (!projectGuardRef.current()) blocked("ATLAS_G5_1_REPLACEMENT_BLOCKED");
+        beginScenarioTransition();
+        setImportedProbeAutoOpen(false);
+        setDiagnostics([...layout.diagnostics, {
+          severity: "warning", code: "ATLAS_G5_1_CANONICAL_ACTIVATED",
+          message: `Reviewed DOCX source ${mapped.sourceSha256.slice(0, 12)}… compiled and activated as canonical Builder source. ${mapped.source.resources.length} resources, ${mapped.source.connections.length} explicit connections; no physical or Engine truth asserted.`,
+        }]);
+        setWorkspace(layout.workspace);
+        setOfficeReviewedAtlasOpen(false);
+        setAtlasOpenRequest(value => value + 1);
       },
     }) : null,
     officeReviewedBuilderOpen ? e(OfficeReviewedBuilderPanel, {

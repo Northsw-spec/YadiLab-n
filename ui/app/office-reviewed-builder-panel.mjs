@@ -9,11 +9,11 @@ const errCode=cause=>{
 const keyOf=n=>[n.tableOrdinal,n.rowOrdinal,n.nodeIdCellOrdinal].join(":");
 
 /** Separate from P1-P6 read-only/reference panels: only original cell ordinals. */
-export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onClose,manualRoleOptions=["resource.generic"]}){
-  const [result,setResult]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onApprove,onClose,manualRoleOptions=["resource.generic"],atlasActivation=false}){
+  const [result,setResult]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[staged,setStaged]=useState(null);
   const epoch=useRef(0),selectedFile=useRef(null),focus=useRef(null);
   const reset=()=>{
-    epoch.current++;selectedFile.current=null;setResult(null);setError("");setBusy(false);
+    epoch.current++;selectedFile.current=null;setResult(null);setError("");setBusy(false);setStaged(null);
   };
   const close=()=>{reset();onClose();};
   useEffect(()=>{
@@ -63,7 +63,7 @@ export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onClose,manual
             void choose(file);
           }})),
       error?e("p",{role:"alert","data-office-p1b-error":"BLOCKED"},error):null,
-      result?e(OfficeReviewedNodeChoices,{
+      staged ? e(OfficeReviewedAtlasApproval,{staged,busy,setBusy,setError,onApprove,onCancel:()=>setStaged(null)}) : result?e(OfficeReviewedNodeChoices,{
         key:result.preview.sourceSha256+":"+epoch.current,
         result,manualRoleOptions,busy,setBusy,setError,
         onConfirm:async decision=>{
@@ -72,12 +72,38 @@ export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onClose,manual
           if(!original || !isCurrent() || typeof onConfirm!=="function"){
             const error=new Error("IC040_P1B_STALE");error.code="IC040_P1B_STALE";throw error;
           }
-          return onConfirm(result,decision,original,isCurrent);
+          const outcome = await onConfirm(result,decision,original,isCurrent);
+          if (atlasActivation && outcome?.status === "STAGED") setStaged(outcome);
+          return outcome;
         }
-      }):e("p",{"data-office-p1b-empty":"true"},"No original selected. Existing Builder and Engine unchanged."),
+      }):staged ? e(OfficeReviewedAtlasApproval,{staged,busy,setBusy,setError,onApprove,onCancel:()=>setStaged(null)}) : e("p",{"data-office-p1b-empty":"true"},"No original selected. Existing Builder and Engine unchanged."),
       e("div",{className:"network-import-actions"},
         e("button",{type:"button","data-office-p1b-cancel":"true",onClick:close},
           "Close without Builder changes"))));
+}
+
+function OfficeReviewedAtlasApproval({staged,busy,setBusy,setError,onApprove,onCancel}){
+  const [approving,setApproving]=useState(false);
+  const approve=async()=>{
+    if(approving||busy||typeof onApprove!=="function")return;
+    setApproving(true);setBusy(true);setError("");
+    try{await onApprove(staged);}catch(cause){setError(errCode(cause));}
+    finally{setBusy(false);setApproving(false);}
+  };
+  const summary=staged.summary??{};
+  return e("section",{className:"network-import-preview","data-office-g5-1-summary":"REVIEW_REQUIRED"},
+    e("h3",null,"Reviewed DOCX → canonical Builder → Atlas"),
+    e("p",{"data-office-g5-1-source-sha":"true"},`Original SHA-256: ${staged.sourceSha256}`),
+    e("p",{"data-office-g5-1-summary-counts":"true"},
+      `Will create exactly ${summary.resources??0} modeled resources, ${summary.connections??0} explicit connections and ${summary.ports??0} reviewed ports. No zones, inferred links, physical verification or Engine/Runtime truth.`),
+    e("ul",{"data-office-g5-1-summary-details":"true"},
+      ...(summary.resourceIds??[]).map(id=>e("li",{key:id},`Resource: ${id}`)),
+      ...(summary.connectionDetails??[]).map((item,index)=>e("li",{key:`link-${index}`},`Link: ${item.from} (${item.fromPort??"no port"}) → ${item.to} (${item.toPort??"no port"})`))),
+    e("p",null,"The original will be reread and revalidated immediately before replacement. Cancel leaves the active Builder unchanged."),
+    e("button",{type:"button",disabled:approving||busy,"data-office-g5-1-approval":"true",onClick:()=>void approve()},
+      approving?"Revalidating and activating Atlas…":"Approve replacing current Builder source and open Atlas"),
+    e("button",{type:"button",disabled:approving||busy,"data-office-g5-1-cancel":"true",onClick:onCancel},"Back to review")
+  );
 }
 
 /** Metadata-only choices; no original text or source filenames rendered. */

@@ -210,6 +210,11 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project094_topology_engine_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project094-topology-engine"
+          # ATLAS-001 G5.1: reviewed original DOCX -> canonical Builder -> Atlas
+          # with real Chromium screenshots and an explicit replacement approval.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_g5_1_reviewed_docx_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-g5-1"
       - name: ATLAS-001 G5.0 evidence hardening
         shell: bash
         run: |
