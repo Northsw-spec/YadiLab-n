@@ -83,6 +83,7 @@ def stage(page):
 
 def new_page(browser, url):
     page = browser.new_page(accept_downloads=True, viewport={"width": 1366, "height": 768})
+    page.on("dialog", lambda dialog: dialog.accept())
     page.add_init_script("Object.defineProperty(window, 'showOpenFilePicker', { value: undefined });")
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     page.locator('[data-network-import-primary="true"]').wait_for(timeout=30000)
