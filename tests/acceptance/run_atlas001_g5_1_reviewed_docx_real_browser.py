@@ -17,6 +17,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
 
+# Every G5.1 page, including negatives and tampered-project reopen, is audited.
+G51_BROWSER_AUDIT = {"pageErrors": [], "externalRequests": []}
+
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_DIR = ROOT / "tests/fixtures/atlas001-g5.0"
 CONTROL_A = FIXTURE_DIR / "atlas001-g5-control-a-500-pages.docx"
@@ -86,6 +89,10 @@ def stage(page):
 
 def new_page(browser, url):
     page = browser.new_page(accept_downloads=True, viewport={"width": 1366, "height": 768})
+    origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+    page.on("pageerror", lambda exc: G51_BROWSER_AUDIT["pageErrors"].append(str(exc)))
+    page.on("request", lambda req: G51_BROWSER_AUDIT["externalRequests"].append(req.url)
+            if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
     page.on("dialog", lambda dialog: dialog.accept())
     page.add_init_script("Object.defineProperty(window, 'showOpenFilePicker', { value: undefined });")
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -398,17 +405,12 @@ def main():
     evidence = Path(args.evidence_dir)
     evidence.mkdir(parents=True, exist_ok=True)
     data_a, data_b = CONTROL_A.read_bytes(), CONTROL_B.read_bytes()
-    all_page_errors, all_external_requests = [], []
-    origin = f"{urlparse(args.url).scheme}://{urlparse(args.url).netloc}"
-    def observe(page):
-        page.on("pageerror", lambda exc: all_page_errors.append(str(exc)))
-        page.on("request", lambda req: all_external_requests.append(req.url)
-                if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
+    G51_BROWSER_AUDIT["pageErrors"].clear()
+    G51_BROWSER_AUDIT["externalRequests"].clear()
     with sync_playwright() as pw:
         launch = {"headless": True}
         if Path("/usr/bin/chromium").exists(): launch["executable_path"] = "/usr/bin/chromium"
         browser = pw.chromium.launch(**launch)
-        browser.on("page", observe)  # Positive, negative and Save/Open pages.
         try:
             readback, positive_report, errors, external = positive(browser, args.url, evidence, data_b)
             negatives = negative_cases(browser, args.url, data_b, data_a)
@@ -416,8 +418,8 @@ def main():
                 save_open = save_open_and_tampered(browser, args.url, readback, Path(temp))
         finally:
             browser.close()
-    require(not all_page_errors, "uncaught Chromium errors across cases: " + repr(all_page_errors))
-    require(not all_external_requests, "unexpected external requests across cases: " + repr(all_external_requests))
+    require(not G51_BROWSER_AUDIT["pageErrors"], "uncaught Chromium errors across cases: " + repr(G51_BROWSER_AUDIT["pageErrors"]))
+    require(not G51_BROWSER_AUDIT["externalRequests"], "unexpected external requests across cases: " + repr(G51_BROWSER_AUDIT["externalRequests"]))
     require(len(save_open) == 6 and all(result == "PASS" for result in save_open.values()),
             "incomplete N8 provenance tampering coverage")
     provenance = readback["officeReviewProvenance"]
@@ -453,7 +455,7 @@ def main():
         "canonical": {"resourceIds": [item["id"] for item in readback["resources"]], "connectionIds": [readback["connections"][0]["id"]], "endpoints": readback["connections"][0], "compile": "valid", "roundTrip": "PASS", "physicalTruth": "UNVERIFIED_MODELED"},
         "atlas": {"nodes": 2, "links": 1}, "viewports": positive_report["viewports"],
         "screenshots": ["g5-1-reviewed-summary.png", *[item["screenshot"] for item in positive_report["viewports"].values()] ],
-        "browserIntegrity": {"pageErrors": all_page_errors, "externalRequests": all_external_requests,
+        "browserIntegrity": {"pageErrors": G51_BROWSER_AUDIT["pageErrors"], "externalRequests": G51_BROWSER_AUDIT["externalRequests"],
                              "coverage": "all-positive-negative-and-save-open-pages"},
         "negativeTests": {**negatives, "N8_tampered_provenance": "PASS"}, "saveOpenProvenance": save_open,
         "ci": {"sourceAndSecurity": "REQUIRED", "compiledChromium": "REQUIRED", "yadilabRequiredCi": "REQUIRED"},
