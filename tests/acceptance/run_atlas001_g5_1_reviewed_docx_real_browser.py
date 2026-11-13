@@ -12,6 +12,7 @@ import json
 import tempfile
 import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -145,9 +146,10 @@ def open_project(page, path):
 def positive(browser, url, evidence, data):
     page = new_page(browser, url)
     errors, external = [], []
+    origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
     page.on("pageerror", lambda exc: errors.append(str(exc)))
     page.on("request", lambda req: external.append(req.url)
-            if not (req.url.startswith(url) or req.url.startswith(("data:", "blob:"))) else None)
+            if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
     try:
         open_g51(page)
         upload(page, CONTROL_B.name, data)
