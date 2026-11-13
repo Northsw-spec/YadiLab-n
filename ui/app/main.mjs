@@ -326,7 +326,8 @@ import { atlasPageForResource, buildAtlasIndex, projectAtlasPage } from "../src/
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
 import { anchorOrthogonalRoute, orthogonalEdgePath } from "./semantic-edge-routing.mjs";
 import { iconDescriptor, iconRegistry } from "../src/canvas/icon-registry.ts";
-import { evaluateBoundedAtlasEligibility } from "./atlas-activation-policy.mjs";
+import { ATLAS_ACTIVATION_KINDS, classifyNetworkImportActivation, evaluateBoundedAtlasEligibility } from "./atlas-activation-policy.mjs";
+import { recordNetworkImportGlobalLayoutInvocation } from "./atlas-activation-trace.mjs";
 
 const e = React.createElement;
 const NORMAL_TOPOLOGY_RESOURCE_BUDGET = 200;
@@ -5256,6 +5257,17 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     candidate.source.connections.every(link=>
       link.from?.port===undefined&&link.to?.port===undefined));
   const boundedAtlasEligibility = candidate => evaluateBoundedAtlasEligibility(candidate, NORMAL_TOPOLOGY_RESOURCE_BUDGET);
+  const activationDecisionFor = candidate => {
+    const bounded = boundedAtlasEligibility(candidate);
+    const large = largeNetworkPreview(candidate);
+    const verifiedScaleProfile = large && (tenThousandCsvProfile(candidate) || tenThousandXlsxProfile(candidate) || tenThousandOdsProfile(candidate));
+    return classifyNetworkImportActivation(candidate, {
+      normalResourceBudget: NORMAL_TOPOLOGY_RESOURCE_BUDGET,
+      boundedDecision: bounded,
+      verifiedScaleProfile,
+      largeSource: large,
+    });
+  };
   const requestId = useRef(0);
   const selectedOriginal = useRef(null);
   const invalidated = () => {
@@ -5441,12 +5453,28 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       getCurrentWorkspaceIdentity() === workspaceIdentity;
     if (!isCurrent()) { setFailure("IC020_P1_STALE"); return; }
     const boundedAtlas = boundedAtlasEligibility(preview);
-    if (boundedAtlas.eligible && (mode !== "builder" || !boundedAtlasConsent)) {
+    const large=largeNetworkPreview(preview);
+    const activationDecision = classifyNetworkImportActivation(preview, {
+      normalResourceBudget: NORMAL_TOPOLOGY_RESOURCE_BUDGET,
+      boundedDecision: boundedAtlas,
+      verifiedScaleProfile: large && (tenThousandCsvProfile(preview) || tenThousandXlsxProfile(preview) || tenThousandOdsProfile(preview)),
+      largeSource: large,
+    });
+    if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED) {
+      setDiagnostics([...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })), {
+        code: "NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED",
+        severity: "error",
+        message: `Validated source exceeds a verified activation capacity (${activationDecision.resourceCount} resources, ${activationDecision.connectionCount} explicit links; reason: ${activationDecision.reason}). YadiLab preserved the canonical source and did not run global layout.`,
+      }]);
+      setFailure("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED");
+      return;
+    }
+    if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BOUNDED_ATLAS && (mode !== "builder" || !boundedAtlasConsent)) {
       setFailure(mode === "runtime" ? "ATLAS_BOUNDED_RUNTIME_BLOCKED" : "ATLAS_BOUNDED_REVIEW_REQUIRED");
       return;
     }
-    const large=largeNetworkPreview(preview);
-    if(large&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
+    if(activationDecision.kind === ATLAS_ACTIVATION_KINDS.EXISTING_VERIFIED_SCALE_PROFILE&&(
+       !(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
        mode!=="builder"||!tenThousandBoundedConsent)){
       setFailure(mode==="runtime"?"SCALE_P4B1_RUNTIME_BLOCKED":
         "SCALE_P4B1_BOUNDED_REVIEW_REQUIRED");
@@ -5467,7 +5495,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         setFailure(`Compilation blocked: ${diagnostics.map((d) => d.code).join(", ")}`);
         return;
       }
-      if(large){
+      if(activationDecision.kind === ATLAS_ACTIVATION_KINDS.EXISTING_VERIFIED_SCALE_PROFILE){
         // Complete compiled Builder source is retained unchanged. ONLY a
         // separately approved 100-original-row bounded source view enters ELK.
         const nodeOrder=preview.source.resources.map(r=>r.id);
@@ -5483,7 +5511,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         });
         return;
       }
-      if (boundedAtlas.eligible) {
+      if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BOUNDED_ATLAS) {
         // G4.1 proves the generic validated XLSX -> canonical -> Atlas -> bounded Canvas
         // path.  Full Builder auto-layout is intentionally not run here;
         // Atlas requests ELK only for the active page after activation.
@@ -5494,6 +5522,10 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         onActivate(next, false);
         return;
       }
+      if (activationDecision.kind !== ATLAS_ACTIVATION_KINDS.NORMAL) {
+        throw new Error("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED");
+      }
+      recordNetworkImportGlobalLayoutInvocation(activationDecision.kind);
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
       if (!layout.ok) {
         setDiagnostics(layout.diagnostics);
@@ -5530,8 +5562,9 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       setDiagnostics([{ code: "NETWORK_IMPORT_ACTIVATION_BLOCKED", severity: "error", message: error instanceof Error ? error.message : String(error) }]);
     } finally { setBusy(false); }
   };
+  const activationDecision = activationDecisionFor(preview);
   return e("div", { className: "network-import-overlay", "data-network-import-overlay": "true" },
-    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "aria-label": "Import Network from Excel / CSV" },
+    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "data-network-import-decision": preview?.source ? activationDecision.kind : "NONE", "aria-label": "Import Network from Excel / CSV" },
     e("div", { className: "network-import-heading" },
       e("div", null, e("h2", null, "Import Network from Excel / CSV"), e("p", null, "Offline import: select → review → validate → re-check original SHA-256 → open Runtime probes or Builder. Existing workspace remains unchanged until you confirm.")),
       e("button", { type: "button", onClick: close, disabled: busy, "aria-label": "Close network import" }, "Close")),
@@ -5614,6 +5647,10 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("input", { id: "legacy-workbook-consent", type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "aria-describedby": "legacy-workbook-consent-help", "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
           e("span", null, "I have reviewed the six SRC sheets and the supplementary documentation; activate only the canonical source model.")),
       ) : null,
+      preview?.source && activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ? e("section", { className: "network-import-consent", "data-network-import-layout-blocked": "true", role: "alert" },
+        e("strong", null, "Import blocked before global layout"),
+        e("p", null, `This validated source exceeds a verified activation capacity (${activationDecision.resourceCount} resources, ${activationDecision.connectionCount} explicit links; ${activationDecision.reason}). The canonical source was not truncated or changed, and global ELK layout was not run.`),
+      ) : null,
       boundedAtlasEligibility(preview).eligible ? e("section", { className: "network-import-consent", "data-atlas-bounded-profile": "REVIEW_REQUIRED", "data-atlas-g4-profile": "REVIEW_REQUIRED" },
         e("p", null, `Validated XLSX exceeds the normal ${NORMAL_TOPOLOGY_RESOURCE_BUDGET}-resource graph budget (${preview.source.resources.length} resources, ${preview.source.connections.length} explicit links). Builder activation keeps the canonical source intact and defers ELK/React Flow to bounded Atlas pages; no physical-network claim is made.`),
         e("label", { className: "network-import-consent-label" },
@@ -5648,8 +5685,8 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("span",null,"I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages."))
       ):null,
       e("div", { className: "network-import-actions" },
-        e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
-        e("button", { type: "button", disabled: !preview.ok || busy ||
+        e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
+        e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ||
           (boundedAtlasEligibility(preview).eligible && !boundedAtlasConsent) ||
           (largeNetworkPreview(preview)&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
             !tenThousandBoundedConsent))||

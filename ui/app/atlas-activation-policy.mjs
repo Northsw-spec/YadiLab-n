@@ -4,6 +4,12 @@
 export const ATLAS_BOUNDED_MAX_RESOURCES = 1000;
 export const ATLAS_BOUNDED_MAX_CONNECTIONS = 2000;
 export const ATLAS_BOUNDED_SUPPORTED_PROFILES = Object.freeze(["standard", "legacy-six"]);
+export const ATLAS_ACTIVATION_KINDS = Object.freeze({
+  NORMAL: "NORMAL",
+  BOUNDED_ATLAS: "BOUNDED_ATLAS",
+  EXISTING_VERIFIED_SCALE_PROFILE: "EXISTING_VERIFIED_SCALE_PROFILE",
+  BLOCKED: "BLOCKED",
+});
 const REQUIRED_CANONICAL_SHEETS = Object.freeze(["Metadata", "Zones", "Nodes", "Interfaces", "Links", "Layout"]);
 
 const decision = (eligible, reason, candidate, extra = {}) => Object.freeze({
@@ -69,5 +75,55 @@ export function evaluateBoundedAtlasEligibility(candidate, normalResourceBudget 
   return decision(true, "validated-bounded-xlsx", candidate, {
     maxResources: ATLAS_BOUNDED_MAX_RESOURCES,
     maxConnections: ATLAS_BOUNDED_MAX_CONNECTIONS,
+  });
+}
+
+/**
+ * Select exactly one activation path before any full-graph layout is started.
+ *
+ * The normal import path has one documented capacity contract today:
+ * NORMAL_TOPOLOGY_RESOURCE_BUDGET (200 resources).  There is deliberately no
+ * invented independent normal link cap here; the existing normal renderer and
+ * ELK path have never declared one.  Link limits are still enforced by the
+ * validated bounded Atlas policy for resources above the normal budget.
+ */
+export function classifyNetworkImportActivation(candidate, {
+  normalResourceBudget = 200,
+  normalConnectionBudget,
+  boundedDecision,
+  verifiedScaleProfile = false,
+  largeSource = false,
+} = {}) {
+  const resources = candidate?.source?.resources;
+  const connections = candidate?.source?.connections;
+  const resourceCount = Array.isArray(resources) ? resources.length : 0;
+  const connectionCount = Array.isArray(connections) ? connections.length : 0;
+  const base = { resourceCount, connectionCount };
+  if (!candidate?.ok || !candidate?.source || !Array.isArray(resources) || !Array.isArray(connections)) {
+    return Object.freeze({ kind: ATLAS_ACTIVATION_KINDS.BLOCKED, reason: "preview-not-validated", ...base });
+  }
+  if (verifiedScaleProfile) {
+    return Object.freeze({ kind: ATLAS_ACTIVATION_KINDS.EXISTING_VERIFIED_SCALE_PROFILE, reason: "existing-verified-scale-profile", ...base });
+  }
+  if (largeSource) {
+    return Object.freeze({ kind: ATLAS_ACTIVATION_KINDS.BLOCKED, reason: "no-verified-activation-path", ...base });
+  }
+  const withinNormalResources = resourceCount <= normalResourceBudget;
+  const withinNormalConnections = normalConnectionBudget === undefined || connectionCount <= normalConnectionBudget;
+  if (withinNormalResources && withinNormalConnections) {
+    return Object.freeze({ kind: ATLAS_ACTIVATION_KINDS.NORMAL, reason: "within-normal-render-budget", ...base });
+  }
+  const bounded = boundedDecision ?? evaluateBoundedAtlasEligibility(candidate, normalResourceBudget);
+  if (bounded?.eligible) {
+    return Object.freeze({ kind: ATLAS_ACTIVATION_KINDS.BOUNDED_ATLAS, reason: bounded.reason, ...base });
+  }
+  return Object.freeze({
+    kind: ATLAS_ACTIVATION_KINDS.BLOCKED,
+    reason: bounded?.reason === "resource-bound-exceeded" || resourceCount > ATLAS_BOUNDED_MAX_RESOURCES
+      ? "resource-bound-exceeded"
+      : bounded?.reason === "connection-bound-exceeded" || connectionCount > ATLAS_BOUNDED_MAX_CONNECTIONS
+        ? "connection-bound-exceeded"
+        : "no-verified-activation-path",
+    ...base,
   });
 }
