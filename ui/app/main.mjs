@@ -1180,9 +1180,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const boundedTopologyGroupPage = Math.min(Math.max(1, topologyGroupPage), topologyGroupPageCount);
   const topologyGroupPageItems = filteredTopologyGroupMembers.slice((boundedTopologyGroupPage - 1) * 50, boundedTopologyGroupPage * 50);
   // An edited 5000 model with stale focus must never fall back to unbounded layout.
-  const vm = useMemo(() => validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
+  // Atlas renders a bounded canonical subset through the existing Canvas/ELK
+  // path.  Do not materialize a full Builder Canvas just to select a page;
+  // NORMAL TOPOLOGY retains the established view-model path unchanged.
+  const vm = useMemo(() => validThousandFocus || fiveThousandWorkspace || tenThousandGuard ||
+    (workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS) ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace),
-    [workspace, validThousandFocus, fiveThousandWorkspace, tenThousandGuard]);
+    [workspace, topologyViewMode, validThousandFocus, fiveThousandWorkspace, tenThousandGuard]);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
   const normalTopologyCanvas = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
@@ -5193,6 +5197,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   const [failure, setFailure] = useState("");
   const [selectedLinkSource, setSelectedLinkSource] = useState(null);
   const [legacyWorkbookConsent, setLegacyWorkbookConsent] = useState(false);
+  const [atlasG4Consent, setAtlasG4Consent] = useState(false);
   const [tenThousandBoundedConsent,setTenThousandBoundedConsent]=useState(false);
   const [reimportReview, setReimportReview] = useState(null);
   const [reimportApproved, setReimportApproved] = useState(false);
@@ -5235,12 +5240,26 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     candidate.unmappedColumnCount===0&&!candidate.linkSourceConflict&&
     candidate.source.connections.every(link=>
       link.from?.port===undefined&&link.to?.port===undefined));
+  // ATLAS-001 G4 is a separately identified synthetic six-sheet source. It
+  // is opt-in only and never broadens the generic import acceptance rules.
+  const atlasG4SyntheticProfile = candidate => Boolean(candidate?.ok &&
+    candidate.filename === "atlas001-g4-500.xlsx" &&
+    (candidate.workbookProfile === "standard" || candidate.workbookProfile === "legacy-six") &&
+    candidate.source?.scenarioId === "atlas_g4_synthetic_500" &&
+    candidate.devices === 500 && candidate.links === 499 &&
+    candidate.source.resources.length === 500 &&
+    candidate.source.connections.length === 499 &&
+    candidate.source.zones.length === 10 && candidate.unmappedColumnCount === 0 &&
+    !candidate.linkSourceConflict &&
+    candidate.source.resources.every(resource => /^g4_node_[0-9]{3}$/.test(resource.id)) &&
+    candidate.source.connections.every(connection => /^g4_link_[0-9]{3}$/.test(connection.id)));
   const requestId = useRef(0);
   const selectedOriginal = useRef(null);
   const invalidated = () => {
     requestId.current++;
     selectedOriginal.current = null;
     setPreview(null); setFailure(""); setBusy(false); setSelectedLinkSource(null);
+    setAtlasG4Consent(false);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
@@ -5251,6 +5270,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     const current = ++requestId.current;
     selectedOriginal.current = file ?? null;
     setFailure(""); setPreview(null); setDiagnostics([]); setSelectedLinkSource(null);
+    setAtlasG4Consent(false);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
@@ -5283,6 +5303,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     setBusy(true); setFailure(""); setPreview(null); setDiagnostics([]);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
+    setAtlasG4Consent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
     try {
       const next = await previewNetworkTopologyFile(original, { linkSourceChoice: choice });
@@ -5416,6 +5437,11 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       selectedOriginal.current === original &&
       getCurrentWorkspaceIdentity() === workspaceIdentity;
     if (!isCurrent()) { setFailure("IC020_P1_STALE"); return; }
+    const atlasG4 = atlasG4SyntheticProfile(preview);
+    if (atlasG4 && (mode !== "builder" || !atlasG4Consent)) {
+      setFailure(mode === "runtime" ? "ATLAS_G4_RUNTIME_BLOCKED" : "ATLAS_G4_BOUNDED_REVIEW_REQUIRED");
+      return;
+    }
     const large=largeNetworkPreview(preview);
     if(large&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
        mode!=="builder"||!tenThousandBoundedConsent)){
@@ -5452,6 +5478,17 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           sourceModelHash:next.compile.model.sourceHash??preview.sourceSha256,
           nodeOrder,focus,sourceKind:tenThousandOdsProfile(preview)?"ods-p4f2":tenThousandXlsxProfile(preview)?"xlsx-p4e1":"csv-p4b1"
         });
+        return;
+      }
+      if (atlasG4) {
+        // G4 proves the real XLSX -> canonical -> Atlas -> bounded Canvas
+        // path.  Full Builder auto-layout is intentionally not run here;
+        // Atlas requests ELK only for the active page after activation.
+        await verifyNetworkTopologyOriginalForActivation(original, preview, isCurrent);
+        await verifyReimportApproval();
+        if (!isCurrent()) throw new Error("IC020_P1_STALE");
+        setDiagnostics(preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })));
+        onActivate(next, false);
         return;
       }
       const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
@@ -5574,6 +5611,12 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("input", { id: "legacy-workbook-consent", type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "aria-describedby": "legacy-workbook-consent-help", "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
           e("span", null, "I have reviewed the six SRC sheets and the supplementary documentation; activate only the canonical source model.")),
       ) : null,
+      atlasG4SyntheticProfile(preview) ? e("section", { className: "network-import-consent", "data-atlas-g4-profile": "REVIEW_REQUIRED" },
+        e("p", null, "ATLAS-001 G4 synthetic fixture: 500 declared devices and 499 declared links. Builder activation keeps the canonical source intact and defers ELK/React Flow to bounded Atlas pages; no physical-network claim is made."),
+        e("label", { className: "network-import-consent-label" },
+          e("input", { type: "checkbox", checked: atlasG4Consent, disabled: busy, "data-atlas-g4-consent": "true", onChange: event => setAtlasG4Consent(event.currentTarget.checked) }),
+          e("span", null, "I reviewed this synthetic source and approve bounded Atlas Builder activation.")),
+      ) : null,
       largeNetworkPreview(preview)&&!tenThousandXlsxProfile(preview)&&!tenThousandOdsProfile(preview)?e("section",{className:"network-import-consent", "data-scale-p4b1-profile":
         tenThousandCsvProfile(preview)?"REVIEW_REQUIRED":"UNSUPPORTED_LARGE_SOURCE"},
         e("p",null,"Large source: full-graph ELK/ReactFlow and Runtime are blocked. Only an explicit original 10,000/10,000 CSV bounded Builder profile can be activated."),
@@ -5604,6 +5647,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       e("div", { className: "network-import-actions" },
         e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
         e("button", { type: "button", disabled: !preview.ok || busy ||
+          (atlasG4SyntheticProfile(preview) && !atlasG4Consent) ||
           (largeNetworkPreview(preview)&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
             !tenThousandBoundedConsent))||
           (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent)||

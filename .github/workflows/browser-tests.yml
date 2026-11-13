@@ -210,6 +210,12 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project094_topology_engine_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project094-topology-engine"
+          # ATLAS-001 G4: real 500-row XLSX import, canonical readback and
+          # bounded page ELK/React Flow at all required viewports.
+          npm run test:atlas001
+          G4_COMMIT_SHA="$YADILAB_EXPECTED_COMMIT" "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_g4_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-g4"
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
