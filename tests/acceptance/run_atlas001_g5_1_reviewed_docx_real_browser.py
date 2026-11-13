@@ -239,7 +239,7 @@ def positive(browser, url, evidence, data):
             expect(page.locator('[data-topology-view-mode="atlas"]')).to_be_visible(timeout=30000)
             expected_bucket = "mobile" if width <= 480 else "compact" if width <= 1100 else "wide"
             expect(atlas).to_have_attribute("data-atlas-layout-request-key",
-                                            re.compile(r"\\|" + expected_bucket + r"\\|"), timeout=30000)
+                                            re.compile(r"\|" + expected_bucket + r"\|"), timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-quality", "PASS", timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
             # Keep failing-viewport images as evidence even when a new geometry
