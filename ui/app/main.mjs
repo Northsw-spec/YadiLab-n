@@ -1804,8 +1804,8 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: 0.12 }));
     if (focusResourceId && page.resourceIds.includes(focusResourceId)) {
       globalThis.requestAnimationFrame?.(() => {
-        const target = baseFlow.nodes.find((node) => node.id === focusResourceId);
-        if (target) flowApi.current?.setCenter?.(target.position.x + (target.width ?? 160) / 2, target.position.y + (target.height ?? 90) / 2, { zoom: 1.15, duration: 220 });
+        const target = topologyWorldRect(focusResourceId);
+        if (target) flowApi.current?.setCenter?.(target.x + target.width / 2, target.y + target.height / 2, { zoom: 1.15, duration: 220 });
       });
     }
   };
