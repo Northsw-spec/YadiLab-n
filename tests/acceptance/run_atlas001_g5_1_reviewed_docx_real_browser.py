@@ -242,10 +242,27 @@ def positive(browser, url, evidence, data):
                                             re.compile(r"\|" + expected_bucket + r"\|"), timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-quality", "PASS", timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
-            # Keep failing-viewport images as evidence even when a new geometry
-            # assertion correctly stops the Chromium job.
+            # Wait for the actual camera transform to settle before collecting
+            # a passing screenshot. Merely checking the ELK layout key is not
+            # enough: a screenshot can capture the old left-anchored camera
+            # while later getBoundingClientRect() checks see the repaired fit.
             name = f"g5-1-atlas-control-b-{width}x{height}.png"
-            page.screenshot(path=str(evidence / name), full_page=True)
+            try:
+                page.wait_for_function("""() => {
+                  const panel = document.querySelector('.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"]');
+                  if (!panel) return false;
+                  const rects = ["g5-router-001", "g5-switch-001"].map(id =>
+                    [...panel.querySelectorAll(".react-flow__node")].find(n => n.dataset.id === id)?.getBoundingClientRect());
+                  if (rects.some(rect => !rect)) return false;
+                  const p = panel.getBoundingClientRect();
+                  const center = (Math.min(...rects.map(r => r.left)) +
+                                  Math.max(...rects.map(r => r.right))) / 2;
+                  return Math.abs(center - (p.left + p.right) / 2) <= Math.max(24, p.width * .1);
+                }""", timeout=15000)
+            except Exception:
+                page.screenshot(path=str(evidence / name.replace(".png", "-FAILED.png")), full_page=True)
+                raise
+            page.screenshot(path=str(evidence / name), full_page=True, animations="disabled")
             # Check rendered DOM geometry after the real ReactFlow viewport
             # transform, rather than only checking that a screenshot exists.
             geometry = page.evaluate("""() => {
@@ -287,7 +304,11 @@ def positive(browser, url, evidence, data):
                 ? Math.max(boxes[1].left - boxes[0].right, boxes[0].left - boxes[1].right,
                            boxes[1].top - boxes[0].bottom, boxes[0].top - boxes[1].bottom)
                 : 0;
-              return { boxes, scopeNameFits,
+              const valid = boxes.filter(b => Number.isFinite(b.left) && Number.isFinite(b.right));
+              const cameraCenterOffsetPx = valid.length === 2
+                ? (Math.min(...valid.map(b => b.left)) + Math.max(...valid.map(b => b.right))) / 2 -
+                  (panelRect.left + panelRect.right) / 2 : null;
+              return { boxes, scopeNameFits, cameraCenterOffsetPx, panelWidthPx: panelRect.width,
                        linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
                        cardSeparationPx: gap };
             }""")
@@ -299,6 +320,9 @@ def positive(browser, url, evidence, data):
                 and node["insidePanel"]
                 for node in geometry["boxes"]), f"{width}x{height}: clipped/off-camera card content: {geometry}")
             require(geometry["scopeNameFits"], f"{width}x{height}: Atlas scope label was truncated: {geometry}")
+            require(geometry["cameraCenterOffsetPx"] is not None and
+                    abs(geometry["cameraCenterOffsetPx"]) <= max(24, geometry["panelWidthPx"] * .1),
+                    f"{width}x{height}: Atlas camera was not centered after viewport resize: {geometry}")
             require(geometry["cardSeparationPx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas cards too close for a readable link: {geometry}")
             require(geometry["linkVisiblePx"] >= (10 if width <= 480 else 24),

@@ -1378,7 +1378,29 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     const measure = (forceRepair = false) => {
       const rect = panel.getBoundingClientRect();
+      const previous = lifecycle.snapshot();
       const next = lifecycle.observe({ width: rect.width, height: rect.height });
+      // Atlas uses one bounded ELK page across all wide viewport buckets.
+      // React Flow keeps the old translation when a panel resizes, leaving the
+      // same two-node page stranded to the left on larger screens. Preserve
+      // the viewport's world-space center (and zoom) by compensating for the
+      // measured panel size delta. Do not modify any canonical node geometry
+      // or force an unrelated hierarchy user's camera back to overview.
+      if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS &&
+          previous.phase === "valid" && previous.lastValidSize &&
+          next.phase === "valid" && next.rebuildVisualGeometry) {
+        const instance = flowApi.current;
+        const currentViewport = instance?.getViewport?.() ?? topologyViewportRef.current;
+        if (currentViewport && instance?.setViewport) {
+          const compensated = {
+            x: currentViewport.x + (next.width - previous.lastValidSize.width) / 2,
+            y: currentViewport.y + (next.height - previous.lastValidSize.height) / 2,
+            zoom: currentViewport.zoom,
+          };
+          topologyViewportRef.current = compensated;
+          instance.setViewport(compensated, { duration: 0 });
+        }
+      }
       setTopologyViewportState(next);
       if (next.phase === "valid" && (forceRepair || next.rebuildVisualGeometry)) repairVisualGeometry();
     };
@@ -1464,7 +1486,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (initialFitSecondFrame !== undefined) globalThis.cancelAnimationFrame?.(initialFitSecondFrame);
       if (initialFitTimer !== undefined) globalThis.clearTimeout(initialFitTimer);
     };
-  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks, hierarchicalTopologyView?.kind, hierarchicalTopologyView?.rootId, topologyCameraMode]);
+  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks, hierarchicalTopologyView?.kind, hierarchicalTopologyView?.rootId, topologyCameraMode, topologyViewMode]);
   const topologyIndex = useMemo(() => buildTopologySearchIndexFromNetwork(canonicalNetwork), [canonicalNetwork]);
   const topologySearch = useMemo(() => searchTopologyWithCount(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
   const topologySearchResults = topologySearch.results;
