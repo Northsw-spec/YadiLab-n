@@ -1803,10 +1803,16 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: 0.12 }));
     if (focusResourceId && page.resourceIds.includes(focusResourceId)) {
-      globalThis.requestAnimationFrame?.(() => {
+      const centerFocused = () => {
         const target = topologyWorldRect(focusResourceId);
         if (target) flowApi.current?.setCenter?.(target.x + target.width / 2, target.y + target.height / 2, { zoom: 1.15, duration: 220 });
-      });
+      };
+      // React Flow's page fit can complete after the first animation frame.
+      // Re-apply the explicit READ focus after that fit so a nested resource
+      // remains visible in screen coordinates.
+      globalThis.requestAnimationFrame?.(centerFocused);
+      globalThis.setTimeout?.(centerFocused, 120);
+      globalThis.setTimeout?.(centerFocused, 320);
     }
   };
   const navigateOverview = () => {
