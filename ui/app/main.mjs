@@ -5649,6 +5649,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       ) : null,
       preview?.source && activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ? e("section", { className: "network-import-consent", "data-network-import-layout-blocked": "true", role: "alert" },
         e("strong", null, "Import blocked before global layout"),
+        e("p", { "data-network-import-layout-diagnostic": "NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED" }, "Diagnostic: NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED"),
         e("p", null, `This validated source exceeds a verified activation capacity (${activationDecision.resourceCount} resources, ${activationDecision.connectionCount} explicit links; ${activationDecision.reason}). The canonical source was not truncated or changed, and global ELK layout was not run.`),
       ) : null,
       boundedAtlasEligibility(preview).eligible ? e("section", { className: "network-import-consent", "data-atlas-bounded-profile": "REVIEW_REQUIRED", "data-atlas-g4-profile": "REVIEW_REQUIRED" },

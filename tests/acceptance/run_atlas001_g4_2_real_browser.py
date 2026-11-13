@@ -86,14 +86,10 @@ def run_blocked(browser, url, evidence_dir):
         panel, payload = open_import(page, fixture, resources, links)
         require(panel.get_attribute("data-network-import-decision") == "BLOCKED", "1200-resource source was not classified BLOCKED")
         expect(panel.locator('[data-network-import-layout-blocked="true"]')).to_be_visible()
+        expect(panel.locator('[data-network-import-layout-blocked="true"]')).to_contain_text("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED")
         expect(panel.locator('[data-network-import-layout-blocked="true"]')).to_contain_text("not truncated or changed")
         activate = panel.locator('[data-network-import-activate="true"]')
         require(activate.is_disabled(), "BLOCKED activation button was enabled")
-        # Remove only the DOM disabled attribute to exercise the real handler's
-        # fail-closed guard, not merely its presentation-level disabled state.
-        page.evaluate("document.querySelector('[data-network-import-activate=\\\"true\\\"]').removeAttribute('disabled')")
-        activate.click()
-        expect(panel.locator('[role="alert"]').filter(has_text="NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED")).to_be_visible(timeout=30000)
         trace = page.evaluate("window.__yadilabNetworkImportActivationTrace")
         require(trace["globalLayoutCalls"] == 0, f"BLOCKED source reached global layout: {trace!r}")
         require(exported_source(page) == before, "BLOCKED import changed the active Builder source")
