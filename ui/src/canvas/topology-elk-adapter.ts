@@ -132,7 +132,7 @@ function presentationZones(projection: CanvasProjection): readonly (CanvasNode &
     node.type === "zone" && (node.data as CanvasZoneData).presentationOnly === true);
 }
 
-function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"]): ElkGraphBuild {
+function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"], atlasReadability = false): ElkGraphBuild {
   const resources = resourceNodes(projection).slice().sort((a, b) => a.id.localeCompare(b.id, "en"));
   const resourceById = new Map(resources.map((resource) => [resource.id, resource] as const));
   const edges = projection.edges.slice().sort((a, b) => a.id.localeCompare(b.id, "en"));
@@ -212,6 +212,16 @@ function buildElkGraph(projection: CanvasProjection, profile: TopologyLayoutCand
         "elk.spacing.edgeEdge": "0",
         "org.eclipse.elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
       };
+  // Atlas is a bounded human-readable view, not the 10k compact fan-out view.
+  // Reserve an actual cable corridor regardless of the winning ELK candidate.
+  if (atlasReadability) {
+    options["elk.spacing.nodeNode"] = "40";
+    options["elk.layered.spacing.nodeNodeBetweenLayers"] = "96";
+    options["elk.layered.spacing.edgeNodeBetweenLayers"] = "20";
+    options["elk.layered.spacing.edgeEdgeBetweenLayers"] = "20";
+    options["elk.spacing.edgeNode"] = "20";
+    options["elk.spacing.edgeEdge"] = "20";
+  }
   const resourceNodesById = new Map(resources.map((resource) => [resource.id, resource] as const));
   const groups = presentationZones(projection)
     .slice()
@@ -462,9 +472,9 @@ function candidateAcceptable(metricsValue: TopologyLayoutMetrics, expectedNodeId
   return { acceptable: reasons.length === 0, rejectionReasons: reasons };
 }
 
-async function runCandidate(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"], backend: LayoutBackend): Promise<CandidateRun> {
+async function runCandidate(projection: CanvasProjection, profile: TopologyLayoutCandidate["id"], backend: LayoutBackend, atlasReadability = false): Promise<CandidateRun> {
   const started = performance.now();
-  const { graph, resourceIds, groupIds } = buildElkGraph(projection, profile);
+  const { graph, resourceIds, groupIds } = buildElkGraph(projection, profile, atlasReadability);
   const raw = await backend.layout(graph);
   const allNodes = rectsFromBackend(raw.nodes);
   const nodes = new Map([...allNodes.entries()].filter(([id]) => resourceIds.has(id)));
@@ -553,13 +563,14 @@ export async function layoutHierarchicalTopologyView(
 ): Promise<TopologyLayoutResult> {
   const requestKey = createTopologyRequestKey(request);
   const projection = view.projection;
+  const atlasReadability = request.configVersion?.startsWith("atlas-001-elk-") === true;
   const runs = await Promise.all([
-    runCandidate(projection, "A-flat-right", backend),
-    runCandidate(projection, "B-flat-down-high-degree", backend),
-    runCandidate(projection, "C-role-aware-fanout", backend),
+    runCandidate(projection, "A-flat-right", backend, atlasReadability),
+    runCandidate(projection, "B-flat-down-high-degree", backend, atlasReadability),
+    runCandidate(projection, "C-role-aware-fanout", backend, atlasReadability),
   ]);
   const winner = chooseCandidate(runs);
-  const graphBuild = buildElkGraph(projection, winner.candidate.id);
+  const graphBuild = buildElkGraph(projection, winner.candidate.id, atlasReadability);
   const totalTarget = FROZEN_BASELINE_TOTAL_LENGTH * 0.8;
   const p95Target = FROZEN_BASELINE_P95_DETOUR * 0.8;
   const totalImprovement = 1 - winner.candidate.metrics.totalLength / FROZEN_BASELINE_TOTAL_LENGTH;
