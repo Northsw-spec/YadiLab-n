@@ -178,3 +178,55 @@ export function projectScenarioToCanvas(
     diagnostics,
   };
 }
+
+/**
+ * Project one already-selected canonical subset through the existing Canvas
+ * projection.  This is deliberately a bounded view operation: it preserves
+ * the original normalized scenario identity and object fields while replacing
+ * only the projected resource/connection/zone arrays in a shallow copy.  It
+ * never creates boundary edges; callers must pass internal connection IDs.
+ */
+export function projectScenarioSubsetToCanvas(
+  scenario: NormalizedScenario,
+  resourceIds: readonly string[],
+  connectionIds: readonly string[],
+): CanvasProjection {
+  const resourceIdSet = new Set(resourceIds);
+  const connectionIdSet = new Set(connectionIds);
+  if (resourceIdSet.size !== resourceIds.length || connectionIdSet.size !== connectionIds.length) {
+    throw new Error("CANVAS_SUBSET_DUPLICATE_ID");
+  }
+  const resourceById = new Map(scenario.resources.map((resource) => [resource.id, resource] as const));
+  const connectionById = new Map(scenario.connections.map((connection) => [connection.id, connection] as const));
+  for (const id of resourceIds) if (!resourceById.has(id)) throw new Error(`CANVAS_SUBSET_UNKNOWN_RESOURCE:${id}`);
+  for (const id of connectionIds) {
+    const connection = connectionById.get(id);
+    if (!connection) throw new Error(`CANVAS_SUBSET_UNKNOWN_CONNECTION:${id}`);
+    if (!resourceIdSet.has(connection.from.resource) || !resourceIdSet.has(connection.to.resource)) {
+      throw new Error(`CANVAS_SUBSET_NON_INTERNAL_CONNECTION:${id}`);
+    }
+  }
+
+  const zoneById = new Map(scenario.zones.map((zone) => [zone.id, zone] as const));
+  const zoneIds = new Set<string>();
+  for (const id of resourceIds) {
+    let zoneId = resourceById.get(id)?.zone;
+    const visiting = new Set<string>();
+    while (zoneId && !zoneIds.has(zoneId)) {
+      if (visiting.has(zoneId)) throw new Error(`CANVAS_SUBSET_ZONE_CYCLE:${zoneId}`);
+      visiting.add(zoneId);
+      const zone = zoneById.get(zoneId);
+      if (!zone) throw new Error(`CANVAS_SUBSET_UNKNOWN_ZONE:${zoneId}`);
+      zoneIds.add(zoneId);
+      zoneId = zone.parent;
+    }
+  }
+
+  const boundedScenario: NormalizedScenario = {
+    ...scenario,
+    zones: scenario.zones.filter((zone) => zoneIds.has(zone.id)),
+    resources: scenario.resources.filter((resource) => resourceIdSet.has(resource.id)),
+    connections: scenario.connections.filter((connection) => connectionIdSet.has(connection.id)),
+  };
+  return projectScenarioToCanvas(boundedScenario);
+}
