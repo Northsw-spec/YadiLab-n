@@ -825,7 +825,8 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
 .topology-column > .topology-active-summary { order: -1; }
 .topology-panel { min-height: clamp(500px, 67vh, 900px); height: clamp(500px, 67vh, 900px); }
 .topology-active-summary { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) minmax(0, 1.4fr); gap: .55rem; align-items: center; padding: .45rem .7rem; border: 1px solid #31506d; border-radius: 8px; background: linear-gradient(110deg, rgba(11, 31, 48, .96), rgba(7, 20, 34, .92)); color: #dcefff; }
-.topology-active-summary strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Scope names must remain readable at desktop widths, even when long. */
+.topology-active-summary strong { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .topology-active-summary span, .topology-active-summary small { min-width: 0; overflow-wrap: anywhere; color: #9ebbd0; font-size: .68rem; }
 .topology-explorer-sidebar { gap: .35rem; padding: .55rem .7rem; }
 .topology-explorer-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
