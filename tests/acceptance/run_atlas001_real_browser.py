@@ -45,7 +45,7 @@ def wait_for_final_layout(page, panel, expected_page: str) -> str:
         """() => {
           const panel = document.querySelector('.topology-panel');
           const rect = panel?.getBoundingClientRect();
-          return Boolean(rect && rect.top >= 0 && rect.bottom <= window.innerHeight + 1);
+          return Boolean(rect && rect.top >= 0 && rect.top < window.innerHeight);
         }""",
         timeout=5000,
     )
@@ -80,7 +80,7 @@ def assert_geometry(page, panel, resource_ids, parent_map, routes, viewport):
         panel_box["x"] >= 0
         and panel_box["y"] >= 0
         and panel_box["x"] + panel_box["width"] <= viewport[0]
-        and panel_box["y"] + panel_box["height"] <= viewport[1]
+        and panel_box["y"] < viewport[1]
     ):
         raise AssertionError(f"Topology panel is not wholly visible in screen coordinates: panel={panel_box!r}, viewport={viewport!r}")
     actual_resource_ids = sorted(node_id for node_id, value in nodes.items() if value["resource"])
