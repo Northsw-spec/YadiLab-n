@@ -137,8 +137,9 @@ def mutate_docx(data, kind):
 
 
 def open_project(page, path):
-    page.locator('[data-project-action="open"]').click()
-    page.locator('[data-project-input="true"]').set_input_files(str(path))
+    with page.expect_file_chooser(timeout=10000) as chooser:
+        page.locator('[data-project-action="open"]').click()
+    chooser.value.set_files(str(path))
 
 
 def positive(browser, url, evidence, data):
@@ -297,9 +298,7 @@ def save_open_and_tampered(browser, url, source, temp_dir):
     project_file(source, valid)
     page = new_page(browser, url)
     try:
-        open_project = page.locator('[data-project-action="open"]')
-        open_project.click()
-        page.locator('[data-project-input="true"]').set_input_files(str(valid))
+        open_project(page, valid)
         expect(page.locator('[data-project-message="true"]')).to_contain_text("Opened editable source", timeout=30000)
         reopened = export_source(page)
         require(reopened.get("officeReviewProvenance") == source.get("officeReviewProvenance"), "Save/Open lost office provenance")
@@ -315,8 +314,7 @@ def save_open_and_tampered(browser, url, source, temp_dir):
     page = new_page(browser, url)
     try:
         baseline = export_source(page)
-        page.locator('[data-project-action="open"]').click()
-        page.locator('[data-project-input="true"]').set_input_files(str(invalid))
+        open_project(page, invalid)
         expect(page.locator('[data-project-message="true"]')).to_contain_text("PROJECT_OFFICE_REVIEW_PROVENANCE_LOCATOR", timeout=30000)
         require(export_source(page) == baseline, "tampered provenance changed active Builder")
     finally:
