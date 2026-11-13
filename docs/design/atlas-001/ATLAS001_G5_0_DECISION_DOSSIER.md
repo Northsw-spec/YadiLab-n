@@ -82,6 +82,35 @@ two control-B tables with the manifest. The YadiLab structural preview is run
 separately and sees `REVIEW_REQUIRED`, `canActivate=false`,
 `engineVerified=false`, and `physicalTopologyVerified=false`.
 
+### G5.0 Evidence Hardening
+
+`tests/fixtures/atlas001-g5.0/rendering-profile.json` is the accepted
+GitHub-hosted renderer profile. It requires Ubuntu 24.04 x86_64, `C.UTF-8`,
+LibreOffice 24.2, Poppler 24.x (`pdfinfo` and `pdftotext`), Python 3.12,
+`python-docx==1.2.0`, and the required DejaVu Sans/Liberation Sans families.
+The run records the exact observed tool strings, locale, font inventory hash,
+fontconfig variables, layout twips and commands. A profile mismatch is a
+failure; local diagnostics may opt out only with an explicit flag and are
+marked `RENDERER_FINGERPRINT=FAIL`.
+
+`run_atlas001_g5_0_fixture.py` now verifies every page marker in one
+`pdftotext -layout` pass, exact page count, PDF creation/non-empty output,
+resource declarations on page 101, the connection/ports on page 251, the
+documentation note on page 401, and all six neighboring pages. It emits
+`atlas001-g5-0-evidence.json` with per-PDF SHA-256, timings, peak child RSS,
+source/XML checks, declaration-page checks and acceptance statuses.
+
+`run_atlas001_g5_0_negative.py` covers stale/incorrect SHA, changed endpoint
+or port, wrong page count, misplaced/flowed declarations, corrupt PDF,
+renderer/version/font/locale drift, missing tools and Control-A injection.
+These probes must fail with non-zero status when the expected evidence is
+invalid.
+
+The structural test is wired into the existing `source-and-security` job.
+The physical qualification and negative suite are wired into the existing
+`browser-regressions / compiled-chromium` job after installing the declared
+renderer packages. No fourth workflow was added.
+
 ## D. Source-integrity matrix
 
 | Concern | Current evidence | G5.0 result |
@@ -164,11 +193,15 @@ Required G5.1 tests (all must be negative-tested as well as positive-tested):
 | Gate | Status | Evidence / limitation |
 |---|---|---|
 | `FORMAT_SELECTED` | **PASS** | DOCX selected; no third format/PDF path |
-| `PHYSICAL_PAGE_COUNT` | **PASS (fixture-only)** | Both synthetic controls independently render to exactly 500 pages |
+| `PHYSICAL_PAGE_COUNT` | **PASS (local; CI evidence required)** | Both synthetic controls render to exactly 500 pages; strict GitHub evidence is required on final HEAD |
+| `PAGE_ORDER` | **PASS (local; CI evidence required)** | All 500 markers and six neighboring pages are checked from rendered PDF text |
+| `DECLARATION_PAGE_LOCATION` | **PASS (local; CI evidence required)** | Control-B pages 101/251/401 are independently checked, including neighbors |
 | `SOURCE_STRUCTURE` | **PASS** | Safe structural preview, exact table/cell counts and fail-closed barriers |
-| `PROVENANCE` | **PASS with G5.1 page-ref gap** | SHA and source locators are preserved; physical-page refs are not yet product output |
+| `PROVENANCE` | **PASS with G5.1 page-ref gap** | SHA, XML locators and renderer evidence are preserved; physical-page refs are not yet product output |
 | `NETWORK_FACT_EXTRACTION` | **REVIEW_REQUIRED** | Explicit reviewed candidate exists; no inference and no live activation |
 | `ATLAS_COMPATIBILITY` | **PENDING_G5.1** | Existing Atlas projection is ready for canonical input; DOCX→Atlas integration is not implemented |
+| `NEGATIVE_TESTS` | **PASS (local; CI evidence required)** | Dedicated fail-closed regression suite covers source, renderer, PDF and pagination drift |
+| `GITHUB_CI_EVIDENCE` | **PENDING** | Must be proven by the final PR run's explicit job logs and uploaded evidence artifact |
 | `G5.1_READY` | **CONDITIONAL / NO-GO for implementation** | Contract and tests are specified, but implementation requires a new explicit review |
 
 ## Verification commands run
@@ -188,5 +221,8 @@ node tests/enterprise-import/run_docx_tables_p1_tests.mjs
 node tests/enterprise-import/run_odt_tables_p1_tests.mjs
 ```
 
-All listed commands passed locally. No product import path, workflow, merge,
-or visual approval was changed by G5.0.
+The local qualification run uses the managed Debian renderer with an explicit
+unaccepted-profile override, so it is evidence of functional checks but not a
+renderer-profile PASS. The strict GitHub run is authoritative for
+`RENDERER_FINGERPRINT`, `GITHUB_CI_EVIDENCE` and final acceptance. No product
+import path, merge or visual approval was changed by G5.0.

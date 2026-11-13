@@ -38,6 +38,10 @@ jobs:
           npm run test:compiler
           npm run test:engine
           npm run test:enterprise-import
+          # ATLAS-001 G5.0: immutable DOCX bytes, source locators and the
+          # structure-only truth boundary. Physical pagination runs in the
+          # existing Chromium job after its renderer install.
+          node tests/enterprise-import/run_atlas001_g5_0_fixture_tests.mjs
           npm run test:import-helper
           # PROJECT-086: canonical focus paging/counts and topology-aware 10k fallback.
           npm run test:topology-navigation

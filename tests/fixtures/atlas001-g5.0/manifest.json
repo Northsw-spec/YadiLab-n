@@ -59,6 +59,7 @@
   ],
   "format": "docx",
   "generator": "generate_g5_fixtures.py",
+  "rendererProfile": "atlas001-g5.0.github-ubuntu-24.04-renderer.v1",
   "page_count_method": "LibreOffice soffice -> PDF -> pdfinfo Pages",
   "profile": "atlas-001.g5.0.synthetic-controls.v1"
 }

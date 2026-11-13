@@ -5,8 +5,15 @@ import {previewDocxTableStructure} from "../../dist-enterprise-import-test/enter
 
 const root = path.resolve("tests/fixtures/atlas001-g5.0");
 const manifest = JSON.parse(await fs.readFile(path.join(root, "manifest.json"), "utf8"));
+const profile = JSON.parse(await fs.readFile(path.join(root, "rendering-profile.json"), "utf8"));
 const fail = (message) => { throw new Error(`G5.0 fixture: ${message}`); };
 if (manifest.format !== "docx") fail("format is not DOCX");
+if (manifest.rendererProfile !== profile.profileId) fail("renderer profile is not bound to the manifest");
+if (profile.acceptedEnvironment?.osId !== "ubuntu" ||
+    profile.acceptedEnvironment?.osVersionId !== "24.04") fail("accepted renderer profile is not Ubuntu 24.04");
+const generatorSha = crypto.createHash("sha256").update(
+  await fs.readFile(path.join(root, "generate_g5_fixtures.py"))).digest("hex");
+if (profile.generator?.sha256 !== generatorSha) fail("generator SHA does not match checkout");
 if (manifest.controls?.length !== 2) fail("exactly controls A and B are required");
 
 for (const control of manifest.controls) {
