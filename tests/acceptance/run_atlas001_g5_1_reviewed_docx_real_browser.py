@@ -87,12 +87,47 @@ def stage(page):
     expect(page.locator('[data-office-g5-1-summary="REVIEW_REQUIRED"]')).to_be_visible(timeout=45000)
 
 
+def allowed_browser_request(request_url, application_url):
+    """Compare actual HTTP(S) origins, never vulnerable URL string prefixes."""
+    remote = urlparse(request_url)
+    if remote.scheme in ("data", "blob"):
+        return True
+    local = urlparse(application_url)
+    if remote.scheme not in ("http", "https") or remote.scheme != local.scheme:
+        return False
+    try:
+        def effective_port(parts):
+            return parts.port or (443 if parts.scheme == "https" else 80)
+        return (remote.hostname == local.hostname
+                and effective_port(remote) == effective_port(local)
+                and remote.username is None and remote.password is None)
+    except ValueError:
+        return False
+
+
+def verify_browser_origin_policy(url):
+    parsed = urlparse(url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    alternate_port = (parsed.port or (443 if parsed.scheme == "https" else 80)) + 1
+    cases = [
+        (origin + "/asset.js?version=1", True),
+        ("data:image/png;base64,AA==", True),
+        ("blob:" + origin + "/generated", True),
+        (origin + "@evil.invalid/collect", False),
+        (f"{parsed.scheme}://{parsed.hostname}.evil.invalid/", False),
+        (f"{parsed.scheme}://{parsed.hostname}:{alternate_port}/", False),
+        (f"{'http' if parsed.scheme == 'https' else 'https'}://{parsed.netloc}/", False),
+    ]
+    for candidate, expected in cases:
+        require(allowed_browser_request(candidate, url) is expected,
+                f"External request policy misclassified {candidate}")
+
+
 def new_page(browser, url):
     page = browser.new_page(accept_downloads=True, viewport={"width": 1366, "height": 768})
-    origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
     page.on("pageerror", lambda exc: G51_BROWSER_AUDIT["pageErrors"].append(str(exc)))
     page.on("request", lambda req: G51_BROWSER_AUDIT["externalRequests"].append(req.url)
-            if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
+            if not allowed_browser_request(req.url, url) else None)
     page.on("dialog", lambda dialog: dialog.accept())
     page.add_init_script("Object.defineProperty(window, 'showOpenFilePicker', { value: undefined });")
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -154,11 +189,6 @@ def open_project(page, path):
 
 def positive(browser, url, evidence, data):
     page = new_page(browser, url)
-    errors, external = [], []
-    origin = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
-    page.on("pageerror", lambda exc: errors.append(str(exc)))
-    page.on("request", lambda req: external.append(req.url)
-            if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
     try:
         open_g51(page)
         upload(page, CONTROL_B.name, data)
@@ -207,6 +237,10 @@ def positive(browser, url, evidence, data):
         for width, height in ((1366, 768), (1280, 800), (1920, 1080), (390, 844)):
             page.set_viewport_size({"width": width, "height": height})
             expect(page.locator('[data-topology-view-mode="atlas"]')).to_be_visible(timeout=30000)
+            expected_bucket = "mobile" if width <= 480 else "compact" if width <= 1100 else "wide"
+            expect(atlas).to_have_attribute("data-atlas-layout-request-key",
+                                            re.compile(r"\\|" + expected_bucket + r"\\|"), timeout=30000)
+            expect(atlas).to_have_attribute("data-atlas-layout-quality", "PASS", timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
             # Keep failing-viewport images as evidence even when a new geometry
             # assertion correctly stops the Chromium job.
@@ -218,6 +252,12 @@ def positive(browser, url, evidence, data):
               const ids = ["g5-router-001", "g5-switch-001"];
               const panel = document.querySelector('.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"]');
               if (!panel) return { error: "ATLAS_PANEL_MISSING" };
+              const panelRect = panel.getBoundingClientRect();
+              const margin = window.innerWidth <= 480 ? 8 : 12;
+              const scopeName = document.querySelector('[data-topology-active-summary] strong');
+              const scopeNameFits = Boolean(scopeName) &&
+                scopeName.scrollWidth <= scopeName.clientWidth + 1 &&
+                scopeName.scrollHeight <= scopeName.clientHeight + 1;
               const boxes = ids.map(id => {
                 const root = [...panel.querySelectorAll(".react-flow__node")].find(el => el.getAttribute("data-id") === id);
                 const card = root?.querySelector(".resource-node");
@@ -234,6 +274,8 @@ def positive(browser, url, evidence, data):
                   labelInsideCard: label.getBoundingClientRect().right <= c.right - 2,
                   portsInsideCard: p.bottom <= c.bottom + 2,
                   portsBelowHeading: p.top >= card.querySelector(".device-heading").getBoundingClientRect().bottom - 1,
+                  insidePanel: c.left >= panelRect.left + margin && c.right <= panelRect.right - margin &&
+                    c.top >= panelRect.top + margin && c.bottom <= panelRect.bottom - margin,
                   left: c.left, right: c.right, top: c.top, bottom: c.bottom
                 };
               });
@@ -245,7 +287,8 @@ def positive(browser, url, evidence, data):
                 ? Math.max(boxes[1].left - boxes[0].right, boxes[0].left - boxes[1].right,
                            boxes[1].top - boxes[0].bottom, boxes[0].top - boxes[1].bottom)
                 : 0;
-              return { boxes, linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
+              return { boxes, scopeNameFits,
+                       linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
                        cardSeparationPx: gap };
             }""")
             require(not geometry.get("error"), f"{width}x{height}: {geometry}")
@@ -253,15 +296,18 @@ def positive(browser, url, evidence, data):
                 not node.get("error") and node["iconTextGapPx"] >= -1
                 and node["labelFits"] and node["labelInsideCard"]
                 and node["portsInsideCard"] and node["portsBelowHeading"]
-                for node in geometry["boxes"]), f"{width}x{height}: overlapping or clipped card content: {geometry}")
+                and node["insidePanel"]
+                for node in geometry["boxes"]), f"{width}x{height}: clipped/off-camera card content: {geometry}")
+            require(geometry["scopeNameFits"], f"{width}x{height}: Atlas scope label was truncated: {geometry}")
             require(geometry["cardSeparationPx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas cards too close for a readable link: {geometry}")
             require(geometry["linkVisiblePx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas link is not legible: {geometry}")
             viewports[f"{width}x{height}"] = {
-                "status": "PASS", "screenshot": name, "layoutErrors": 0, "geometry": geometry}
+                "status": "PASS", "screenshot": name, "layoutErrors": 0,
+                "viewportBucket": expected_bucket, "geometry": geometry}
         runtime_commit = page.locator('[data-source-commit]').get_attribute("data-source-commit")
-        return readback, {"positive": "PASS", "viewports": viewports, "runtimeCommit": runtime_commit}, errors, external
+        return readback, {"positive": "PASS", "viewports": viewports, "runtimeCommit": runtime_commit}
     finally:
         page.close()
 
@@ -411,6 +457,7 @@ def main():
     evidence = Path(args.evidence_dir)
     evidence.mkdir(parents=True, exist_ok=True)
     data_a, data_b = CONTROL_A.read_bytes(), CONTROL_B.read_bytes()
+    verify_browser_origin_policy(args.url)
     G51_BROWSER_AUDIT["pageErrors"].clear()
     G51_BROWSER_AUDIT["externalRequests"].clear()
     with sync_playwright() as pw:
@@ -418,7 +465,7 @@ def main():
         if Path("/usr/bin/chromium").exists(): launch["executable_path"] = "/usr/bin/chromium"
         browser = pw.chromium.launch(**launch)
         try:
-            readback, positive_report, errors, external = positive(browser, args.url, evidence, data_b)
+            readback, positive_report = positive(browser, args.url, evidence, data_b)
             negatives = negative_cases(browser, args.url, data_b, data_a)
             with tempfile.TemporaryDirectory(prefix="yadilab-g51-project-") as temp:
                 save_open = save_open_and_tampered(browser, args.url, readback, Path(temp))
