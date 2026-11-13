@@ -65,6 +65,8 @@ def focus_resource(page, panel, resource_id):
     expect(result).to_be_visible(timeout=15000)
     result.click()
     wait_for_final_layout(page, panel, panel.get_attribute("data-atlas-active-page"))
+    page.evaluate("document.querySelector('.topology-panel')?.scrollIntoView({block: 'center', inline: 'nearest'})")
+    page.wait_for_timeout(400)
 
 
 def exercise(browser, url, evidence_dir, viewport):

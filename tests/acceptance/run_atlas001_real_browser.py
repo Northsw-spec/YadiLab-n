@@ -49,6 +49,9 @@ def wait_for_final_layout(page, panel, expected_page: str) -> str:
         }""",
         timeout=5000,
     )
+    # Scrolling the panel can trigger React Flow's resize repair.  Allow the
+    # already-requested bounded camera to settle before reading screen rects.
+    page.wait_for_timeout(350)
     request_key = panel.get_attribute("data-atlas-layout-request-key") or ""
     source_identity = panel.get_attribute("data-atlas-layout-source-identity") or ""
     if not source_identity or expected_page not in request_key:
@@ -88,6 +91,14 @@ def assert_geometry(page, panel, resource_ids, parent_map, routes, viewport):
         raise AssertionError(f"Rendered resource IDs differ: expected={sorted(resource_ids)!r}, actual={actual_resource_ids!r}")
 
     margin = 16 if viewport[0] >= 600 else 4
+    fully_visible_candidates = sorted(
+        node_id for node_id in resource_ids
+        if nodes.get(node_id, {}).get("rect") and
+        nodes[node_id]["rect"]["x"] >= panel_box["x"] + margin and
+        nodes[node_id]["rect"]["y"] >= panel_box["y"] + margin and
+        nodes[node_id]["rect"]["x"] + nodes[node_id]["rect"]["width"] <= panel_box["x"] + panel_box["width"] - margin and
+        nodes[node_id]["rect"]["y"] + nodes[node_id]["rect"]["height"] <= panel_box["y"] + panel_box["height"] - margin
+    )
     visible_candidates = sorted(
         node_id for node_id in resource_ids
         if nodes.get(node_id, {}).get("rect") and
@@ -96,7 +107,7 @@ def assert_geometry(page, panel, resource_ids, parent_map, routes, viewport):
         nodes[node_id]["rect"]["x"] < panel_box["x"] + panel_box["width"] and
         nodes[node_id]["rect"]["y"] < panel_box["y"] + panel_box["height"]
     )
-    root_id = visible_candidates[0] if visible_candidates else (sorted(resource_ids)[0] if resource_ids else None)
+    root_id = fully_visible_candidates[0] if fully_visible_candidates else (visible_candidates[0] if visible_candidates else (sorted(resource_ids)[0] if resource_ids else None))
     if root_id:
         root_rect = nodes[root_id]["rect"]
         if not root_rect:
