@@ -546,25 +546,44 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
     );
 }
 
+// G5.1 Chromium measured a systematic 5.4 screen-pixel offset between the
+// SVG route and the visible eth1 handle at desktop zoom (6 canvas units).
+// Apply a purely visual inset only to Atlas edges, leaving ELK bends and
+// source/canonical ports unchanged.
+function atlasHandleAnchor(x, y, position, atlasEdge) {
+  if (!atlasEdge) return { x, y };
+  const inset = 6;
+  if (position === Position.Left) return { x: x + inset, y };
+  if (position === Position.Right) return { x: x - inset, y };
+  if (position === Position.Top) return { x, y: y + inset };
+  if (position === Position.Bottom) return { x, y: y - inset };
+  return { x, y };
+}
+
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
+  const atlasEdge = data?.atlasPageLink === true;
+  const visualSource = atlasHandleAnchor(sourceX, sourceY, sourcePosition, atlasEdge);
+  const visualTarget = atlasHandleAnchor(targetX, targetY, targetPosition, atlasEdge);
+  const renderSourceX = visualSource.x, renderSourceY = visualSource.y;
+  const renderTargetX = visualTarget.x, renderTargetY = visualTarget.y;
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
   const isHierarchical = data?.hierarchyVisual === true;
-  const route = hasRoute ? anchorOrthogonalRoute({ sourceX, sourceY, targetX, targetY, route: data.route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition }) : [];
+  const route = hasRoute ? anchorOrthogonalRoute({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, route: data.route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition }) : [];
   // The route is computed from source geometry, then anchored to the actual
   // live React Flow handles. Hierarchical edges never discard bends for a
   // shared fallback corridor and never fall back to a Bezier path.
   const [basePath, labelX, labelY] = hasRoute
-    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition })
+    ? orthogonalEdgePath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition })
     : isHierarchical
-      ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })
-      : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+      ? orthogonalEdgePath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, sourcePosition, targetPosition })
+      : getBezierPath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
   const endpoint = (resourceId, fallbackX, fallbackY) => resourceId === journeyEndpoint?.resourceId
     ? { x: journeyEndpoint.x, y: journeyEndpoint.y }
     : { x: fallbackX, y: fallbackY };
-  const motionSource = endpoint(source, sourceX, sourceY);
-  const motionTarget = endpoint(target, targetX, targetY);
+  const motionSource = endpoint(source, renderSourceX, renderSourceY);
+  const motionTarget = endpoint(target, renderTargetX, renderTargetY);
   const pathComparison = data?.pathComparison;
   const visual = data?.visual ?? { tone: "network", kindLabel: "NETWORK", enabled: true, direction: "unspecified", accessibleLabel: "NETWORK" };
   const reverse = journey?.direction?.from === target && journey?.direction?.to === source;
@@ -576,7 +595,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
   const comparisonForwardMarkerId = `comparison-forward-arrow-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const comparisonReturnMarkerId = `comparison-return-arrow-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const comparisonPath = (direction) => direction?.from === target && direction?.to === source
-    ? getBezierPath({ sourceX: targetX, sourceY: targetY, targetX: sourceX, targetY: sourceY, sourcePosition: targetPosition, targetPosition: sourcePosition })[0]
+    ? getBezierPath({ sourceX: renderTargetX, sourceY: renderTargetY, targetX: renderSourceX, targetY: renderSourceY, sourcePosition: targetPosition, targetPosition: sourcePosition })[0]
     : basePath;
   // Playback advances every 900 ms at 1×. Keep a packet segment within that
   // event window so a hop reaches its next Engine-authoritative node before
@@ -644,8 +663,8 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       className: `path-comparison-edge return symmetry-${String(pathComparison.symmetry ?? "UNRESOLVED").toLowerCase()}`,
       "data-path-comparison": "return",
     }) : null,
-    e("circle", { cx: sourceX, cy: sourceY, r: active ? 5 : 3.5, className: `link-led source tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
-    e("circle", { cx: targetX, cy: targetY, r: active ? 5 : 3.5, className: `link-led target tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
+    e("circle", { cx: renderSourceX, cy: renderSourceY, r: active ? 5 : 3.5, className: `link-led source tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
+    e("circle", { cx: renderTargetX, cy: renderTargetY, r: active ? 5 : 3.5, className: `link-led target tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
     highlighted && (state !== "active" || motionGeometryResolved) ? e("path", {
       d: motionPath,
       fill: "none",
@@ -1216,6 +1235,10 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     );
     return {
       ...pageCanvas,
+      edges: pageCanvas.edges.map((edge) => ({
+        ...edge,
+        data: { ...edge.data, atlasPageLink: true },
+      })),
       nodes: pageCanvas.nodes.map((node) => node.type === "resource" ? {
         ...node,
         data: {
