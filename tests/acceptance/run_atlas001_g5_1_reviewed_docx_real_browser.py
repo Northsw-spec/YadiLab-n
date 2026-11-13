@@ -181,6 +181,19 @@ def positive(browser, url, evidence, data):
         for fact in provenance["facts"]:
             require(fact["locator"]["sourceSha256"] == provenance["source"]["sha256"], "locator is not source-bound")
             require(fact["decision"] == "USER_CONSENTED_MODELED_UNVERIFIED", "provenance overstated verification")
+        expected_locators = {
+            ("resource.id", "g5-router-001"): (0, 1, 0),
+            ("resource.id", "g5-switch-001"): (0, 2, 0),
+            ("connection.from.resource", "office_link_row_1"): (1, 1, 0),
+            ("connection.to.resource", "office_link_row_1"): (1, 1, 1),
+            ("connection.from.port", "office_link_row_1"): (1, 1, 2),
+            ("connection.to.port", "office_link_row_1"): (1, 1, 3),
+        }
+        for fact in provenance["facts"]:
+            key = (fact["field"], fact["targetId"])
+            locator = fact["locator"]
+            require(key in expected_locators, f"unexpected provenance fact {key}")
+            require((locator["tableOrdinal"], locator["rowOrdinal"], locator["cellOrdinal"]) == expected_locators[key], f"wrong locator for {key}")
         viewports = {}
         for width, height in ((1366, 768), (1280, 800), (1920, 1080), (390, 844)):
             page.set_viewport_size({"width": width, "height": height})
@@ -306,22 +319,30 @@ def save_open_and_tampered(browser, url, source, temp_dir):
         require(reopened.get("officeReviewProvenance") == source.get("officeReviewProvenance"), "Save/Open lost office provenance")
     finally:
         page.close()
-    tampered = json.loads(json.dumps(source))
-    # A locator with a different source digest must be rejected before it can
-    # replace the active Builder. This is deterministic without guessing the
-    # physical row/cell bounds of the original DOCX.
-    tampered["officeReviewProvenance"]["facts"][0]["locator"]["sourceSha256"] = "b" * 64
-    invalid = temp_dir / "g5-tampered.yadilab"
-    project_file(tampered, invalid)
-    page = new_page(browser, url)
-    try:
-        baseline = export_source(page)
-        open_project(page, invalid)
-        expect(page.locator('[data-project-message="true"]')).to_contain_text("PROJECT_OFFICE_REVIEW_PROVENANCE_LOCATOR", timeout=30000)
-        require(export_source(page) == baseline, "tampered provenance changed active Builder")
-    finally:
-        page.close()
-    return "PASS"
+    tamper_cases = {
+        "wrong_source_sha": (lambda value: value["officeReviewProvenance"]["facts"][0]["locator"].update(sourceSha256="b" * 64), "PROJECT_OFFICE_REVIEW_PROVENANCE_LOCATOR"),
+        "wrong_cell_ordinal": (lambda value: value["officeReviewProvenance"]["facts"][0]["locator"].update(cellOrdinal=-1), "PROJECT_SOURCE_SCHEMA_INVALID"),
+        "wrong_target_id": (lambda value: value["officeReviewProvenance"]["facts"][0].update(targetId="missing-resource"), "PROJECT_OFFICE_REVIEW_PROVENANCE_TARGET"),
+        "wrong_source_revision": (lambda value: value["officeReviewProvenance"]["targetModel"].update(sourceRevision=1), "PROJECT_OFFICE_REVIEW_PROVENANCE_REVISION"),
+        "changed_canonical_model": (lambda value: value["officeReviewProvenance"]["targetModel"].update(scenarioId="other_scenario"), "PROJECT_OFFICE_REVIEW_PROVENANCE_SCENARIO_MISMATCH"),
+        "missing_port_locator": (lambda value: value["officeReviewProvenance"]["facts"][4].pop("locator"), "PROJECT_SOURCE_SCHEMA_INVALID"),
+    }
+    results = {}
+    for name, (mutate, expected_code) in tamper_cases.items():
+        tampered = json.loads(json.dumps(source))
+        mutate(tampered)
+        invalid = temp_dir / f"g5-tampered-{name}.yadilab"
+        project_file(tampered, invalid)
+        page = new_page(browser, url)
+        try:
+            baseline = export_source(page)
+            open_project(page, invalid)
+            expect(page.locator('[data-project-message="true"]')).to_contain_text(expected_code, timeout=30000)
+            require(export_source(page) == baseline, f"tampered provenance {name} changed active Builder")
+            results[name] = "PASS"
+        finally:
+            page.close()
+    return results
 
 
 def main():

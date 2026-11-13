@@ -84,12 +84,17 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
       blocked("OFFICE_REVIEW_PROVENANCE_SOURCE_ID");
     if (officeProvenance.targetModel.scenarioId !== source.scenarioId)
       blocked("OFFICE_REVIEW_PROVENANCE_SCENARIO_MISMATCH");
+    if (officeProvenance.status === "CURRENT" && officeProvenance.targetModel.sourceRevision !== 0)
+      blocked("OFFICE_REVIEW_PROVENANCE_REVISION");
     const officeFactIds = new Set();
     for (const fact of officeProvenance.facts) {
       if (officeFactIds.has(fact.factId)) blocked("OFFICE_REVIEW_PROVENANCE_DUPLICATE_FACT");
       officeFactIds.add(fact.factId);
       const targetExists = fact.targetKind === "resource" ? resourceIds.has(fact.targetId) : connectionIds.has(fact.targetId);
       if (officeProvenance.status === "CURRENT" && !targetExists)
+        blocked("OFFICE_REVIEW_PROVENANCE_TARGET");
+      const fieldTargetKind = fact.field === "resource.id" ? "resource" : "connection";
+      if (fact.targetKind !== fieldTargetKind)
         blocked("OFFICE_REVIEW_PROVENANCE_TARGET");
       if (fact.locator.sourceSha256 !== officeProvenance.source.sha256 ||
           fact.locator.part !== "word/document.xml")

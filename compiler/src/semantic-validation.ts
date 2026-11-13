@@ -673,6 +673,9 @@ export function validateScenarioSemantics(
     if (officeProvenance.targetModel.scenarioId !== source.scenarioId) {
       diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_SCENARIO_MISMATCH", "officeReviewProvenance.targetModel.scenarioId", "Office review provenance is bound to a different canonical scenario."));
     }
+    if (officeProvenance.status === "CURRENT" && officeProvenance.targetModel.sourceRevision !== 0) {
+      diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_REVISION", "officeReviewProvenance.targetModel.sourceRevision", "Current office review provenance must be bound to the activation revision."));
+    }
     const officeFactIds = new Set<string>();
     officeProvenance.facts.forEach((fact, index) => {
       const path = `officeReviewProvenance.facts[${index}]`;
@@ -680,6 +683,8 @@ export function validateScenarioSemantics(
       officeFactIds.add(fact.factId);
       const targetExists = fact.targetKind === "resource" ? resources.has(fact.targetId) : connections.has(fact.targetId);
       if (officeProvenance.status === "CURRENT" && !targetExists) diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_TARGET", `${path}.targetId`, "Current office review provenance target does not exist in the canonical source."));
+      const fieldTargetKind = fact.field === "resource.id" ? "resource" : "connection";
+      if (fact.targetKind !== fieldTargetKind) diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_TARGET", `${path}.targetKind`, "Office review provenance field and target kind do not agree."));
       if (fact.locator.sourceSha256 !== officeProvenance.source.sha256 ||
           fact.locator.part !== "word/document.xml") {
         diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_LOCATOR", `${path}.locator`, "Office review locator is not bound to the declared DOCX source."));
