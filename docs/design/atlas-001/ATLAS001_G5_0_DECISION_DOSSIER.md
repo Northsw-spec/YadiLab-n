@@ -110,6 +110,9 @@ The structural test is wired into the existing `source-and-security` job.
 The physical qualification and negative suite are wired into the existing
 `browser-regressions / compiled-chromium` job after installing the declared
 renderer packages. No fourth workflow was added.
+The renderer installation/qualification step is placed after the existing
+compiled-Chromium acceptance block so that LibreOffice/font packages cannot
+alter the browser regression environment.
 
 The first strict GitHub-hosted verification of this hardening change is run
 `43458131651` on the exact PR head `bef457ac6eddd7e22371429d1bbcd0b67808c7fa`.

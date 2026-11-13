@@ -97,22 +97,6 @@ jobs:
               print("PASS: Pinned Playwright Chromium launched:", browser.version)
               browser.close()
           PY
-      - name: ATLAS-001 G5.0 evidence hardening
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            libreoffice-writer poppler-utils fontconfig fonts-dejavu-core fonts-liberation2 python3-venv
-          renderer_venv="$RUNNER_TEMP/yadilab-g5-renderer"
-          python3 -m venv "$renderer_venv"
-          "$renderer_venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
-            --retries 3 --timeout 60 'python-docx==1.2.0'
-          evidence_dir="$RUNNER_TEMP/yadilab-evidence/atlas001-g5-0"
-          mkdir -p "$evidence_dir"
-          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_fixture.py \
-            --evidence-dir "$evidence_dir"
-          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_negative.py
       - name: Mounted UI identity, import truth and reviewed graph
         env:
           YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
@@ -226,6 +210,22 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project094_topology_engine_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project094-topology-engine"
+      - name: ATLAS-001 G5.0 evidence hardening
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fontconfig fonts-dejavu-core fonts-liberation2 python3-venv
+          renderer_venv="$RUNNER_TEMP/yadilab-g5-renderer"
+          python3 -m venv "$renderer_venv"
+          "$renderer_venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
+            --retries 3 --timeout 60 'python-docx==1.2.0'
+          evidence_dir="$RUNNER_TEMP/yadilab-evidence/atlas001-g5-0"
+          mkdir -p "$evidence_dir"
+          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_fixture.py \
+            --evidence-dir "$evidence_dir"
+          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_negative.py
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
