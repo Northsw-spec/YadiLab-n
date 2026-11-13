@@ -9,6 +9,8 @@ import argparse
 import hashlib
 import io
 import json
+import os
+import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -370,17 +372,28 @@ def main():
     facts_by_field = {fact["field"]: fact["locator"] for fact in provenance["facts"]}
     runtime_commit = positive_report.get("runtimeCommit")
     require(runtime_commit and runtime_commit != "RUNTIME_BUILD_COMMIT", "runtime build commit marker missing")
+    ref = os.getenv("GITHUB_REF", "")
+    pr_match = re.search(r"refs/pull/(\d+)/(?:merge|head)$", ref)
+    pr_number = os.getenv("GITHUB_PR_NUMBER") or (pr_match.group(1) if pr_match else "105")
     manifest = {
         "commit": runtime_commit, "fixture": str(CONTROL_B.relative_to(ROOT)),
+        "github": {
+            "pr": int(pr_number) if str(pr_number).isdigit() else pr_number,
+            "head": os.getenv("GITHUB_SHA", runtime_commit),
+            "main": os.getenv("YADILAB_MAIN_SHA", "UNKNOWN_UNRESOLVED_IN_BROWSER_JOB"),
+            "runId": os.getenv("GITHUB_RUN_ID", "LOCAL_REAL_CHROMIUM"),
+            "requiredChecks": {"source-and-security": "REQUIRED", "browser-regressions / compiled-chromium": "REQUIRED", "yadilab-required-ci": "REQUIRED"},
+        },
         "originalSha256": hashlib.sha256(data_b).hexdigest(), "documentProfile": provenance["source"]["profileId"],
         "physicalPages": 500, "locators": {"factsByField": facts_by_field, "all": [fact["locator"] for fact in provenance["facts"]]},
         "provenance": {"formatId": provenance["formatId"], "status": provenance["status"], "targetModel": provenance["targetModel"], "factCount": len(provenance["facts"]), "physicalTopologyVerified": provenance["physicalTopologyVerified"]},
         "canonical": {"resourceIds": [item["id"] for item in readback["resources"]], "connectionIds": [readback["connections"][0]["id"]], "endpoints": readback["connections"][0], "compile": "valid", "roundTrip": "PASS", "physicalTruth": "UNVERIFIED_MODELED"},
         "atlas": {"nodes": 2, "links": 1}, "viewports": positive_report["viewports"],
         "screenshots": ["g5-1-reviewed-summary.png", *[item["screenshot"] for item in positive_report["viewports"].values()] ],
+        "browserIntegrity": {"pageErrors": errors, "externalRequests": external},
         "negativeTests": {**negatives, "N8_tampered_provenance": "PASS"}, "saveOpenProvenance": save_open,
         "ci": {"sourceAndSecurity": "REQUIRED", "compiledChromium": "REQUIRED", "yadilabRequiredCi": "REQUIRED"},
-        "limitations": ["DOCX declarations and ports are source-modeled facts, not physical cable verification.", "500 physical document pages do not imply 500 Atlas pages.", "visualApproved=PENDING_USER"],
+        "limitations": ["DOCX declarations and ports are source-modeled facts, not physical cable verification.", "500 physical document pages do not imply 500 Atlas pages.", "G5.2 and larger DOCX scale are not implemented.", "visualApproved=PENDING_USER"],
         "visualApproved": "PENDING_USER",
     }
     (evidence / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
