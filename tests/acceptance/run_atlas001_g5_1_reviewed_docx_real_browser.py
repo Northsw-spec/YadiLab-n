@@ -242,6 +242,8 @@ def positive(browser, url, evidence, data):
                                             re.compile(r"\|" + expected_bucket + r"\|"), timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-quality", "PASS", timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
+            # No incomplete route/handle stubs may be visible as a topology.
+            expect(atlas).to_have_attribute("data-atlas-render-ready", "true", timeout=30000)
             # Wait for the actual camera transform to settle before collecting
             # a passing screenshot. Merely checking the ELK layout key is not
             # enough: a screenshot can capture the old left-anchored camera
@@ -250,14 +252,29 @@ def positive(browser, url, evidence, data):
             try:
                 page.wait_for_function("""() => {
                   const panel = document.querySelector('.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"]');
-                  if (!panel) return false;
+                  if (!panel || panel.dataset.atlasRenderReady !== "true") return false;
                   const rects = ["g5-router-001", "g5-switch-001"].map(id =>
                     [...panel.querySelectorAll(".react-flow__node")].find(n => n.dataset.id === id)?.getBoundingClientRect());
-                  if (rects.some(rect => !rect)) return false;
+                  const path = [...panel.querySelectorAll("path.semantic-edge")].find(p =>
+                    p.dataset.connectionSource === "g5-router-001" &&
+                    p.dataset.connectionTarget === "g5-switch-001");
+                  if (rects.some(rect => !rect) || !path?.getAttribute("d")) return false;
                   const p = panel.getBoundingClientRect();
                   const center = (Math.min(...rects.map(r => r.left)) +
                                   Math.max(...rects.map(r => r.right))) / 2;
-                  return Math.abs(center - (p.left + p.right) / 2) <= Math.max(24, p.width * .1);
+                  if (Math.abs(center - (p.left + p.right) / 2) > Math.max(24, p.width * .1)) return false;
+                  const viewport = panel.querySelector(".react-flow__viewport");
+                  const stamp = JSON.stringify([
+                    viewport ? getComputedStyle(viewport).transform : null,
+                    path.getAttribute("d"), ...rects.flatMap(r => [r.left, r.right, r.top, r.bottom])
+                  ]);
+                  const previous = window.__atlasG51StableFrame;
+                  if (!previous || previous.stamp !== stamp) {
+                    window.__atlasG51StableFrame = { stamp, frames: 1 };
+                    return false;
+                  }
+                  previous.frames += 1;
+                  return previous.frames >= 4;
                 }""", timeout=15000)
             except Exception:
                 page.screenshot(path=str(evidence / name.replace(".png", "-FAILED.png")), full_page=True)
@@ -300,6 +317,26 @@ def positive(browser, url, evidence, data):
                 .find(el => el.getAttribute("data-connection-source") === ids[0] &&
                             el.getAttribute("data-connection-target") === ids[1]);
               const route = link?.getBoundingClientRect();
+              // Compare actual SVG M/L endpoints in screen coordinates with
+              // exact rendered ReactFlow handles, not node borders or ELK ports.
+              const handleMap = JSON.parse(panel.getAttribute("data-topology-react-flow-edge-handles") || "[]");
+              const edge = handleMap.find(row => row.id === link?.id);
+              const svgPoints = [...(link?.getAttribute("d") || "").matchAll(/[ML]\\s*(-?[0-9.]+)\\s+(-?[0-9.]+)/g)]
+                .map(match => new DOMPoint(Number(match[1]), Number(match[2])).matrixTransform(link.getScreenCTM()));
+              const handleCenter = (resourceId, handleId, kind) => {
+                const node = [...panel.querySelectorAll(".react-flow__node")].find(el => el.dataset.id === resourceId);
+                const handle = [...(node?.querySelectorAll("[data-react-flow-handle-id]") || [])].find(el =>
+                  el.getAttribute("data-react-flow-handle-id") === handleId &&
+                  el.getAttribute("data-react-flow-handle-type") === kind);
+                if (!handle) return null;
+                const r = handle.getBoundingClientRect();
+                return { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+              };
+              const sourceAnchor = edge && handleCenter(ids[0], edge.sourceHandle, "source");
+              const targetAnchor = edge && handleCenter(ids[1], edge.targetHandle, "target");
+              const distance = (a, b) => a && b ? Math.hypot(a.x - b.x, a.y - b.y) : null;
+              const cableSourceGapPx = distance(svgPoints[0], sourceAnchor);
+              const cableTargetGapPx = distance(svgPoints.at(-1), targetAnchor);
               const gap = boxes.length === 2
                 ? Math.max(boxes[1].left - boxes[0].right, boxes[0].left - boxes[1].right,
                            boxes[1].top - boxes[0].bottom, boxes[0].top - boxes[1].bottom)
@@ -310,6 +347,8 @@ def positive(browser, url, evidence, data):
                   (panelRect.left + panelRect.right) / 2 : null;
               return { boxes, scopeNameFits, cameraCenterOffsetPx, panelWidthPx: panelRect.width,
                        linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
+                       cableSourceGapPx, cableTargetGapPx,
+                       sourceHandle: edge?.sourceHandle ?? null, targetHandle: edge?.targetHandle ?? null,
                        cardSeparationPx: gap };
             }""")
             require(not geometry.get("error"), f"{width}x{height}: {geometry}")
@@ -327,6 +366,9 @@ def positive(browser, url, evidence, data):
                     f"{width}x{height}: Atlas cards too close for a readable link: {geometry}")
             require(geometry["linkVisiblePx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas link is not legible: {geometry}")
+            require(all(geometry[key] is not None and geometry[key] <= 2
+                        for key in ("cableSourceGapPx", "cableTargetGapPx")),
+                    f"{width}x{height}: cable does not reach its real node handle: {geometry}")
             viewports[f"{width}x{height}"] = {
                 "status": "PASS", "screenshot": name, "layoutErrors": 0,
                 "viewportBucket": expected_bucket, "geometry": geometry}
