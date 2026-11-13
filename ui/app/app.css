@@ -873,9 +873,16 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
   font-size: .82rem; line-height: 1.13; letter-spacing: 0;
   white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip;
 }
-/* Atlas links remain readable without inventing a connection or port. */
-.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"] .semantic-edge.tone-network {
+/* A pending ELK graph has fallback handles but not yet authoritative
+   routes. Never expose detached cable stubs during the async layout swap. */
+.topology-panel[data-atlas-render-ready="false"] .react-flow__viewport {
+  visibility: hidden;
+}
+/* Complete the visible line through the centre of the measured handle:
+   rounded caps cover subpixel antialiasing at node attachment points. */
+.topology-panel[data-atlas-render-ready="true"] .semantic-edge.tone-network {
   stroke: #79c9fa; stroke-width: 3; opacity: 1;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 .semantic-badge { display: inline-flex; width: fit-content; padding: .08rem .28rem; border: 1px solid rgba(238, 200, 120, .6); border-radius: 4px; color: #f4d992; font-size: .56rem; letter-spacing: .03em; text-transform: uppercase; }
 [data-topology-readable-mode="true"] .semantic-edge-label { font-size: .82rem; }
