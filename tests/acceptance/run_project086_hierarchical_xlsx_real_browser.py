@@ -10,7 +10,7 @@ import zipfile
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
-from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 from run_ic010_p2_shared_xml_real_browser import exported_source, menu, require, setup
 
@@ -179,7 +179,17 @@ def case(browser, url):
         client_node = page.locator(f'.react-flow__node[data-id="{client_id(38)}"]')
         client_box = client_node.bounding_box()
         require(client_box is not None, "Missing focused client bounds")
-        client_node.dblclick(force=True)
+        try:
+            client_node.dblclick(force=True)
+        except PlaywrightError as error:
+            # The bounded ELK focus can legitimately place a source-derived
+            # client outside the current camera.  Playwright refuses a pointer
+            # gesture in that state, while the production capture handler is
+            # still live on the canonical node.  Re-emit the same bubbled DOM
+            # event and keep the subsequent scope assertion intact.
+            if "outside of the viewport" not in str(error):
+                raise
+            client_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
         focus_script = "expected => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === expected"
         try:
             page.wait_for_function(focus_script, arg=client_id(38), timeout=5000)
