@@ -873,7 +873,7 @@ details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
   white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip;
 }
 /* Atlas links remain readable without inventing a connection or port. */
-.topology-panel[data-topology-view-mode="atlas"] .semantic-edge.tone-network {
+.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"] .semantic-edge.tone-network {
   stroke: #79c9fa; stroke-width: 3; opacity: 1;
 }
 .semantic-badge { display: inline-flex; width: fit-content; padding: .08rem .28rem; border: 1px solid rgba(238, 200, 120, .6); border-radius: 4px; color: #f4d992; font-size: .56rem; letter-spacing: .03em; text-transform: uppercase; }
