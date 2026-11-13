@@ -6007,6 +6007,18 @@ function atlasG51DocxLocator(locator, sourceSha256) {
     throw Object.assign(new Error("ATLAS_G5_1_PROVENANCE_BLOCKED"), { code: "ATLAS_G5_1_PROVENANCE_BLOCKED" });
   return { kind: "docx-table-cell", sourceSha256, part: "word/document.xml", tableOrdinal: locator.tableOrdinal, rowOrdinal: locator.rowOrdinal, cellOrdinal: locator.cellOrdinal };
 }
+async function verifyAtlasG51Candidate(file, expected, decision, isCurrent) {
+  try {
+    return await verifyOfficeCandidateFile(file, expected, decision, isCurrent);
+  } catch (cause) {
+    const code = cause?.code;
+    const mapped = code === "IC040_P1B_SOURCE_CHANGED" ? "ATLAS_G5_1_SOURCE_CHANGED" :
+      code === "IC040_P1B_STALE" ? "ATLAS_G5_1_STALE" :
+        code === "IC040_P1B_FILE_INVALID" ? "ATLAS_G5_1_DOCX_ONLY" : null;
+    if (mapped) throw Object.assign(new Error(mapped), { code: mapped, cause });
+    throw cause;
+  }
+}
 async function buildAtlasG51Provenance(mapped, source, originalFile, sourceRevision, isCurrent) {
   const raw = await originalFile.arrayBuffer();
   if (typeof isCurrent === "function" && !isCurrent())
@@ -8296,7 +8308,7 @@ function App() {
           if (typeof isCurrentSelection !== "function" || !isCurrentSelection()) blocked("ATLAS_G5_1_STALE");
         };
         checkCurrent();
-        const mapped = await verifyOfficeCandidateFile(originalFile, expected, decision, isCurrentSelection);
+        const mapped = await verifyAtlasG51Candidate(originalFile, expected, decision, isCurrentSelection);
         checkCurrent();
         const expectedConnections = Array.isArray(decision.linkRows)
           ? decision.linkRows.length
@@ -8338,7 +8350,7 @@ function App() {
           JSON.stringify(latestDrawioWorkspaceRef.current) === staged.workspaceIdentity &&
           typeof staged.isCurrentSelection === "function" && staged.isCurrentSelection();
         if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
-        const mapped = await verifyOfficeCandidateFile(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        const mapped = await verifyAtlasG51Candidate(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
         if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
         if (mapped.sourceSha256 !== staged.sourceSha256) blocked("ATLAS_G5_1_SOURCE_CHANGED");
         const stagingWorkspace = createBuilderWorkspace(mapped.source);
@@ -8350,7 +8362,7 @@ function App() {
         if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
         const layout = await autoLayoutBuilder(compiled, new ElkLayoutBackend());
         if (!layout.ok) blocked("ATLAS_G5_1_LAYOUT_BLOCKED");
-        const refreshed = await verifyOfficeCandidateFile(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        const refreshed = await verifyAtlasG51Candidate(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
         if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
         if (JSON.stringify(refreshed.source) !== JSON.stringify(mapped.source) ||
             JSON.stringify(refreshed.origins) !== JSON.stringify(mapped.origins) ||
