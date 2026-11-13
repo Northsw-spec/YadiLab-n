@@ -39,8 +39,8 @@ def wait_for_final_layout(page, panel, expected_page: str) -> str:
     expect(panel.locator('.atlas-page-status [data-atlas-layout-status="PENDING"]')).to_have_count(0, timeout=30000)
     # Boundary/page-list clicks may scroll a sidebar control into view.  The
     # evidence must be measured in the real screen coordinate system with the
-    # topology panel restored to the initial READ context.
-    page.evaluate("window.scrollTo(0, 0)")
+    # active topology panel restored to a visible READ context.
+    page.evaluate("document.querySelector('.topology-panel')?.scrollIntoView({block: 'center', inline: 'nearest'})")
     page.wait_for_function(
         """() => {
           const panel = document.querySelector('.topology-panel');
