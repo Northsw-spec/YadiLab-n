@@ -41,6 +41,8 @@ def main() -> None:
                 page.on("pageerror", lambda error, bucket=page_errors: bucket.append(str(error)))
                 page.goto(args.url, wait_until="domcontentloaded", timeout=30000)
                 expect(page.locator('[data-project-file-controls="ready"]')).to_be_visible(timeout=30000)
+                page.locator('[data-guided-lab-start="direct"]').click()
+                page.wait_for_function("document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id')", timeout=45000)
                 page.get_by_role("button", name="ATLAS PAGES").click()
                 panel = page.locator(".topology-panel")
                 expect(panel).to_have_attribute("data-atlas-active-page", timeout=30000)
