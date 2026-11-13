@@ -208,11 +208,15 @@ def positive(browser, url, evidence, data):
             page.set_viewport_size({"width": width, "height": height})
             expect(page.locator('[data-topology-view-mode="atlas"]')).to_be_visible(timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
+            # Keep failing-viewport images as evidence even when a new geometry
+            # assertion correctly stops the Chromium job.
+            name = f"g5-1-atlas-control-b-{width}x{height}.png"
+            page.screenshot(path=str(evidence / name), full_page=True)
             # Check rendered DOM geometry after the real ReactFlow viewport
             # transform, rather than only checking that a screenshot exists.
             geometry = page.evaluate("""() => {
               const ids = ["g5-router-001", "g5-switch-001"];
-              const panel = document.querySelector('.topology-panel[data-topology-view-mode="atlas"]');
+              const panel = document.querySelector('.topology-panel[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"]');
               if (!panel) return { error: "ATLAS_PANEL_MISSING" };
               const boxes = ids.map(id => {
                 const root = [...panel.querySelectorAll(".react-flow__node")].find(el => el.getAttribute("data-id") === id);
@@ -230,15 +234,19 @@ def positive(browser, url, evidence, data):
                   labelInsideCard: label.getBoundingClientRect().right <= c.right - 2,
                   portsInsideCard: p.bottom <= c.bottom + 2,
                   portsBelowHeading: p.top >= card.querySelector(".device-heading").getBoundingClientRect().bottom - 1,
-                  left: c.left, right: c.right
+                  left: c.left, right: c.right, top: c.top, bottom: c.bottom
                 };
               });
               const link = [...panel.querySelectorAll("path.semantic-edge")]
                 .find(el => el.getAttribute("data-connection-source") === ids[0] &&
                             el.getAttribute("data-connection-target") === ids[1]);
               const route = link?.getBoundingClientRect();
+              const gap = boxes.length === 2
+                ? Math.max(boxes[1].left - boxes[0].right, boxes[0].left - boxes[1].right,
+                           boxes[1].top - boxes[0].bottom, boxes[0].top - boxes[1].bottom)
+                : 0;
               return { boxes, linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
-                       cardGapPx: boxes.length === 2 ? boxes[1].left - boxes[0].right : 0 };
+                       cardSeparationPx: gap };
             }""")
             require(not geometry.get("error"), f"{width}x{height}: {geometry}")
             require(len(geometry["boxes"]) == 2 and all(
@@ -246,12 +254,10 @@ def positive(browser, url, evidence, data):
                 and node["labelFits"] and node["labelInsideCard"]
                 and node["portsInsideCard"] and node["portsBelowHeading"]
                 for node in geometry["boxes"]), f"{width}x{height}: overlapping or clipped card content: {geometry}")
-            require(geometry["cardGapPx"] >= (10 if width <= 480 else 24),
+            require(geometry["cardSeparationPx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas cards too close for a readable link: {geometry}")
             require(geometry["linkVisiblePx"] >= (10 if width <= 480 else 24),
                     f"{width}x{height}: Atlas link is not legible: {geometry}")
-            name = f"g5-1-atlas-control-b-{width}x{height}.png"
-            page.screenshot(path=str(evidence / name), full_page=True)
             viewports[f"{width}x{height}"] = {
                 "status": "PASS", "screenshot": name, "layoutErrors": 0, "geometry": geometry}
         runtime_commit = page.locator('[data-source-commit]').get_attribute("data-source-commit")
