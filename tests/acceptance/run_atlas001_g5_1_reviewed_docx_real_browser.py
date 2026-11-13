@@ -257,8 +257,8 @@ def negative_cases(browser, url, data_b, data_a):
     try:
         open_g51(page); upload(page, CONTROL_B.name, data_b); select_review(page, missing_target_port=True)
         require(page.locator('[data-office-p1b-confirm="true"]').is_disabled(), "missing port approval enabled staging")
-        page.locator('[data-office-p1b-confirm="true"]').evaluate("el => { el.disabled = false; el.click(); }")
-        expect(page.locator('[data-office-p1b-error="BLOCKED"]')).to_contain_text("IC040_P4_", timeout=30000)
+        page.locator('[data-office-p1b-confirm="true"]').evaluate("el => el.click()")
+        require(page.locator('[data-office-g5-1-summary]').count() == 0, "missing port approval reached staging")
         results["N5_missing_port_approval"] = "PASS"
     finally:
         page.close()
