@@ -92,6 +92,8 @@ def run_blocked(browser, url, evidence_dir):
         require(activate.is_disabled(), "BLOCKED activation button was enabled")
         trace = page.evaluate("window.__yadilabNetworkImportActivationTrace")
         require(trace["globalLayoutCalls"] == 0, f"BLOCKED source reached global layout: {trace!r}")
+        page.get_by_role("button", name="Close network import").click()
+        expect(panel).to_have_count(0, timeout=30000)
         require(exported_source(page) == before, "BLOCKED import changed the active Builder source")
         require(not errors and not outside, f"BLOCKED Chromium errors/remote requests: {errors!r} {outside!r}")
         page.screenshot(path=str(evidence_dir / "atlas001-g4-2-blocked.png"), full_page=True)
