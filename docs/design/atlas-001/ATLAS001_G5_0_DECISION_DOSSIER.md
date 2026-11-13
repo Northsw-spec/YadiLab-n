@@ -114,10 +114,9 @@ The renderer installation/qualification step is placed after the existing
 compiled-Chromium acceptance block so that LibreOffice/font packages cannot
 alter the browser regression environment.
 
-The first strict GitHub-hosted verification of this hardening change is run
-`43458131651` on the exact PR head `bef457ac6eddd7e22371429d1bbcd0b67808c7fa`.
-Its browser job is
-[131997626109](https://github.com/Northsw-spec/YadiLab-n/actions/runs/43458131651/job/131997626109),
+The final strict GitHub-hosted verification is run `43461786994` on exact PR
+head `9f5376cbfc19335b1077d324750d66522e643f18`. Its browser job is
+[132010284314](https://github.com/Northsw-spec/YadiLab-n/actions/runs/43461786994/job/132010284314),
 and the uploaded artifact is `yadilab-chromium-evidence` (containing
 `atlas001-g5-0-evidence.json`). The renderer step itself is an explicit named
 step in that job; the full job and the fail-closed required gate are green.
@@ -212,7 +211,7 @@ Required G5.1 tests (all must be negative-tested as well as positive-tested):
 | `NETWORK_FACT_EXTRACTION` | **REVIEW_REQUIRED** | Explicit reviewed candidate exists; no inference and no live activation |
 | `ATLAS_COMPATIBILITY` | **PENDING_G5.1** | Existing Atlas projection is ready for canonical input; DOCX→Atlas integration is not implemented |
 | `NEGATIVE_TESTS` | **PASS** | Dedicated fail-closed regression suite covers source, renderer, PDF and pagination drift; GitHub renderer step passed |
-| `GITHUB_CI_EVIDENCE` | **PASS** | Run `43458131651`; source job `131997625597`, browser job `131997626109`, gate job `132002356179` |
+| `GITHUB_CI_EVIDENCE` | **PASS** | Run `43461786994`; source job `132010283784`, browser job `132010284314`, gate job `132013794523` |
 | `G5.1_READY` | **CONDITIONAL / NO-GO for implementation** | Contract and tests are specified, but implementation requires a new explicit review |
 
 ## Verification commands run
