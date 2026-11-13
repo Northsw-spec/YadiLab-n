@@ -51,7 +51,7 @@ def main() -> None:
                     raise AssertionError(f"Expected at least two Atlas pages, got {page_count}")
                 first_page = panel.get_attribute("data-atlas-active-page")
                 expect(page.locator('[data-atlas-page-list]')).to_be_visible(timeout=15000)
-                expect(page.locator('[data-atlas-layout-status="PENDING"], [data-atlas-layout-quality]')).to_have_count(1, timeout=30000)
+                expect(page.locator('.atlas-page-status [data-atlas-layout-status="PENDING"], .atlas-page-status [data-atlas-layout-quality]')).to_have_count(1, timeout=30000)
                 screenshot_name = f"atlas001-{width}x{height}-page-a.png"
                 page.screenshot(path=str(args.evidence_dir / screenshot_name), full_page=True)
                 screenshots.append({"viewport": [width, height], "page": first_page, "path": screenshot_name})
