@@ -546,13 +546,13 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
     );
 }
 
-// G5.1 Chromium measured a systematic 5.4 screen-pixel offset between the
-// SVG route and the visible eth1 handle at desktop zoom (6 canvas units).
-// Apply a purely visual inset only to Atlas edges, leaving ELK bends and
-// source/canonical ports unchanged.
+// The live eth1 handle is 8 canvas units wide. Chromium measured a 5.4px
+// separation at 1.35× camera zoom, i.e. exactly half that handle width.
+// Inset only the Atlas SVG path endpoints by the handle radius; preserve
+// ELK bends, canonical endpoints and source-declared port identity.
 function atlasHandleAnchor(x, y, position, atlasEdge) {
   if (!atlasEdge) return { x, y };
-  const inset = 6;
+  const inset = 4;
   if (position === Position.Left) return { x: x + inset, y };
   if (position === Position.Right) return { x: x - inset, y };
   if (position === Position.Top) return { x, y: y + inset };
