@@ -83,21 +83,24 @@ def exercise(browser, url, evidence_dir, viewport):
         page_options = page.locator("[data-atlas-page-option]")
         require(page_options.count() == page_count, "Atlas page list count differs from derived page count")
         first_page = panel.get_attribute("data-atlas-active-page")
-        first_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        first_resources = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))
+        first_resource = first_resources[len(first_resources) // 2]
         focus_resource(page, panel, first_resource)
         first = capture_page_evidence(page, panel, first_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-first.png"), full_page=True)
 
         middle_page = page_options.nth(page_count // 2).get_attribute("data-atlas-page-option")
         page_options.nth(page_count // 2).click()
-        middle_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        middle_resources = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))
+        middle_resource = middle_resources[len(middle_resources) // 2]
         focus_resource(page, panel, middle_resource)
         middle = capture_page_evidence(page, panel, middle_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-middle.png"), full_page=True)
 
         last_page = page_options.nth(page_count - 1).get_attribute("data-atlas-page-option")
         page_options.nth(page_count - 1).click()
-        last_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        last_resources = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))
+        last_resource = last_resources[len(last_resources) // 2]
         focus_resource(page, panel, last_resource)
         last = capture_page_evidence(page, panel, last_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-last.png"), full_page=True)
