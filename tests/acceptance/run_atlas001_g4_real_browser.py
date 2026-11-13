@@ -58,6 +58,15 @@ def import_fixture(page):
     return source
 
 
+def focus_resource(page, panel, resource_id):
+    search = page.get_by_label("Sök i topology")
+    search.fill(resource_id)
+    result = page.get_by_role("option").filter(has_text=resource_id).first
+    expect(result).to_be_visible(timeout=15000)
+    result.click()
+    wait_for_final_layout(page, panel, panel.get_attribute("data-atlas-active-page"))
+
+
 def exercise(browser, url, evidence_dir, viewport):
     width, height = viewport
     page = browser.new_page(accept_downloads=True, viewport={"width": width, "height": height}, device_scale_factor=1)
@@ -74,16 +83,22 @@ def exercise(browser, url, evidence_dir, viewport):
         page_options = page.locator("[data-atlas-page-option]")
         require(page_options.count() == page_count, "Atlas page list count differs from derived page count")
         first_page = panel.get_attribute("data-atlas-active-page")
+        first_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        focus_resource(page, panel, first_resource)
         first = capture_page_evidence(page, panel, first_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-first.png"), full_page=True)
 
         middle_page = page_options.nth(page_count // 2).get_attribute("data-atlas-page-option")
         page_options.nth(page_count // 2).click()
+        middle_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        focus_resource(page, panel, middle_resource)
         middle = capture_page_evidence(page, panel, middle_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-middle.png"), full_page=True)
 
         last_page = page_options.nth(page_count - 1).get_attribute("data-atlas-page-option")
         page_options.nth(page_count - 1).click()
+        last_resource = json.loads(panel.get_attribute("data-atlas-page-resource-ids"))[0]
+        focus_resource(page, panel, last_resource)
         last = capture_page_evidence(page, panel, last_page, viewport)
         page.screenshot(path=str(evidence_dir / f"atlas001-g4-{width}x{height}-last.png"), full_page=True)
 
