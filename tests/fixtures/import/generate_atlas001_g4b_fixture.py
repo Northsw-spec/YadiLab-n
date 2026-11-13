@@ -34,7 +34,7 @@ def rows() -> dict[str, list[tuple[str, ...]]]:
     zones = [("zoneId", "displayName", "kind")]
     layout = [("nodeId", "rank")]
     zone_ranges = (("b4_zone_north", 1, 120), ("b4_zone_core", 121, 260),
-                   ("b4_zone_edge", 261, 480), ("b4_zone_remote", 491, 500))
+                   ("b4_zone_edge", 261, 440), ("b4_zone_remote", 441, 500))
     for zone_id, first, last in zone_ranges:
         zones.append((zone_id, zone_id.replace("b4_", "").replace("_", " ").title(), "lan"))
     for index in range(1, RESOURCE_COUNT + 1):

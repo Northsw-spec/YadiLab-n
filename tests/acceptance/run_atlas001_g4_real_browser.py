@@ -18,7 +18,7 @@ MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 VIEWPORTS = ((1366, 768), (1280, 800), (1920, 1080), (390, 844))
 CASES = (
     {"key": "g4-a", "fixture": ROOT / "tests/fixtures/import/atlas001-g4-500.xlsx", "sha256": "84a32fb149903e89488ec656d036622b5b81b7086c84b8352f24138273e48fde", "resources": 500, "connections": 499, "zones": 10, "node_prefix": "g4_node_", "link_prefix": "g4_link_", "page_count": 10},
-    {"key": "g4-b", "fixture": ROOT / "tests/fixtures/import/atlas001-g4b-500.xlsx", "sha256": "9dabeae5901931845059bba4a380b7b543192f06948d270a615fdf765031e8ed", "resources": 500, "connections": 500, "zones": 4, "node_prefix": "b4_device_", "link_prefix": "b4_link_", "page_count": 11},
+    {"key": "g4-b", "fixture": ROOT / "tests/fixtures/import/atlas001-g4b-500.xlsx", "sha256": "5b9db7325077e7b0b1a6cfc02ec42426889b210826abc7efe24e2ef140ab51e1", "resources": 500, "connections": 500, "zones": 4, "node_prefix": "b4_device_", "link_prefix": "b4_link_", "page_count": 9},
 )
 
 
