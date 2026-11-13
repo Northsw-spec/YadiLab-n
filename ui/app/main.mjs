@@ -1916,7 +1916,13 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
     if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS && validAtlasIndex) {
       const page = atlasPageForResource(validAtlasIndex, nodeId);
-      if (page) openAtlasPage(page.id, nodeId);
+      if (page) {
+        openAtlasPage(page.id, nodeId);
+        // Atlas search/navigation is view-only.  Do not publish a Builder
+        // selection update while React Flow is reconciling the new bounded
+        // page; that event can otherwise re-enter selection reconciliation.
+        return;
+      }
     } else if (tenThousandHierarchyIndex) {
       const role = tenThousandHierarchyIndex.roleById.get(nodeId) ?? "device";
       const hierarchyLabel = role === "distribution" ? `Distribution branch: ${label}` : role === "access" ? `Access network: ${label}` : `Connected branch: ${label}`;
