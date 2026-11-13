@@ -43,6 +43,7 @@ jobs:
           # existing Chromium job after its renderer install.
           node tests/enterprise-import/run_atlas001_g5_0_fixture_tests.mjs
           node tests/browser/run_atlas001_g5_1_reviewed_docx_atlas_tests.mjs
+          node tests/browser/run_atlas001_g5_2_contract_tests.mjs
           npm run test:import-helper
           # PROJECT-086: canonical focus paging/counts and topology-aware 10k fallback.
           npm run test:topology-navigation
