@@ -321,7 +321,7 @@ def positive(browser, url, evidence, data):
               // exact rendered ReactFlow handles, not node borders or ELK ports.
               const handleMap = JSON.parse(panel.getAttribute("data-topology-react-flow-edge-handles") || "[]");
               const edge = handleMap.find(row => row.id === link?.id);
-              const svgPoints = [...(link?.getAttribute("d") || "").matchAll(/[ML]\\s*(-?[0-9.]+)\\s+(-?[0-9.]+)/g)]
+              const svgPoints = [...(link?.getAttribute("d") || "").matchAll(/[ML]\s*(-?[0-9.]+)\s+(-?[0-9.]+)/g)]
                 .map(match => new DOMPoint(Number(match[1]), Number(match[2])).matrixTransform(link.getScreenCTM()));
               const handleCenter = (resourceId, handleId, kind) => {
                 const node = [...panel.querySelectorAll(".react-flow__node")].find(el => el.dataset.id === resourceId);
