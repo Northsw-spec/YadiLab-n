@@ -201,9 +201,52 @@ def positive(browser, url, evidence, data):
             page.set_viewport_size({"width": width, "height": height})
             expect(page.locator('[data-topology-view-mode="atlas"]')).to_be_visible(timeout=30000)
             expect(atlas).to_have_attribute("data-atlas-layout-error-count", "0", timeout=30000)
+            # Check rendered DOM geometry after the real ReactFlow viewport
+            # transform, rather than only checking that a screenshot exists.
+            geometry = page.evaluate("""() => {
+              const ids = ["g5-router-001", "g5-switch-001"];
+              const panel = document.querySelector('.topology-panel[data-topology-view-mode="atlas"]');
+              if (!panel) return { error: "ATLAS_PANEL_MISSING" };
+              const boxes = ids.map(id => {
+                const root = [...panel.querySelectorAll(".react-flow__node")].find(el => el.getAttribute("data-id") === id);
+                const card = root?.querySelector(".resource-node");
+                const icon = card?.querySelector(".device-icon-stack");
+                const identity = card?.querySelector(".device-identity");
+                const label = identity?.querySelector("strong");
+                const ports = card?.querySelector(".resource-port-strip");
+                if (!root || !card || !icon || !identity || !label || !ports) return { id, error: "CARD_PART_MISSING" };
+                const a = icon.getBoundingClientRect(), b = identity.getBoundingClientRect();
+                const c = card.getBoundingClientRect(), p = ports.getBoundingClientRect();
+                return {
+                  id, iconTextGapPx: b.left - a.right,
+                  labelFits: label.scrollWidth <= label.clientWidth + 1 && label.scrollHeight <= label.clientHeight + 1,
+                  labelInsideCard: label.getBoundingClientRect().right <= c.right - 2,
+                  portsInsideCard: p.bottom <= c.bottom + 2,
+                  portsBelowHeading: p.top >= card.querySelector(".device-heading").getBoundingClientRect().bottom - 1,
+                  left: c.left, right: c.right
+                };
+              });
+              const link = [...panel.querySelectorAll("path.semantic-edge")]
+                .find(el => el.getAttribute("data-connection-source") === ids[0] &&
+                            el.getAttribute("data-connection-target") === ids[1]);
+              const route = link?.getBoundingClientRect();
+              return { boxes, linkVisiblePx: route ? Math.hypot(route.width, route.height) : 0,
+                       cardGapPx: boxes.length === 2 ? boxes[1].left - boxes[0].right : 0 };
+            }""")
+            require(not geometry.get("error"), f"{width}x{height}: {geometry}")
+            require(len(geometry["boxes"]) == 2 and all(
+                not node.get("error") and node["iconTextGapPx"] >= -1
+                and node["labelFits"] and node["labelInsideCard"]
+                and node["portsInsideCard"] and node["portsBelowHeading"]
+                for node in geometry["boxes"]), f"{width}x{height}: overlapping or clipped card content: {geometry}")
+            require(geometry["cardGapPx"] >= (10 if width <= 480 else 24),
+                    f"{width}x{height}: Atlas cards too close for a readable link: {geometry}")
+            require(geometry["linkVisiblePx"] >= (10 if width <= 480 else 24),
+                    f"{width}x{height}: Atlas link is not legible: {geometry}")
             name = f"g5-1-atlas-control-b-{width}x{height}.png"
             page.screenshot(path=str(evidence / name), full_page=True)
-            viewports[f"{width}x{height}"] = {"status": "PASS", "screenshot": name, "layoutErrors": 0}
+            viewports[f"{width}x{height}"] = {
+                "status": "PASS", "screenshot": name, "layoutErrors": 0, "geometry": geometry}
         runtime_commit = page.locator('[data-source-commit]').get_attribute("data-source-commit")
         return readback, {"positive": "PASS", "viewports": viewports, "runtimeCommit": runtime_commit}, errors, external
     finally:
@@ -355,10 +398,17 @@ def main():
     evidence = Path(args.evidence_dir)
     evidence.mkdir(parents=True, exist_ok=True)
     data_a, data_b = CONTROL_A.read_bytes(), CONTROL_B.read_bytes()
+    all_page_errors, all_external_requests = [], []
+    origin = f"{urlparse(args.url).scheme}://{urlparse(args.url).netloc}"
+    def observe(page):
+        page.on("pageerror", lambda exc: all_page_errors.append(str(exc)))
+        page.on("request", lambda req: all_external_requests.append(req.url)
+                if not (req.url.startswith(origin) or req.url.startswith(("data:", "blob:"))) else None)
     with sync_playwright() as pw:
         launch = {"headless": True}
         if Path("/usr/bin/chromium").exists(): launch["executable_path"] = "/usr/bin/chromium"
         browser = pw.chromium.launch(**launch)
+        browser.on("page", observe)  # Positive, negative and Save/Open pages.
         try:
             readback, positive_report, errors, external = positive(browser, args.url, evidence, data_b)
             negatives = negative_cases(browser, args.url, data_b, data_a)
@@ -366,8 +416,10 @@ def main():
                 save_open = save_open_and_tampered(browser, args.url, readback, Path(temp))
         finally:
             browser.close()
-    require(not errors, "uncaught Chromium errors: " + repr(errors))
-    require(not external, "unexpected external browser requests: " + repr(external))
+    require(not all_page_errors, "uncaught Chromium errors across cases: " + repr(all_page_errors))
+    require(not all_external_requests, "unexpected external requests across cases: " + repr(all_external_requests))
+    require(len(save_open) == 6 and all(result == "PASS" for result in save_open.values()),
+            "incomplete N8 provenance tampering coverage")
     provenance = readback["officeReviewProvenance"]
     facts_by_field = {fact["field"]: fact["locator"] for fact in provenance["facts"]}
     runtime_commit = positive_report.get("runtimeCommit")
@@ -375,12 +427,23 @@ def main():
     ref = os.getenv("GITHUB_REF", "")
     pr_match = re.search(r"refs/pull/(\d+)/(?:merge|head)$", ref)
     pr_number = os.getenv("GITHUB_PR_NUMBER") or (pr_match.group(1) if pr_match else "105")
+    event_path = os.getenv("GITHUB_EVENT_PATH", "")
+    event = json.loads(Path(event_path).read_text(encoding="utf-8")) if event_path and Path(event_path).is_file() else {}
+    pull = event.get("pull_request") or {}
+    pr_head_sha = pull.get("head", {}).get("sha") or runtime_commit
+    base_sha = pull.get("base", {}).get("sha") or os.getenv("YADILAB_MAIN_SHA", "UNKNOWN_LOCAL")
+    ci_merge_sha = os.getenv("GITHUB_SHA", runtime_commit)
+    if pull:
+        require(all(re.fullmatch(r"[0-9a-f]{40}", sha or "") for sha in (pr_head_sha, base_sha, ci_merge_sha)),
+                "invalid GitHub pull-request commit identity")
+        require(runtime_commit == ci_merge_sha, "compiled UI commit does not match tested merge SHA")
     manifest = {
         "commit": runtime_commit, "fixture": str(CONTROL_B.relative_to(ROOT)),
         "github": {
             "pr": int(pr_number) if str(pr_number).isdigit() else pr_number,
-            "head": os.getenv("GITHUB_SHA", runtime_commit),
-            "main": os.getenv("YADILAB_MAIN_SHA", "UNKNOWN_UNRESOLVED_IN_BROWSER_JOB"),
+            "head": pr_head_sha, "prHeadSha": pr_head_sha,
+            "ciMergeSha": ci_merge_sha, "baseSha": base_sha,
+            "main": base_sha,
             "runId": os.getenv("GITHUB_RUN_ID", "LOCAL_REAL_CHROMIUM"),
             "requiredChecks": {"source-and-security": "REQUIRED", "browser-regressions / compiled-chromium": "REQUIRED", "yadilab-required-ci": "REQUIRED"},
         },
@@ -390,7 +453,8 @@ def main():
         "canonical": {"resourceIds": [item["id"] for item in readback["resources"]], "connectionIds": [readback["connections"][0]["id"]], "endpoints": readback["connections"][0], "compile": "valid", "roundTrip": "PASS", "physicalTruth": "UNVERIFIED_MODELED"},
         "atlas": {"nodes": 2, "links": 1}, "viewports": positive_report["viewports"],
         "screenshots": ["g5-1-reviewed-summary.png", *[item["screenshot"] for item in positive_report["viewports"].values()] ],
-        "browserIntegrity": {"pageErrors": errors, "externalRequests": external},
+        "browserIntegrity": {"pageErrors": all_page_errors, "externalRequests": all_external_requests,
+                             "coverage": "all-positive-negative-and-save-open-pages"},
         "negativeTests": {**negatives, "N8_tampered_provenance": "PASS"}, "saveOpenProvenance": save_open,
         "ci": {"sourceAndSecurity": "REQUIRED", "compiledChromium": "REQUIRED", "yadilabRequiredCi": "REQUIRED"},
         "limitations": ["DOCX declarations and ports are source-modeled facts, not physical cable verification.", "500 physical document pages do not imply 500 Atlas pages.", "G5.2 and larger DOCX scale are not implemented.", "visualApproved=PENDING_USER"],
