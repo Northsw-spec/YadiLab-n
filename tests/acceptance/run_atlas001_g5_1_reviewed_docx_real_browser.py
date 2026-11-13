@@ -242,7 +242,10 @@ def negative_cases(browser, url, data_b, data_a):
     page = new_page(browser, url)
     try:
         open_g51(page); upload(page, CONTROL_B.name, data_b); select_review(page); stage(page)
-        page.locator('[data-project-action="new"]').click(force=True)
+        # The staged panel is an overlay; dispatch the real button event on
+        # the underlying project control so the active Builder is replaced
+        # while the old approval remains mounted and must become stale.
+        page.locator('[data-project-action="new"]').evaluate("element => element.click()")
         page.locator('[data-office-g5-1-approval="true"]').click()
         expect(page.locator('[data-office-p1b-error="BLOCKED"]')).to_have_text("ATLAS_G5_1_STALE", timeout=30000)
         require(page.locator('[data-atlas-activation-mode="BOUNDED_SOURCE_PAGE"]').count() == 0, "stale workspace activated Atlas")
