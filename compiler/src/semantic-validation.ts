@@ -665,6 +665,27 @@ export function validateScenarioSemantics(
       if (!valid) diagnostics.push(error("NETWORK_IMPORT_PROVENANCE_TARGET", `${path}.targetId`, "Provenance target does not exist with the declared targetKind."));
     });
   }
+  const officeProvenance = source.officeReviewProvenance;
+  if (officeProvenance !== undefined) {
+    if (officeProvenance.source.sourceId !== `src_${officeProvenance.source.sha256}`) {
+      diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_SOURCE_ID", "officeReviewProvenance.source.sha256", "Office review provenance source identity is not derived from its exact SHA-256."));
+    }
+    if (officeProvenance.targetModel.scenarioId !== source.scenarioId) {
+      diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_SCENARIO_MISMATCH", "officeReviewProvenance.targetModel.scenarioId", "Office review provenance is bound to a different canonical scenario."));
+    }
+    const officeFactIds = new Set<string>();
+    officeProvenance.facts.forEach((fact, index) => {
+      const path = `officeReviewProvenance.facts[${index}]`;
+      if (officeFactIds.has(fact.factId)) diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_DUPLICATE_FACT", `${path}.factId`, "Office review provenance fact IDs must be unique."));
+      officeFactIds.add(fact.factId);
+      const targetExists = fact.targetKind === "resource" ? resources.has(fact.targetId) : connections.has(fact.targetId);
+      if (officeProvenance.status === "CURRENT" && !targetExists) diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_TARGET", `${path}.targetId`, "Current office review provenance target does not exist in the canonical source."));
+      if (fact.locator.sourceSha256 !== officeProvenance.source.sha256 ||
+          fact.locator.part !== "word/document.xml") {
+        diagnostics.push(error("OFFICE_REVIEW_PROVENANCE_LOCATOR", `${path}.locator`, "Office review locator is not bound to the declared DOCX source."));
+      }
+    });
+  }
 
   const zoneParent = new Map<string, string>();
   source.zones.forEach((zone, i) => {

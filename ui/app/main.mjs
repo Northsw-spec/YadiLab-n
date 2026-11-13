@@ -5997,6 +5997,67 @@ function NetworkIntentPanel({ workspace, setDiagnostics, onOpenEngineRun }) {
   );
 }
 
+const ATLAS_G5_1_DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+function atlasG51SourceWithoutProvenance(source) {
+  const { officeReviewProvenance: _provenance, ...without } = source;
+  return without;
+}
+function atlasG51DocxLocator(locator, sourceSha256) {
+  if (!locator || locator.kind !== "docx-table-cell" || locator.part !== "word/document.xml" || locator.sourceSha256 !== sourceSha256)
+    throw Object.assign(new Error("ATLAS_G5_1_PROVENANCE_BLOCKED"), { code: "ATLAS_G5_1_PROVENANCE_BLOCKED" });
+  return { kind: "docx-table-cell", sourceSha256, part: "word/document.xml", tableOrdinal: locator.tableOrdinal, rowOrdinal: locator.rowOrdinal, cellOrdinal: locator.cellOrdinal };
+}
+async function buildAtlasG51Provenance(mapped, source, originalFile, sourceRevision, isCurrent) {
+  const raw = await originalFile.arrayBuffer();
+  if (typeof isCurrent === "function" && !isCurrent())
+    throw Object.assign(new Error("ATLAS_G5_1_STALE"), { code: "ATLAS_G5_1_STALE" });
+  if (!(raw instanceof ArrayBuffer) || raw.byteLength < 4 || raw.byteLength > 16 * 1024 * 1024)
+    throw Object.assign(new Error("ATLAS_G5_1_SOURCE_CHANGED"), { code: "ATLAS_G5_1_SOURCE_CHANGED" });
+  const sha = mapped.sourceSha256;
+  const facts = [];
+  const add = (targetKind, targetId, field, locator) => facts.push({
+    factId: `office_ref_${facts.length + 1}`,
+    targetKind, targetId, field, mapping: "EXACT",
+    decision: "USER_CONSENTED_MODELED_UNVERIFIED",
+    locator: atlasG51DocxLocator(locator, sha),
+  });
+  for (const origin of mapped.origins ?? []) add("resource", origin.targetId, "resource.id", origin.locator);
+  const linkOrigins = mapped.linkRowOrigins?.length ? mapped.linkRowOrigins : (mapped.connectionOrigins ?? []);
+  for (const origin of linkOrigins) {
+    add("connection", origin.targetId, "connection.from.resource", origin.fromLocator);
+    add("connection", origin.targetId, "connection.to.resource", origin.toLocator ?? origin.peerLocator);
+    if (origin.sourcePortLocator && origin.targetPortLocator) {
+      add("connection", origin.targetId, "connection.from.port", origin.sourcePortLocator);
+      add("connection", origin.targetId, "connection.to.port", origin.targetPortLocator);
+    }
+  }
+  for (const port of mapped.portOrigins ?? []) {
+    if (!port.sourcePortLocator || !port.peerPortLocator) continue;
+    // P3 port origins are already represented by the link-row facts when the
+    // DOCX Links table path is used; retain this branch for the older P3 UI.
+    if (linkOrigins.some(origin => origin.targetId === port.targetLinkId && origin.sourcePortLocator && origin.targetPortLocator)) continue;
+    add("connection", port.targetLinkId, "connection.from.port", port.sourcePortLocator);
+    add("connection", port.targetLinkId, "connection.to.port", port.peerPortLocator);
+  }
+  if (!facts.length) throw Object.assign(new Error("ATLAS_G5_1_PROVENANCE_BLOCKED"), { code: "ATLAS_G5_1_PROVENANCE_BLOCKED" });
+  const sourceIdentity = await computeCanonicalSourceIdentity(atlasG51SourceWithoutProvenance(source));
+  return {
+    formatId: "yadilab.office-reviewed-provenance",
+    schemaVersion: "1.0.0",
+    status: "CURRENT",
+    semanticTrack: "CONFIG_DOCUMENTED",
+    source: { sourceId: `src_${sha}`, profileId: "office.docx-tables.structural.v1", sha256: sha, byteSize: raw.byteLength, mediaType: ATLAS_G5_1_DOCX_MEDIA, part: "word/document.xml" },
+    targetModel: { scenarioId: source.scenarioId, sourceRevision, sourceIdentity },
+    facts,
+    engineVerified: false,
+    physicalTopologyVerified: false,
+    warnings: [
+      "Reviewed DOCX cells are source-modeled facts selected by the operator; they are not independently verified asset identities.",
+      "Declared links and ports are not proof of physical cabling, reachability, Runtime truth or Engine verification.",
+    ],
+  };
+}
+
 function App() {
   const [runtimeMedia, setRuntimeMedia] = useState(null);
   const mediaRef = useRef(null);
@@ -8221,6 +8282,7 @@ function App() {
       inspectFile: previewOfficeNodesFile,
       manualRoleOptions: GRAPHML_MANUAL_ROLE_OPTIONS,
       atlasActivation: true,
+      allowedFormats: ["docx"],
       onClose: () => setOfficeReviewedAtlasOpen(false),
       onConfirm: async (expected, decision, originalFile, isCurrentSelection) => {
         const liveBefore = latestDrawioWorkspaceRef.current;
@@ -8243,7 +8305,11 @@ function App() {
             mapped.source.connections.length !== expectedConnections || mapped.source.tests.length ||
             mapped.canActivate !== false || mapped.engineVerified !== false)
           blocked("ATLAS_G5_1_CANDIDATE_BLOCKED");
-        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(mapped.source), compilerOptions);
+        const stagingWorkspace = createBuilderWorkspace(mapped.source);
+        const provenance = await buildAtlasG51Provenance(mapped, mapped.source, originalFile, stagingWorkspace.sourceRevision, isCurrentSelection);
+        checkCurrent();
+        const source = { ...mapped.source, officeReviewProvenance: provenance };
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
         checkCurrent();
         if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
         return {
@@ -8252,15 +8318,17 @@ function App() {
           expected,
           decision,
           originalFile,
+          provenance,
+          source,
           workspaceIdentity,
           transitionIdentity,
           isCurrentSelection,
           summary: {
-            resources: mapped.source.resources.length,
-            connections: mapped.source.connections.length,
-            ports: mapped.source.connections.reduce((count, link) => count + (link.from?.port ? 1 : 0) + (link.to?.port ? 1 : 0), 0),
-            resourceIds: mapped.source.resources.map(resource => resource.id),
-            connectionDetails: mapped.source.connections.map(link => ({ from: link.from.resource, to: link.to.resource, fromPort: link.from.port, toPort: link.to.port })),
+            resources: source.resources.length,
+            connections: source.connections.length,
+            ports: source.connections.reduce((count, link) => count + (link.from?.port ? 1 : 0) + (link.to?.port ? 1 : 0), 0),
+            resourceIds: source.resources.map(resource => resource.id),
+            connectionDetails: source.connections.map(link => ({ from: link.from.resource, to: link.to.resource, fromPort: link.from.port, toPort: link.to.port })),
           },
         };
       },
@@ -8273,7 +8341,11 @@ function App() {
         const mapped = await verifyOfficeCandidateFile(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
         if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
         if (mapped.sourceSha256 !== staged.sourceSha256) blocked("ATLAS_G5_1_SOURCE_CHANGED");
-        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(mapped.source), compilerOptions);
+        const stagingWorkspace = createBuilderWorkspace(mapped.source);
+        const provenance = await buildAtlasG51Provenance(mapped, mapped.source, staged.originalFile, stagingWorkspace.sourceRevision, staged.isCurrentSelection);
+        if (JSON.stringify(provenance) !== JSON.stringify(staged.provenance)) blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const source = { ...mapped.source, officeReviewProvenance: provenance };
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
         if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
         if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
         const layout = await autoLayoutBuilder(compiled, new ElkLayoutBackend());
@@ -8287,6 +8359,8 @@ function App() {
             JSON.stringify(refreshed.linkRowOrigins ?? []) !== JSON.stringify(mapped.linkRowOrigins ?? []) ||
             refreshed.sourceSha256 !== mapped.sourceSha256)
           blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const refreshedProvenance = await buildAtlasG51Provenance(refreshed, refreshed.source, staged.originalFile, stagingWorkspace.sourceRevision, staged.isCurrentSelection);
+        if (JSON.stringify(refreshedProvenance) !== JSON.stringify(provenance)) blocked("ATLAS_G5_1_SOURCE_CHANGED");
         if (!projectGuardRef.current()) blocked("ATLAS_G5_1_REPLACEMENT_BLOCKED");
         beginScenarioTransition();
         setImportedProbeAutoOpen(false);

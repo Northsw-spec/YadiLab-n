@@ -78,6 +78,24 @@ export function verifyEditableProject(source, layoutOverrides, validateSource) {
       if (!valid) blocked("NETWORK_IMPORT_PROVENANCE_TARGET");
     }
   }
+  const officeProvenance = source.officeReviewProvenance;
+  if (officeProvenance !== undefined) {
+    if (officeProvenance.source.sourceId !== "src_" + officeProvenance.source.sha256)
+      blocked("OFFICE_REVIEW_PROVENANCE_SOURCE_ID");
+    if (officeProvenance.targetModel.scenarioId !== source.scenarioId)
+      blocked("OFFICE_REVIEW_PROVENANCE_SCENARIO_MISMATCH");
+    const officeFactIds = new Set();
+    for (const fact of officeProvenance.facts) {
+      if (officeFactIds.has(fact.factId)) blocked("OFFICE_REVIEW_PROVENANCE_DUPLICATE_FACT");
+      officeFactIds.add(fact.factId);
+      const targetExists = fact.targetKind === "resource" ? resourceIds.has(fact.targetId) : connectionIds.has(fact.targetId);
+      if (officeProvenance.status === "CURRENT" && !targetExists)
+        blocked("OFFICE_REVIEW_PROVENANCE_TARGET");
+      if (fact.locator.sourceSha256 !== officeProvenance.source.sha256 ||
+          fact.locator.part !== "word/document.xml")
+        blocked("OFFICE_REVIEW_PROVENANCE_LOCATOR");
+    }
+  }
   const zoneParent = new Map();
   for (const zone of source.zones) {
     if (zone.parent !== undefined) {

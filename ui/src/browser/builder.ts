@@ -15,6 +15,7 @@ import type {
 import { compileScenario } from "../../../compiler/src/index.js";
 import type { ManualLayoutOverride } from "../../../layout/src/types.js";
 import { cloneJson, setJsonPath } from "./json.js";
+import { markOfficeReviewProvenanceHistorical } from "./office-reviewed-provenance.js";
 import type {
   BrowserCommandResult,
   BrowserDiagnostic,
@@ -50,9 +51,10 @@ function sortedUnique(ids: readonly string[]): readonly string[] {
 }
 
 function invalidate(workspace: BuilderWorkspace, source: ScenarioSource): BuilderWorkspace {
+  const historized = markOfficeReviewProvenanceHistorical(source);
   return {
     ...workspace,
-    source,
+    source: historized,
     sourceRevision: workspace.sourceRevision + 1,
     dirty: true,
     compile: { status: "idle" },

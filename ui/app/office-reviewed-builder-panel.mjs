@@ -3,13 +3,13 @@ const e=React.createElement;
 const MAX=4;
 const errCode=cause=>{
   const code=cause?.code;
-  return typeof code==="string" && /^(?:IC040_|DOCX_|ODT_|IMPORT_)[A-Z0-9_]+$/.test(code)
+  return typeof code==="string" && /^(?:ATLAS_G5_1_|IC040_|DOCX_|ODT_|IMPORT_)[A-Z0-9_]+$/.test(code)
     ? code : "IC040_P1B_BLOCKED";
 };
 const keyOf=n=>[n.tableOrdinal,n.rowOrdinal,n.nodeIdCellOrdinal].join(":");
 
 /** Separate from P1-P6 read-only/reference panels: only original cell ordinals. */
-export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onApprove,onClose,manualRoleOptions=["resource.generic"],atlasActivation=false}){
+export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onApprove,onClose,manualRoleOptions=["resource.generic"],atlasActivation=false,allowedFormats=["docx","odt"]}){
   const [result,setResult]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[staged,setStaged]=useState(null);
   const epoch=useRef(0),selectedFile=useRef(null),focus=useRef(null);
   const reset=()=>{
@@ -27,12 +27,17 @@ export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onApprove,onCl
   },[onClose]);
   const choose=async file=>{
     reset();if(!file)return;
+    const extension=/\.docx$/i.test(file.name)?"docx":/\.odt$/i.test(file.name)?"odt":"";
+    if(!allowedFormats.includes(extension)){
+      setError(atlasActivation?"ATLAS_G5_1_DOCX_ONLY":"IC040_P1B_FILE_INVALID");
+      return;
+    }
     const request=epoch.current;
     setBusy(true);
     try{
       const value=await inspectFile(file);
       if(epoch.current!==request)return;
-      if(!value || !["docx","odt"].includes(value.format) ||
+      if(!value || !allowedFormats.includes(value.format) ||
           value.preview?.status!=="REVIEW_REQUIRED" ||
           value.preview?.textIncluded!==false ||
           value.preview?.canActivate!==false ||
@@ -47,14 +52,14 @@ export function OfficeReviewedBuilderPanel({inspectFile,onConfirm,onApprove,onCl
   };
   return e("div",{className:"network-import-overlay","data-office-p1b-overlay":"true"},
     e("section",{className:"network-import-panel",role:"dialog","aria-modal":"true",
-      tabIndex:-1,ref:focus,"aria-label":"Reviewed DOCX/ODT nodes into Builder",
+      tabIndex:-1,ref:focus,"aria-label":atlasActivation?"Reviewed DOCX into Builder and Atlas":"Reviewed DOCX/ODT nodes into Builder",
       "data-office-p1b-panel":"REVIEW_REQUIRED"},
       e("div",{className:"network-import-heading"},
-        e("div",null,e("h2",null,"Review DOCX/ODT nodes into Builder"),
+        e("div",null,e("h2",null,atlasActivation?"Review DOCX into canonical Builder and Atlas":"Review DOCX/ODT nodes into Builder"),
           e("p",null,"Choose individual original table cells, not whole rows or documents. All modeled resources are unverified.")),
         e("button",{type:"button",onClick:close,"data-office-p1b-top-close":"true"},"Close")),
-      e("label",{className:"file-button"},"Choose local .docx or .odt",
-        e("input",{type:"file",accept:".docx,.odt",hidden:true,
+      e("label",{className:"file-button"},atlasActivation?"Choose local .docx":"Choose local .docx or .odt",
+        e("input",{type:"file",accept:atlasActivation?".docx":".docx,.odt",hidden:true,
           "data-office-p1b-file":"true",
           onClick:reset,onCancel:reset,
           onChange:event=>{
