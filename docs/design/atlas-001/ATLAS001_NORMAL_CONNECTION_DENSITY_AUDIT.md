@@ -78,23 +78,25 @@ evidence is intentionally not committed as source code).
 
 | Case | Preview ms | Activation ms | Render ms | Result | Evidence |
 |---|---:|---:|---:|---|---|
-| 50/49 linear | 162.7 | 1,000.5 | 195.0 | **PASS** | 50 nodes, 49 SVG edges, 5 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 43,865,874 bytes; 16/16 probe ticks, max delay 0 ms |
-| 50/150 star | 408.4 | 967.2 | — | **FAIL / ACTIVATION_BLOCKED** | `LAYOUT_UNREASONABLE_WHITESPACE` ratio 11.70; repeated spoke routes trigger `LAYOUT_EDGE_OVERLAP_EXCESSIVE`; Builder unchanged |
-| 50/400 redundant | 419.6 | 3,983.4 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 11.20–15.62 across zones; Builder unchanged |
-| 100/99 linear | 398.2 | 1,511.9 | 433.7 | **PASS** | 100 nodes, 99 SVG edges, 10 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 55,365,691 bytes; 16/16 probe ticks, max delay 0 ms |
-| 100/300 star | 425.2 | 2,260.6 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 39.53 plus repeated spoke route overlap; Builder unchanged |
-| 100/800 redundant | 473.1 | 19,145.0 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 14.03–20.43 across zones; Builder unchanged |
-| 200/199 linear | 402.0 | 755.6 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 9.14–9.35; Builder unchanged |
-| 200/600 star | 405.5 | 8,827.0 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 71.46 plus repeated spoke route overlap; Builder unchanged |
+| 50/49 linear | 407.8 | 1,074.3 | 252.6 | **PASS** | 50 nodes, 49 SVG edges, 5 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 36,441,912 bytes; 16/16 probe ticks, max delay 0 ms |
+| 50/150 star | 457.1 | 941.6 | — | **FAIL / ACTIVATION_BLOCKED** | `LAYOUT_UNREASONABLE_WHITESPACE` ratio 11.70; repeated spoke routes trigger `LAYOUT_EDGE_OVERLAP_EXCESSIVE`; Builder unchanged |
+| 50/400 redundant | 398.7 | 3,993.8 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 11.20–15.62 across zones; Builder unchanged |
+| 100/99 linear | 412.2 | 1,829.3 | 293.4 | **PASS** | 100 nodes, 99 SVG edges, 10 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 53,408,026 bytes; 16/16 probe ticks, max delay 0 ms |
+| 100/300 star | 426.8 | 2,267.0 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 39.53 plus repeated spoke route overlap; Builder unchanged |
+| 100/800 redundant | 485.9 | 20,426.1 | — | **FAIL / TIMEOUT** | activation click exceeded the 20,000 ms case bound; layout completion and Builder preservation are **UNKNOWN** (a separate bounded repeat reached the existing layout guard instead) |
+| 200/199 linear | 397.4 | 806.3 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 9.14–9.35; Builder unchanged |
+| 200/600 star | 434.0 | 8,715.9 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 71.46 plus repeated spoke route overlap; Builder unchanged |
 | 200/1,600 redundant | — | — | — | **FAIL / PROCESS_TIMEOUT** | isolated Chromium process exceeded 30,000 ms and was terminated; layout completion and Builder preservation are **UNKNOWN** |
 
-For the six activation-blocked cases the existing layout-quality guard stopped
+For the five activation-blocked cases the existing layout-quality guard stopped
 the NORMAL activation before a React Flow render. That is why rendered-node,
 SVG-edge, memory and responsiveness fields are absent rather than estimated.
 The source/export checks still prove that no canonical IDs, endpoints or ports
 were lost before the guard, and the harness verified the Builder remained
-unchanged. The process-timeout case is explicitly UNKNOWN, not a successful
-fail-closed result.
+unchanged. The 100/800 case exceeded the explicit activation-click bound in
+the final run; a separate run with the same bound reached the layout guard
+instead. The 100/800 and 200/1,600 timeout outcomes are explicitly UNKNOWN,
+not successful fail-closed results.
 
 The two successful cases prove the exact source-to-render path for their
 profiles: all declared nodes and edges render, endpoint/port metadata matches
