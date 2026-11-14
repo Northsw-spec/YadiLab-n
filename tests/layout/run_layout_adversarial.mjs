@@ -11,5 +11,6 @@ for (const [name,mutate,code] of [
  const backend={id:name,async layout(){return {nodes:mutate(valid())}}}; const result=await runAutoLayout(scenario,backend); ok(!result.ok,`${name} backend output rejected`); ok(result.diagnostics.some(d=>d.code===code),`${name} reports ${code}`);
 }
 const exploding={id:"explode",async layout(){throw new Error("boom")}}; const e=await runAutoLayout(scenario,exploding);ok(!e.ok,"backend exception fails closed");ok(e.diagnostics.some(d=>d.code==="LAYOUT_BACKEND_FAILED"),"backend exception diagnostic");
+const timeout={id:"timeout",async layout(){const error=new Error("terminated");error.code="LAYOUT_TIMEOUT_ABORTED";throw error;}}; const t=await runAutoLayout(scenario,timeout);ok(!t.ok,"coded worker abort fails closed");ok(t.diagnostics.some(d=>d.code==="LAYOUT_TIMEOUT_ABORTED"),"coded worker abort diagnostic is preserved");
 const override=await runAutoLayout(scenario,{id:"ok",async layout(){return {nodes:valid()}}},{manualOverrides:[{id:"ghost",x:1,y:2}]});ok(override.ok,"unknown override is warning only");ok(override.diagnostics.some(d=>d.code==="LAYOUT_OVERRIDE_UNKNOWN"),"unknown override warning");
 console.log(`PASS layout adversarial suite: ${c} assertions.`);

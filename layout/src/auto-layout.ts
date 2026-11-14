@@ -16,7 +16,10 @@ export async function runAutoLayout(
   try {
     raw = await backend.layout(graph, context);
   } catch (cause) {
-    return { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] };
+    const code = cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string"
+      ? (cause as { code: string }).code
+      : "LAYOUT_BACKEND_FAILED";
+    return { ok: false, diagnostics: [{ severity: "error", code, message: cause instanceof Error ? cause.message : String(cause) }] };
   }
   const diagnostics = [
     ...(raw.diagnostics ?? []),
