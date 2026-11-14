@@ -24,6 +24,7 @@
     "../engine/src/**/*.ts",
     "../layout/src/types.ts",
     "../layout/src/elk-backend.ts",
+    "../layout/src/elk-worker-backend.ts",
     "../certification/src/**/*.ts",
     "../ui/src/canvas/**/*.ts",
     "../ui/src/browser/**/*.ts",

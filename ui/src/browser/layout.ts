@@ -1,5 +1,5 @@
 import { runAutoLayout } from "../../../layout/src/auto-layout.js";
-import type { LayoutBackend } from "../../../layout/src/types.js";
+import type { LayoutBackend, LayoutRequestContext } from "../../../layout/src/types.js";
 import type { BrowserCommandResult, BrowserDiagnostic, BuilderWorkspace } from "./types.js";
 
 function mapDiagnostic(d: { readonly severity: "error" | "warning"; readonly code: string; readonly message: string; readonly objectId?: string }): BrowserDiagnostic {
@@ -8,7 +8,7 @@ function mapDiagnostic(d: { readonly severity: "error" | "warning"; readonly cod
     : { severity: d.severity, code: d.code, message: d.message };
 }
 
-export async function autoLayoutBuilder(workspace: BuilderWorkspace, backend: LayoutBackend): Promise<BrowserCommandResult<BuilderWorkspace>> {
+export async function autoLayoutBuilder(workspace: BuilderWorkspace, backend: LayoutBackend, context?: LayoutRequestContext): Promise<BrowserCommandResult<BuilderWorkspace>> {
   if (workspace.compile.status !== "valid") {
     return {
       ok: false,
@@ -16,7 +16,7 @@ export async function autoLayoutBuilder(workspace: BuilderWorkspace, backend: La
       diagnostics: [{ severity: "error", code: "BUILDER_COMPILE_REQUIRED_FOR_LAYOUT", message: "Auto-layout requires a successful current compile." }],
     };
   }
-  const result = await runAutoLayout(workspace.compile.model, backend, { manualOverrides: workspace.layoutOverrides });
+  const result = await runAutoLayout(workspace.compile.model, backend, { manualOverrides: workspace.layoutOverrides }, context);
   const diagnostics = result.diagnostics.map(mapDiagnostic);
   if (!result.ok || !result.document) return { ok: false, workspace, diagnostics };
   return { ok: true, workspace: { ...workspace, layout: result.document }, diagnostics };

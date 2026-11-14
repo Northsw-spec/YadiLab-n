@@ -21,7 +21,7 @@ interface ElkPortLike extends ElkPointLike {
 }
 interface ElkSectionLike { id?: string; startPoint?: ElkPointLike; bendPoints?: ElkPointLike[]; endPoint?: ElkPointLike }
 interface ElkEdgeLike { id: string; sources?: string[]; targets?: string[]; sections?: ElkSectionLike[]; container?: string }
-interface ElkNodeLike {
+export interface ElkNodeLike {
   id: string;
   x?: number; y?: number; width?: number; height?: number;
   children?: ElkNodeLike[];
@@ -44,7 +44,7 @@ function portSide(port: LayoutPortInput): "NORTH" | "SOUTH" | "EAST" | "WEST" {
   return port.side ?? (port.direction === "output" ? "EAST" : "WEST");
 }
 
-function nodeToElk(node: LayoutGraphNode): Record<string, unknown> {
+export function nodeToElk(node: LayoutGraphNode): Record<string, unknown> {
   const ports = node.ports.map((port) => ({
     id: port.id,
     width: 8,
@@ -66,6 +66,36 @@ function nodeToElk(node: LayoutGraphNode): Record<string, unknown> {
       ...(fixedOrder ? { "org.eclipse.elk.portConstraints": "FIXED_ORDER" } : ports.length ? { "org.eclipse.elk.portConstraints": "FIXED_SIDE" } : {}),
       ...(node.layoutOptions ?? {}),
     },
+  };
+}
+
+/**
+ * Build the exact ELK graph used by the in-process backend.  Keeping this
+ * serializer shared is important: the cancellable worker path must not grow a
+ * second graph model or silently lose ports/edges.
+ */
+export function toElkGraph(graph: LayoutGraph): Record<string, unknown> {
+  return {
+    id: graph.id,
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "RIGHT",
+      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      "org.eclipse.elk.edgeRouting": "ORTHOGONAL",
+      "org.eclipse.elk.layered.mergeEdges": "false",
+      "org.eclipse.elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "org.eclipse.elk.randomSeed": "094",
+      "elk.spacing.nodeNode": "40",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
+      "elk.padding": elkPadding(ROOT_LAYOUT_PADDING),
+      ...(graph.layoutOptions ?? {}),
+    },
+    children: graph.children.map(nodeToElk),
+    edges: graph.edges.map((edge) => ({
+      id: edge.id,
+      sources: [edge.sourcePort ?? edge.sourceNode],
+      targets: [edge.targetPort ?? edge.targetNode],
+    })),
   };
 }
 
@@ -148,6 +178,17 @@ function normalizeEdges(output: ElkNodeLike, origins: ReadonlyMap<string, Origin
   });
 }
 
+/** Normalize ELK's nested result into the public LayoutBackend contract. */
+export function normalizeElkOutput(output: ElkNodeLike, graph: LayoutGraph): LayoutBackendResult {
+  const nodes: LayoutBackendNode[] = [];
+  const ports: LayoutBackendPort[] = [];
+  const origins = new Map<string, Origin>([[graph.id, { x: 0, y: 0 }]]);
+  collectNodes(output.children, undefined, { x: 0, y: 0 }, nodes, ports, origins);
+  const inputEdges = new Map(graph.edges.map((edge) => [edge.id, edge] as const));
+  const edges = normalizeEdges(output, origins, inputEdges);
+  return { nodes, ports, edges };
+}
+
 export class ElkLayoutBackend implements LayoutBackend {
   readonly id = "elk.layered";
 
@@ -156,32 +197,10 @@ export class ElkLayoutBackend implements LayoutBackend {
     const elk = new Ctor();
     let output: ElkNodeLike;
     try {
-      output = await elk.layout({
-        id: graph.id,
-        layoutOptions: {
-          "elk.algorithm": "layered",
-          "elk.direction": "RIGHT",
-          "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-          "org.eclipse.elk.edgeRouting": "ORTHOGONAL",
-          "org.eclipse.elk.layered.mergeEdges": "false",
-          "org.eclipse.elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
-          "org.eclipse.elk.randomSeed": "094",
-          "elk.spacing.nodeNode": "40",
-          "elk.layered.spacing.nodeNodeBetweenLayers": "80",
-          "elk.padding": elkPadding(ROOT_LAYOUT_PADDING),
-          ...(graph.layoutOptions ?? {}),
-        },
-        children: graph.children.map(nodeToElk),
-      edges: graph.edges.map((edge) => ({ id: edge.id, sources: [edge.sourcePort ?? edge.sourceNode], targets: [edge.targetPort ?? edge.targetNode] })),
-      });
+      output = await elk.layout(toElkGraph(graph));
     } catch (cause) {
       throw new Error(`TOPOLOGY_LAYOUT_ELK_FAILED:${cause instanceof Error ? cause.message : String(cause)}`);
     }
-    const nodes: LayoutBackendNode[] = []; const ports: LayoutBackendPort[] = [];
-    const origins = new Map<string, Origin>([[graph.id, { x: 0, y: 0 }]]);
-    collectNodes(output.children, undefined, { x: 0, y: 0 }, nodes, ports, origins);
-    const inputEdges = new Map(graph.edges.map((edge) => [edge.id, edge] as const));
-    const edges = normalizeEdges(output, origins, inputEdges);
-    return { nodes, ports, edges };
+    return normalizeElkOutput(output, graph);
   }
 }

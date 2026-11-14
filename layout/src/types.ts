@@ -94,9 +94,19 @@ export interface LayoutBackendResult {
   readonly diagnostics?: readonly LayoutDiagnostic[];
 }
 
+/** Identity envelope carried by cancellable browser layout jobs. */
+export interface LayoutRequestContext {
+  readonly requestId: string;
+  readonly sourceSha: string;
+  readonly sourceRevision: number;
+  readonly projectGeneration: number;
+  readonly builderIdentity: string;
+  readonly compileIdentity: string;
+}
+
 export interface LayoutBackend {
   readonly id: string;
-  layout(graph: LayoutGraph): Promise<LayoutBackendResult>;
+  layout(graph: LayoutGraph, context?: LayoutRequestContext): Promise<LayoutBackendResult>;
 }
 
 export interface ManualLayoutOverride {

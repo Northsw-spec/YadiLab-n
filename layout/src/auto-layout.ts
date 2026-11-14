@@ -1,6 +1,6 @@
 import type { LayoutDocument, NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { buildLayoutGraph } from "./projection.js";
-import type { AutoLayoutOptions, AutoLayoutResult, LayoutBackendNode } from "./types.js";
+import type { AutoLayoutOptions, AutoLayoutResult, LayoutBackendNode, LayoutRequestContext } from "./types.js";
 import { validateBackendEdges, validateBackendPorts, validateBackendResult } from "./validation.js";
 import { validateVisualLayout } from "./visual-validation.js";
 import type { LayoutBackend } from "./types.js";
@@ -9,11 +9,12 @@ export async function runAutoLayout(
   scenario: NormalizedScenario,
   backend: LayoutBackend,
   options: AutoLayoutOptions = {},
+  context?: LayoutRequestContext,
 ): Promise<AutoLayoutResult> {
   const graph = buildLayoutGraph(scenario);
   let raw;
   try {
-    raw = await backend.layout(graph);
+    raw = await backend.layout(graph, context);
   } catch (cause) {
     return { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] };
   }

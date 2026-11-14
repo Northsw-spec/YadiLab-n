@@ -36,6 +36,9 @@ jobs:
           # A valid JSON schema alone does not reject dangling test subjects,
           # ignored port arrays, or an invalid protocol being defaulted.
           npm run test:compiler
+          # ATLAS-001 F4B: the 112px zone-header geometry contract and its
+          # negative 72px regression must remain a source-level gate.
+          npm run test:layout
           npm run test:engine
           npm run test:enterprise-import
           # ATLAS-001 G5.0: immutable DOCX bytes, source locators and the

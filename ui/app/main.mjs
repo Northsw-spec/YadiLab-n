@@ -314,6 +314,7 @@ import { createCompilerSchemaValidator } from "../../validator/src/compiler-adap
 import { validateContract } from "../../validator/src/index.ts";
 import { SafePackageIO, ZipJsArchiveBackend } from "../../package-io/src/index.ts";
 import { ElkLayoutBackend } from "../../layout/src/elk-backend.ts";
+import { CancellableElkLayoutBackend } from "../../layout/src/elk-worker-backend.ts";
 import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
@@ -5307,10 +5308,12 @@ function WorkspaceMenu({ label, children, className = "", panelClassName = "", c
 }
 
 
-function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setDiagnostics, initialSelection, workspaceIdentity, getCurrentWorkspaceIdentity }) {
+function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setDiagnostics, initialSelection, workspaceIdentity, projectGeneration, getCurrentProjectGeneration, getCurrentWorkspaceIdentity }) {
   const panelRef = useRef(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [layoutBusy, setLayoutBusy] = useState(false);
+  const [layoutMetrics, setLayoutMetrics] = useState(null);
   const [failure, setFailure] = useState("");
   const [selectedLinkSource, setSelectedLinkSource] = useState(null);
   const [legacyWorkbookConsent, setLegacyWorkbookConsent] = useState(false);
@@ -5371,10 +5374,28 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   };
   const requestId = useRef(0);
   const selectedOriginal = useRef(null);
+  const layoutBackendRef = useRef(null);
+  if (!layoutBackendRef.current) layoutBackendRef.current = new CancellableElkLayoutBackend();
+  const cancelLayout = (reason = "LAYOUT_ABORTED") => {
+    const cancelled = layoutBackendRef.current?.cancel(reason);
+    if (!cancelled) return false;
+    requestId.current++;
+    setLayoutBusy(false);
+    setBusy(false);
+    setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+    setFailure(reason === "LAYOUT_TIMEOUT_ABORTED"
+      ? "Layout timeout: the ELK Worker was terminated; the active Builder was not changed."
+      : "Layout cancelled: the ELK Worker was terminated; the active Builder was not changed.");
+    setDiagnostics([{ code: reason, severity: "warning", message: reason === "LAYOUT_TIMEOUT_ABORTED"
+      ? "The bounded ELK layout deadline expired. No partial layout was accepted or published."
+      : "The layout job was cancelled. No partial layout was accepted or published." }]);
+    return true;
+  };
   const invalidated = () => {
+    cancelLayout();
     requestId.current++;
     selectedOriginal.current = null;
-    setPreview(null); setFailure(""); setBusy(false); setSelectedLinkSource(null);
+    setPreview(null); setFailure(""); setBusy(false); setLayoutBusy(false); setLayoutMetrics(null); setSelectedLinkSource(null);
     setBoundedAtlasConsent(false);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
@@ -5383,6 +5404,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   };
   const close = () => { invalidated(); onClose(); };
   const chooseFile = async (file) => {
+    if (layoutBusy) cancelLayout();
     const current = ++requestId.current;
     selectedOriginal.current = file ?? null;
     setFailure(""); setPreview(null); setDiagnostics([]); setSelectedLinkSource(null);
@@ -5551,6 +5573,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     const isCurrent = () => Boolean(original) &&
       requestId.current === activationEpoch &&
       selectedOriginal.current === original &&
+      (getCurrentProjectGeneration?.() ?? projectGeneration) === projectGeneration &&
       getCurrentWorkspaceIdentity() === workspaceIdentity;
     if (!isCurrent()) { setFailure("IC020_P1_STALE"); return; }
     const boundedAtlas = boundedAtlasEligibility(preview);
@@ -5627,13 +5650,42 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         throw new Error("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED");
       }
       recordNetworkImportGlobalLayoutInvocation(activationDecision.kind);
-      const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+      const sourceTopologySignature = (source) => JSON.stringify({
+        resources: source.resources.map((resource) => ({
+          id: resource.id,
+          interfaces: resource.interfaces,
+        })),
+        connections: source.connections,
+      });
+      if (sourceTopologySignature(next.source) !== sourceTopologySignature(preview.source)) {
+        throw new Error("NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED");
+      }
+      setLayoutBusy(true);
+      const layoutContext = {
+        requestId: `normal-import-${activationEpoch}-${preview.sourceSha256}`,
+        sourceSha: preview.sourceSha256,
+        sourceRevision: next.sourceRevision,
+        projectGeneration,
+        builderIdentity: `${workspaceIdentity.sourceRevision ?? "runtime"}:${workspaceIdentity.source?.scenarioId ?? workspaceIdentity.scenario?.scenarioId ?? "unknown"}:${projectGeneration}`,
+        compileIdentity: `${next.compile.model.sourceHash ?? preview.sourceSha256}:${next.sourceRevision}`,
+      };
+      const layout = await autoLayoutBuilder(next, layoutBackendRef.current, layoutContext);
+      setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+      if (!isCurrent()) {
+        setFailure("NETWORK_IMPORT_LAYOUT_STALE");
+        return;
+      }
       if (!layout.ok) {
         setDiagnostics(layout.diagnostics);
         setFailure("Layout failed; the active workspace was not replaced.");
         return;
       }
       next = layout.workspace;
+      if (sourceTopologySignature(next.source) !== sourceTopologySignature(preview.source)) {
+        setDiagnostics([{ code: "NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED", severity: "error", message: "The layout result changed canonical resource IDs, interfaces or explicit connections; activation was blocked." }]);
+        setFailure("Layout result changed canonical topology; the active workspace was not replaced.");
+        return;
+      }
       setDiagnostics([...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })), ...layout.diagnostics]);
       if (mode === "runtime") {
         const runtime = previewRuntime(next);
@@ -5659,13 +5711,15 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         onActivate(next, false);
       }
     } catch (error) {
+      if (requestId.current !== activationEpoch) return;
+      setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
       setFailure(error instanceof Error ? error.message : String(error));
       setDiagnostics([{ code: "NETWORK_IMPORT_ACTIVATION_BLOCKED", severity: "error", message: error instanceof Error ? error.message : String(error) }]);
-    } finally { setBusy(false); }
+    } finally { setLayoutBusy(false); if (requestId.current === activationEpoch) setBusy(false); }
   };
   const activationDecision = activationDecisionFor(preview);
   return e("div", { className: "network-import-overlay", "data-network-import-overlay": "true" },
-    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "data-network-import-decision": preview?.source ? activationDecision.kind : "NONE", "aria-label": "Import Network from Excel / CSV" },
+    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "data-network-import-decision": preview?.source ? activationDecision.kind : "NONE", "data-network-import-layout-worker-outcome": layoutMetrics?.outcome ?? "IDLE", "data-network-import-layout-worker-request": layoutMetrics?.requestId ?? "", "data-network-import-layout-worker-elapsed-ms": layoutMetrics?.elapsedMs ?? "", "data-network-import-layout-worker-graph-bytes": layoutMetrics?.graphBytes ?? "", "aria-label": "Import Network from Excel / CSV" },
     e("div", { className: "network-import-heading" },
       e("div", null, e("h2", null, "Import Network from Excel / CSV"), e("p", null, "Offline import: select → review → validate → re-check original SHA-256 → open Runtime probes or Builder. Existing workspace remains unchanged until you confirm.")),
       e("button", { type: "button", onClick: close, disabled: busy, "aria-label": "Close network import" }, "Close")),
@@ -5787,6 +5841,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("span",null,"I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages."))
       ):null,
       e("div", { className: "network-import-actions" },
+        layoutBusy ? e("button", { type: "button", className: "danger-button", "data-network-import-layout-cancel": "true", onClick: () => cancelLayout("LAYOUT_ABORTED") }, "Cancel layout") : null,
         e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
         e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ||
           (boundedAtlasEligibility(preview).eligible && !boundedAtlasConsent) ||
@@ -5795,6 +5850,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent)||
           (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-activate": "true", onClick: () => activate("builder") }, busy ? "Validating…" : "Create topology in Builder (edit only)")),
       e("p", { className: "helper-note", "data-import-probe-boundary": "true" }, "Modeled probes use declared Windows/Linux source hosts and existing Engine evidence. A topology inventory alone cannot prove connectivity, routing, DNS or open ports: UNKNOWN is expected when required facts are absent. No real traffic is sent."),
+      layoutBusy ? e("p", { role: "status", "data-network-import-layout-status": "RUNNING" }, "Bounded ELK layout is running in a dedicated Worker. The active Builder remains unchanged until complete validation succeeds.") : null,
       ),
     ) : null,
     ),
@@ -7510,7 +7566,9 @@ function App() {
         e("span", null, `Evidenssynlighet ${selectedGuidedLab.difficulty.evidenceVisibility}`),
         e("span", null, `Åtgärdsbegränsningar ${selectedGuidedLab.difficulty.remediationConstraints}`))) : null,
     networkImportOpen ? e(NetworkTopologyImportPanel, { compilerOptions, setDiagnostics,
-      workspaceIdentity: workspace, getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
+      workspaceIdentity: workspace, projectGeneration: scenarioTransitionRef.current,
+      getCurrentProjectGeneration: () => scenarioTransitionRef.current,
+      getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
       initialSelection: networkImportSelection, onClose: () => { setNetworkImportOpen(false); setNetworkImportSelection(null); }, onActivate: (next, openProbes, bounded) => {
         if (!projectGuardRef.current()) return;
         beginScenarioTransition();

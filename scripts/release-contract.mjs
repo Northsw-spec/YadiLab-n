@@ -61,7 +61,7 @@ function inventoryDirectory(root,tracked,dirname) {
 export function assertGitCopiedAssets(root) {
   const tracked=trackedPaths(root);
   inventoryDirectory(root,tracked,"asset-library/builtin");
-  for (const file of ["acceptance.html","acceptance-probe.js","manifest.webmanifest","app-shell.js"]) {
+  for (const file of ["acceptance.html","acceptance-probe.js","manifest.webmanifest","app-shell.js","elk-worker-proxy.js"]) {
     indexedRegularFile(root,tracked,path.join("ui/public",file));
   }
 }
