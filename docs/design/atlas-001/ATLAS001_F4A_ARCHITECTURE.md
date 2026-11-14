@@ -3,11 +3,12 @@
 Status: `F4A_ARCHITECTURE: PARTIAL`
 Scope: isolated proof and measurements only; no product integration, no merge.
 
-This document records the F4A decision at source HEAD
-`b09a7073f3da6cec8d95b8b6bb87ade8098b5bb0`. The Worker proof is deliberately
-not a product PASS. It uses the same ELK distribution as the product, but it
-does not replace `ElkLayoutBackend`, mutate Builder state, or change the
-activation policy.
+The existing product source was measured at
+`b09a7073f3da6cec8d95b8b6bb87ade8098b5bb0`; this F4A evidence/report is
+committed at PR HEAD `13177a61a70fb6556529f219ebd3de1ecc1cbb78`. The Worker
+proof is deliberately not a product PASS. It uses the same ELK distribution as
+the product, but it does not replace `ElkLayoutBackend`, mutate Builder state,
+or change the activation policy.
 
 ## Governance and live GitHub state
 
@@ -19,14 +20,14 @@ description's historical verification text.
 | Repository | `Northsw-spec/YadiLab-n` |
 | PR | [#105](https://github.com/Northsw-spec/YadiLab-n/pull/105) |
 | PR state | `OPEN`, `merged=false`, `draft=false`, `mergeable=true` |
-| PR HEAD | `b09a7073f3da6cec8d95b8b6bb87ade8098b5bb0` |
+| PR HEAD after F4A push | `13177a61a70fb6556529f219ebd3de1ecc1cbb78` |
 | `main` at cold start | `8b75e344b702a3ad645759b89ef47720952ec424` |
 | Other open PRs | none returned by the repository-scoped open-PR search |
 | Reviews | no review submissions, no review threads, no requested reviewers |
-| Required run | `43593657507` (`YadiLab required CI`) |
-| `source-and-security` | SUCCESS (job `132443493264`) |
-| `browser-regressions / compiled-chromium` | SUCCESS (job `132443493619`) |
-| `yadilab-required-ci` | SUCCESS (job `132446089429`) |
+| Required run | `43596916706` (`YadiLab required CI`) |
+| `source-and-security` | SUCCESS (job `132453281183`) |
+| `browser-regressions / compiled-chromium` | SUCCESS (job `132453281266`) |
+| `yadilab-required-ci` | SUCCESS (job `132455396753`) |
 | Branch protection API | `UNKNOWN`: GitHub returned HTTP 403 `Resource not accessible by integration` |
 | Repository rulesets | empty response (`[]`) |
 
