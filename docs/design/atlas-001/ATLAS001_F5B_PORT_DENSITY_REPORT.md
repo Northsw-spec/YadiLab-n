@@ -54,7 +54,9 @@ projection and its evidence:
   size-aware zone packing. Non-dense resources retain the F5A projection.
 - ui/src/canvas/topology-edge-routing.ts: source/target-aware handle geometry,
   orthogonal parallel-lane candidates, cable conflict accounting and strict
-  final dense-presentation diagnostics.
+  final dense-presentation diagnostics. The legacy card-boundary lanes are
+  explicit opt-in for grouped hierarchy views and are not enabled for NORMAL
+  F5B measurements.
 - ui/src/canvas/types.ts and ui/app/main.mjs: optional view-only side metadata
   and actual-handle rendering. The import path publishes bounded Worker
   metrics only for test evidence; no fallback to inline ELK is added.
@@ -78,10 +80,10 @@ source SHA-256
 
 | Viewport | Resources / SVG links | Handles | Min port separation (flow px) | Foreign crossings | Endpoint errors | Diagonal / malformed | Cable crossing pairs | Cable overlap pairs | ELK ms | Max event-loop delay | Heap used |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1366×768 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 1198.7 | 0 ms | 115.4 MB |
-| 1280×800 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 1224.1 | 2 ms | 108.4 MB |
-| 1920×1080 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 948.6 | 0 ms | 112.4 MB |
-| 390×844 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 838.7 | 0 ms | 102.4 MB |
+| 1366×768 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 1131.0 | 1 ms | 126.5 MB |
+| 1280×800 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 1244.9 | 0 ms | 103.5 MB |
+| 1920×1080 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 985.9 | 0 ms | 95.5 MB |
+| 390×844 | 200 / 199 | 796 | 18.39 | 0 | 0 | 0 / 0 | 57 | 42 | 981.6 | 0 ms | 114.3 MB |
 
 The linear profile is structurally safe and preserves the F5A canonical
 counts, provenance, endpoint identity, orthogonality and Builder replacement.
