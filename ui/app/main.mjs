@@ -1241,12 +1241,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyViewHistory([{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }]);
   }, [connectedExplorerUnsafe, canonicalNetwork.resources.length, validAtlasIndex, sourceIdentity]);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
-  const normalTopologyCanvas = connectedExplorerUnsafe ? null :
-    workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
+  const normalTopologyEligible = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
-    vm?.canvas && !hasManualLayoutOverrides
+    Boolean(vm?.canvas) && !hasManualLayoutOverrides;
+  const normalTopologyProjection = normalTopologyEligible && vm?.canvas
     ? compactNormalTopologyProjection(vm.canvas)
     : vm?.canvas;
+  const normalTopologyValidationBlocked = normalTopologyEligible && Boolean(normalTopologyProjection?.diagnostics.some((diagnostic) => diagnostic.severity === "error"));
+  // A failed final-view validation must never degrade to an unverified
+  // straight/Bezier cable graph.  Keep the raw ELK gate intact and expose an
+  // empty canvas until a fresh, identity-matched safe projection exists.
+  const normalTopologyCanvas = connectedExplorerUnsafe || normalTopologyValidationBlocked ? null : normalTopologyProjection;
   const atlasScenario = workspace.mode === "builder"
     ? workspace.compile.status === "valid" ? workspace.compile.model : null
     : workspace.scenario;
@@ -2645,6 +2650,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       "aria-label": "Topology",
       "data-topology-camera-mode": topologyCameraMode,
       "data-connected-explorer-geometry": connectedExplorerGeometry ? (connectedExplorerGeometry.safe ? "SAFE" : connectedExplorerGeometry.reason) : "NOT_APPLICABLE",
+      "data-normal-topology-validation": normalTopologyEligible ? (normalTopologyValidationBlocked ? "BLOCKED" : "PASS") : "NOT_APPLICABLE",
       "data-topology-readable-mode": topologyCameraMode === "read" ? "true" : "false",
       "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,

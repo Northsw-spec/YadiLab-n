@@ -1,5 +1,5 @@
 import type { CanvasProjection, CanvasNode } from "./types.js";
-import { computeOrthogonalRoutes } from "./topology-edge-routing.js";
+import { computeOrthogonalRoutesChecked, validateOrthogonalProjection } from "./topology-edge-routing.js";
 
 const GRID_COLUMNS = 5;
 const GRID_GAP_X = 56;
@@ -77,12 +77,18 @@ export function compactNormalTopologyProjection(projection: CanvasProjection): C
     const next = nextPositions.get(node.id);
     return next ? { ...node, position: next } : node;
   });
-  const routes = computeOrthogonalRoutes(nodes, projection.edges);
+  const routeResult = computeOrthogonalRoutesChecked(nodes, projection.edges);
+  const routes = routeResult.routes;
   const edges = projection.edges.map((edge) => {
     const route = routes.get(edge.id);
-    return route === undefined || route.length === 0
+    return route === undefined
       ? edge
       : { ...edge, data: { ...edge.data, route, routeKind: "orthogonal" as const } };
   });
-  return { ...projection, nodes, edges };
+  const finalProjection = { ...projection, nodes, edges };
+  const validation = validateOrthogonalProjection(finalProjection, projection, routeResult);
+  return {
+    ...finalProjection,
+    diagnostics: [...projection.diagnostics, ...validation.diagnostics],
+  };
 }
