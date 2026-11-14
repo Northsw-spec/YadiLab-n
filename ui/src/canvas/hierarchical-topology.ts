@@ -450,7 +450,7 @@ export function buildHierarchicalTopologyView(index: HierarchicalTopologyIndex, 
   } as unknown as NormalizedScenario;
   const layout = layoutDocument(index, selected.nodeIds, selected.edgeIds, kind, rootId, index.scenarioId, navigationGroups);
   const base = projectScenarioToCanvas(bounded, layout);
-  const routes = computeOrthogonalRoutes(base.nodes, base.edges);
+  const routes = computeOrthogonalRoutes(base.nodes, base.edges, { allowBoundaryLanes: true });
   const visibleByResource = new Map<string, number>();
   const boundaryByResource = new Map<string, number>();
   for (const connection of selected.partition.internal) {

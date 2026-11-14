@@ -163,6 +163,16 @@ export interface OrthogonalRouteResult {
   readonly failures: readonly OrthogonalRouteFailure[];
 }
 
+export interface OrthogonalRouteOptions {
+  /**
+   * Legacy grouped-hierarchy views may need a card-boundary departure when
+   * their source-facing side is adjacent to a sibling resource. NORMAL keeps
+   * this opt-in so its F5B routing evidence remains on the existing bounded
+   * candidate set.
+   */
+  readonly allowBoundaryLanes?: boolean;
+}
+
 function routeForEdge(
   edge: CanvasEdge,
   source: Rect,
@@ -173,6 +183,7 @@ function routeForEdge(
   parallelIndex: number,
   parallelCount: number,
   existingSegments: readonly RouteSegment[],
+  options: OrthogonalRouteOptions,
 ): RouteForEdgeResult {
   const sourcePoint = handlePoint(source, sourceNode, edge.sourceHandle, "source");
   const targetPoint = handlePoint(target, targetNode, edge.targetHandle, "target");
@@ -202,12 +213,12 @@ function routeForEdge(
     // Existing hierarchy/NORMAL views may have a neighbouring resource
     // directly outside the outward-facing handle. The legacy bounded lanes
     // leave along the card boundary and remain valid for non-dense views.
-    ...(densePresentation ? [] : [
+    ...(options.allowBoundaryLanes && !densePresentation ? [
       [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
       [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],
       [sourcePoint, { x: laneXLeft, y: sourcePoint.y }, { x: laneXLeft, y: targetPoint.y }, targetPoint],
       [sourcePoint, { x: laneXRight, y: sourcePoint.y }, { x: laneXRight, y: targetPoint.y }, targetPoint],
-    ]),
+    ] : []),
     [sourcePoint, { x: sourcePoint.x, y: parallelLaneY }, { x: targetPoint.x, y: parallelLaneY }, targetPoint],
     [sourcePoint, { x: parallelLaneX, y: sourcePoint.y }, { x: parallelLaneX, y: targetPoint.y }, targetPoint],
     [sourcePoint, { x: targetPoint.x, y: sourcePoint.y }, targetPoint],
@@ -221,8 +232,7 @@ function routeForEdge(
     [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: middleY }, { x: targetEntry.x, y: middleY }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: sourceExit.x, y: parallelLaneY }, { x: targetEntry.x, y: parallelLaneY }, targetEntry, targetPoint],
   ];
-  const valid = candidates.filter((candidate) =>
-    (!densePresentation || !pathHasBacktracking(candidate)) && !pathIntersects(candidate, obstacleRects));
+  const valid = candidates.filter((candidate) => !pathHasBacktracking(candidate) && !pathIntersects(candidate, obstacleRects));
   if (!valid.length) {
     const blockedObstacleIds = [...new Set(candidates.flatMap((candidate) => pathObstacleIds(candidate, obstacleRects)))].sort((left, right) => left.localeCompare(right, "en"));
     return {
@@ -242,7 +252,11 @@ function routeForEdge(
   };
 }
 
-export function computeOrthogonalRoutesChecked(nodes: readonly CanvasNode[], edges: readonly CanvasEdge[]): OrthogonalRouteResult {
+export function computeOrthogonalRoutesChecked(
+  nodes: readonly CanvasNode[],
+  edges: readonly CanvasEdge[],
+  options: OrthogonalRouteOptions = {},
+): OrthogonalRouteResult {
   const rects = absoluteRects(nodes);
   const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
   const groups = new Map<string, CanvasEdge[]>();
@@ -283,7 +297,7 @@ export function computeOrthogonalRoutesChecked(nodes: readonly CanvasNode[], edg
       });
       continue;
     }
-    const result = routeForEdge(edge, source, target, sourceNode, targetNode, [...rects.values()], Math.max(0, index), siblings.length, routedSegments);
+    const result = routeForEdge(edge, source, target, sourceNode, targetNode, [...rects.values()], Math.max(0, index), siblings.length, routedSegments, options);
     if (result.route !== undefined) {
       routes.set(edge.id, result.route);
       if (result.fullPath) {
@@ -303,8 +317,12 @@ export function computeOrthogonalRoutesChecked(nodes: readonly CanvasNode[], edg
   return { routes, failures };
 }
 
-export function computeOrthogonalRoutes(nodes: readonly CanvasNode[], edges: readonly CanvasEdge[]): ReadonlyMap<string, readonly CanvasRoutePoint[]> {
-  return computeOrthogonalRoutesChecked(nodes, edges).routes;
+export function computeOrthogonalRoutes(
+  nodes: readonly CanvasNode[],
+  edges: readonly CanvasEdge[],
+  options: OrthogonalRouteOptions = {},
+): ReadonlyMap<string, readonly CanvasRoutePoint[]> {
+  return computeOrthogonalRoutesChecked(nodes, edges, options).routes;
 }
 
 export interface OrthogonalProjectionValidation {
