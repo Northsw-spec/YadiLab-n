@@ -238,6 +238,43 @@ jobs:
           "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_fixture.py \
             --evidence-dir "$evidence_dir"
           "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_negative.py
+      - name: Package verified compiled YadiLab app and original capacity XLSX files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node scripts/verify_browser_release.mjs
+          test -s ui/dist/index.html
+          test -s ui/dist/assets/app.js
+          test -s ui/dist/build-marker.json
+          out="$RUNNER_TEMP/yadilab-compiled-delivery"
+          mkdir -p "$out/app" "$out/testfiler"
+          cp -a ui/dist/. "$out/app/"
+          cp tests/fixtures/import/atlas001-capacity-{50-grid,100-grid,200-grid,201-linear,300-branch-lowercase,500-branch,1000-linear,1001-linear}.xlsx "$out/testfiler/"
+          cat > "$out/START_HERE.txt" <<'END_README'
+          YadiLab – REAL COMPILED BROWSER APPLICATION
+          The app/ folder is the compiled, CI-verified ui/dist/ output.
+          It is not a source checkout and does not require npm or compilation.
+
+          LINUX/macOS (Python 3):
+            cd app && python3 -m http.server 18981 --bind 127.0.0.1
+          WINDOWS (Python 3):
+            cd app
+            py -3 -m http.server 18981 --bind 127.0.0.1
+          Then open http://127.0.0.1:18981/
+
+          Import one XLSX file from ../testfiler via Network import:
+          50 and 100 resources: NORMAL Canvas; 300 and 500: ATLAS PAGES.
+          1001 resources: intentionally BLOCKED. These are synthetic fixtures.
+          Source and build identity: app/build-marker.json
+          END_README
+      - name: Publish verified compiled YadiLab app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yadilab-compiled-app-${{ github.sha }}
+          path: ${{ runner.temp }}/yadilab-compiled-delivery/
+          if-no-files-found: error
+          retention-days: 30
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4
