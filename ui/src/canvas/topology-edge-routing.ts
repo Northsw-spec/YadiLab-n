@@ -200,6 +200,14 @@ function routeForEdge(
     [sourcePoint, { x: parallelLaneX, y: sourcePoint.y }, { x: parallelLaneX, y: targetPoint.y }, targetPoint],
     [sourcePoint, { x: targetPoint.x, y: sourcePoint.y }, targetPoint],
     [sourcePoint, { x: sourcePoint.x, y: targetPoint.y }, targetPoint],
+    // A handle can face a neighbouring resource even when the safe lane is
+    // on the opposite side of the card. Leave along the card boundary first
+    // so the candidate does not cross that neighbour merely to reach the
+    // bounded top/bottom or left/right lane.
+    [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
+    [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],
+    [sourcePoint, { x: laneXLeft, y: sourcePoint.y }, { x: laneXLeft, y: targetPoint.y }, targetPoint],
+    [sourcePoint, { x: laneXRight, y: sourcePoint.y }, { x: laneXRight, y: targetPoint.y }, targetPoint],
     [sourcePoint, sourceExit, { x: targetEntry.x, y: sourceExit.y }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: targetEntry.y }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: sourceExit.x, y: laneYTop }, { x: targetEntry.x, y: laneYTop }, targetEntry, targetPoint],

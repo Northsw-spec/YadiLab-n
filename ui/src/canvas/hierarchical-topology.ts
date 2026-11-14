@@ -511,7 +511,11 @@ export function buildHierarchicalTopologyView(index: HierarchicalTopologyIndex, 
         data: {
           ...edge.data,
           hierarchyVisual: true as const,
-          ...(route && route.length ? { route, routeKind: "orthogonal" as const } : {}),
+          // A direct orthogonal link has an empty bend list. Preserve the
+          // explicit route kind whenever the checked router returned a route;
+          // testing route.length would silently drop the orthogonal contract
+          // for those valid straight segments.
+          ...(route !== undefined ? { route, routeKind: "orthogonal" as const } : {}),
         },
       };
     }),
