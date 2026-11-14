@@ -1,7 +1,16 @@
 # ATLAS-001 F3 — Safe final-view validation and bounded routing
 
-Status: **F3_PARTIAL** pending the final compiled-Chromium matrix and exact
-PR-CI handoff.
+Status: **F3_PARTIAL**. The final compiled-Chromium matrix is recorded below;
+the 200/1600 profile still exceeds the killable test-process bound and the
+product has no independently abortable compile/layout phase. Exact PR-CI
+status is still verified at handoff time.
+
+Final local verification commit: `e80647403fbcc3176966670aee531543fb4c3a8c`.
+The Chromium run used the independent XLSX fixtures, loopback compiled bundle,
+`/usr/bin/chromium`, viewport `1366x768`, a `45,000 ms` per-case bound and a
+`55,000 ms` isolated-process bound. The machine-readable result and the eight
+available screenshots are published with this audit under
+`docs/design/atlas-001/evidence/f3/`.
 
 ## Scope and unchanged contracts
 
@@ -84,19 +93,23 @@ timeouts/unknown outcomes, not product cancellation. No unsafe Promise race or
 main-thread fake cancellation was added. A worker-backed cancellable ELK
 boundary remains a separate architecture decision.
 
-## Isolated F3 classification before final Chromium rerun
+## Final compiled-Chromium classification
 
-| Profile | F3 classification | Basis |
+| Profile | F3 classification | Final Chromium evidence |
 |---|---|---|
-| 50/49 linear | FULL_UI_PASS candidate | final projection has no error diagnostics; prior Chromium PASS retained |
-| 50/150 star | SAFE_BLOCKED | raw ELK gate remains blocking; final route validator is independent |
-| 50/400 redundant | SAFE_BLOCKED | raw gate blocks and 15 unsafe links now fail closed |
-| 100/99 linear | FULL_UI_PASS candidate | final projection has no error diagnostics; prior Chromium PASS retained |
-| 100/300 star | SAFE_BLOCKED | raw ELK gate remains blocking |
-| 100/800 redundant | UNKNOWN | prior bounded test timeout; no product cancellation exists |
-| 200/199 linear | SAFE_BLOCKED | raw ELK gate remains blocking; isolated final projection is geometrically safe |
-| 200/600 star | SAFE_BLOCKED | raw ELK gate remains blocking |
-| 200/1600 redundant | UNKNOWN | isolated process timeout; final geometry and Builder preservation remain unobserved |
+| 50/49 linear | **FULL_UI_PASS** | 50 resources, 49 SVG edges, zero overlaps/port errors/non-orthogonal routes; no page or console errors. Screenshot: `atlas001-normal-density-50-linear-1366x768.png`. |
+| 50/150 star | **SAFE_BLOCKED** | Existing raw ELK gate blocked activation with `LAYOUT_UNREASONABLE_WHITESPACE` and `LAYOUT_EDGE_OVERLAP_EXCESSIVE`; Builder unchanged. Failure screenshot recorded. |
+| 50/400 redundant | **SAFE_BLOCKED** | Existing raw ELK gate blocked activation with `LAYOUT_UNREASONABLE_WHITESPACE`; the checked router also reports 15 explicit `TOPOLOGY_ROUTE_UNSAFE` links in the isolated projection. Failure screenshot recorded. |
+| 100/99 linear | **FULL_UI_PASS** | 100 resources, 99 SVG edges, zero overlaps/port errors/non-orthogonal routes; no page or console errors. Screenshot: `atlas001-normal-density-100-linear-1366x768.png`. |
+| 100/300 star | **SAFE_BLOCKED** | Existing raw ELK gate blocked activation with whitespace and repeated-spoke overlap diagnostics; Builder unchanged. Failure screenshot recorded. |
+| 100/800 redundant | **SAFE_BLOCKED** | In the final 45-second run the raw ELK gate returned a bounded `LAYOUT_UNREASONABLE_WHITESPACE` block in 24.5 seconds; Builder unchanged. The earlier 20-second run remains a historical timeout observation, not a product cancellation. Failure screenshot recorded. |
+| 200/199 linear | **SAFE_BLOCKED** | Existing raw ELK gate blocked activation with whitespace diagnostics; Builder unchanged. Failure screenshot recorded. |
+| 200/600 star | **SAFE_BLOCKED** | Existing raw ELK gate blocked activation with whitespace and repeated-spoke overlap diagnostics; Builder unchanged. Failure screenshot recorded. |
+| 200/1600 redundant | **UNKNOWN** | The isolated Chromium process exceeded the explicit 55-second bound and was terminated. No final geometry or Builder-preservation result is claimed; no product cancellation exists. |
 
-The final handoff must replace the candidate labels above with actual compiled
-Chromium evidence and exact required-CI results on the final PR HEAD.
+The two `FULL_UI_PASS` cases are the only profiles for which final React Flow
+geometry was rendered and measured. The five `SAFE_BLOCKED` cases were stopped
+by the existing raw safety gate before a graph could be presented. The six
+`SAFE_BLOCKED` cases are not treated as UI passes. The final
+`UNKNOWN` is deliberately not relabelled as controlled success: the bound is
+owned by the test harness, not by the product.
