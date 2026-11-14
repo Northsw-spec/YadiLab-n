@@ -228,9 +228,21 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_worker_product_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-worker-product"
-          # ATLAS-001 F4B-C: independent 100/800 timeout recovery, project
-          # switch and Builder-edit races, plus Save/Open after abort. The
-          # test explicitly reports mock versus durable file-system evidence.
+      - name: ATLAS-001 F4B-C production Worker verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18981 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-f4b-c-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null
+          # Independent 100/800 timeout recovery, project switch and
+          # Builder-edit races, plus Save/Open after abort. The test
+          # explicitly reports mock versus durable file-system evidence.
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_c_product_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-c-product"
