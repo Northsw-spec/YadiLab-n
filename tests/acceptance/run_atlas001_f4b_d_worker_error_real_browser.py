@@ -147,12 +147,12 @@ def run_case(page, mode: str, expected: str, label: str) -> dict:
     diagnostic = panel.locator('[role="alert"]').text_content(timeout=10_000) or ""
     panel_text = panel.text_content() or ""
     require(expected in diagnostic or expected in panel_text, f"{label}: expected diagnostic {expected}, got {diagnostic!r}")
-    require(exported_source(page) == baseline, f"{label}: active Builder changed after Worker failure")
     after_topology = topology_snapshot(page)
     require(after_topology == before_topology, f"{label}: partial topology was published: {before_topology} -> {after_topology}")
     page.evaluate("window.__atlas001F4BDWorkerFault.mode = 'none'")
     panel.locator('[aria-label="Close network import"]').click()
     expect(panel).to_have_count(0, timeout=30_000)
+    require(exported_source(page) == baseline, f"{label}: active Builder changed after Worker failure")
     recovered = reimport_small(page, dense)
     state = page.evaluate("window.__atlas001F4BDWorkerFault")
     require(state["nativeInstances"] >= 1, f"{label}: valid recovery did not create a native Worker")
