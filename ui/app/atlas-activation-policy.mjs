@@ -37,7 +37,14 @@ export function evaluateBoundedAtlasEligibility(candidate, normalResourceBudget 
   if (!candidate?.ok || !candidate.source) return decision(false, "preview-not-validated", candidate);
   if (!/\.xlsx$/i.test(candidate.filename ?? "")) return decision(false, "source-is-not-xlsx", candidate);
   if (!ATLAS_BOUNDED_SUPPORTED_PROFILES.includes(candidate.workbookProfile)) return decision(false, "unsupported-workbook-profile", candidate);
-  if (!Array.isArray(candidate.sheets) || REQUIRED_CANONICAL_SHEETS.some(sheet => !candidate.sheets.includes(sheet))) {
+  // Workbook compatibility owns producer-name normalization.  A valid
+  // preview exposes those stable canonical identities separately from the
+  // raw worksheet names so bounded activation cannot reject a source merely
+  // because its producer used different casing/whitespace.
+  const canonicalSheets = Array.isArray(candidate.authoritativeSheets)
+    ? candidate.authoritativeSheets
+    : candidate.sheets;
+  if (!Array.isArray(canonicalSheets) || REQUIRED_CANONICAL_SHEETS.some(sheet => !canonicalSheets.includes(sheet))) {
     return decision(false, "canonical-sheets-missing", candidate);
   }
   if (candidate.unmappedColumnCount !== 0) return decision(false, "unmapped-source-columns", candidate);

@@ -215,6 +215,13 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_g5_1_reviewed_docx_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-g5-1"
+          # ATLAS-001 capacity gate: real file-input import through Builder,
+          # Normal Canvas and every bounded Atlas page for the independent
+          # 50/100/200/201/300/500/1000/1001 XLSX matrix.
+          export YADILAB_MAIN_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_import_visualization_capacity_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-capacity"
       - name: ATLAS-001 G5.0 evidence hardening
         shell: bash
         run: |
