@@ -49,7 +49,7 @@ Builder.  The manifest records each file SHA-256, all canonical resource and
 connection IDs, endpoint resources, endpoint ports and zone IDs.  The matrix
 contains:
 
-- linear 50/100/200/201/1000/1001 cases;
+- compact spanning-grid 50/100/200 cases plus linear 201/1000/1001 controls;
 - a 300 branched case and an identical lowercase-sheet-name variant;
 - a 500 branched case with one source-declared parallel pair on distinct ports
   and a disconnected component.

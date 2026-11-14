@@ -66,7 +66,10 @@ def build_rows(key: str, resources: int, connections: int, topology: str) -> tup
     zones = [("zoneId", "displayName", "kind")]
     layout = [("nodeId", "rank")]
 
-    zone_count = max(1, min(10, (resources + 49) // 50))
+    # A bounded grid for the NORMAL cases gives ELK a compact, readable
+    # source projection while the separate linear and branched controls keep
+    # the capacity fixture set topologically diverse.
+    zone_count = 2 if topology == "grid" and resources == 100 else (1 if topology == "grid" else max(1, min(10, (resources + 49) // 50)))
     for zone_index in range(zone_count):
         zone = f"cap_{key}_zone_{zone_index + 1:02d}"
         zones.append((zone, f"Capacity {key} zone {zone_index + 1:02d}", "lan"))
@@ -76,9 +79,14 @@ def build_rows(key: str, resources: int, connections: int, topology: str) -> tup
         zone = f"cap_{key}_zone_{((index - 1) * zone_count) // resources + 1:02d}"
         role = "network.switch" if index % 17 == 1 else "endpoint.windows"
         nodes.append((identifier, f"Capacity {key} device {index:04d}", role, zone))
-        # Every endpoint has explicit left/right ports. Branch fixtures add a
+        # Every endpoint has explicit source-declared ports. Grid fixtures use
+        # one directional port per spanning-tree side; branch fixtures add a
         # second pair for the one parallel physical declaration.
-        interfaces.extend(((identifier, "left", "left"), (identifier, "right", "right")))
+        if topology == "grid":
+            interfaces.extend(((identifier, "north", "north"), (identifier, "south", "south"),
+                                (identifier, "east", "east"), (identifier, "west", "west")))
+        else:
+            interfaces.extend(((identifier, "left", "left"), (identifier, "right", "right")))
         if topology == "branch" and index in (1, 2):
             interfaces.extend(((identifier, "parallel_left", "parallel-left"), (identifier, "parallel_right", "parallel-right")))
         layout.append((identifier, str(index)))
@@ -87,6 +95,19 @@ def build_rows(key: str, resources: int, connections: int, topology: str) -> tup
     if topology == "linear":
         for index in range(1, connections + 1):
             endpoint_pairs.append((index, "right", index + 1, "left"))
+    elif topology == "grid":
+        columns = max(2, round(resources ** 0.5))
+        rows = (resources + columns - 1) // columns
+        for row in range(rows):
+            start = row * columns + 1
+            end = min(resources, start + columns - 1)
+            for index in range(start, end):
+                endpoint_pairs.append((index, "east", index + 1, "west"))
+        for row in range(rows - 1):
+            top = row * columns + 1
+            bottom = top + columns
+            if bottom <= resources:
+                endpoint_pairs.append((top, "south", bottom, "north"))
     elif topology == "branch":
         # Main component, an explicitly disconnected component, and one
         # parallel edge with distinct source-declared ports.
@@ -162,9 +183,9 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     cases = []
     definitions = [
-        ("50-linear", 50, 49, "linear", False, "NORMAL"),
-        ("100-linear", 100, 99, "linear", False, "NORMAL"),
-        ("200-linear", 200, 199, "linear", False, "NORMAL"),
+        ("50-grid", 50, 49, "grid", False, "NORMAL"),
+        ("100-grid", 100, 99, "grid", False, "NORMAL"),
+        ("200-grid", 200, 199, "grid", False, "NORMAL"),
         ("201-linear", 201, 200, "linear", False, "BOUNDED_ATLAS"),
         ("300-branch", 300, 299, "branch", False, "BOUNDED_ATLAS"),
         ("300-branch-lowercase", 300, 299, "branch", True, "BOUNDED_ATLAS"),

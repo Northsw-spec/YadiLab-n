@@ -30,9 +30,9 @@ MOBILE = (390, 844)
 # The matrix is intentionally explicit: each status is represented in the
 # evidence manifest rather than being hidden behind one generic PASS.
 CASES = (
-    {"key": "50-linear", "viewports": (DESKTOP, MOBILE), "status": "FULL_UI_PASS"},
-    {"key": "100-linear", "viewports": (DESKTOP, MOBILE), "status": "FULL_UI_PASS"},
-    {"key": "200-linear", "viewports": (DESKTOP,), "status": "FULL_UI_PASS"},
+    {"key": "50-grid", "viewports": (DESKTOP, MOBILE), "status": "FULL_UI_PASS"},
+    {"key": "100-grid", "viewports": (DESKTOP, MOBILE), "status": "FULL_UI_PASS"},
+    {"key": "200-grid", "viewports": (DESKTOP,), "status": "FULL_UI_PASS"},
     {"key": "201-linear", "viewports": (DESKTOP,), "status": "BOUNDED_ATLAS_PASS"},
     {"key": "300-branch-lowercase", "viewports": (DESKTOP, MOBILE), "status": "BOUNDED_ATLAS_PASS"},
     {"key": "500-branch", "viewports": (DESKTOP, MOBILE), "status": "BOUNDED_ATLAS_PASS"},
@@ -217,6 +217,16 @@ def atlas_page_refs(page) -> list[dict[str, str]]:
     )
 
 
+def focus_atlas_resource(page, panel, resource_id: str) -> None:
+    search = page.get_by_label("Sök i topology")
+    search.fill(resource_id)
+    result = page.get_by_role("option").filter(has_text=resource_id).first
+    expect(result).to_be_visible(timeout=30000)
+    result.click()
+    expected_page = panel.get_attribute("data-atlas-active-page") or ""
+    wait_for_final_layout(page, panel, expected_page)
+
+
 def verify_atlas(page, item: dict[str, Any], viewport: tuple[int, int], evidence_dir: Path) -> dict[str, Any]:
     panel = page.locator(".topology-panel")
     expect(page.get_by_role("button", name="ATLAS PAGES")).to_be_visible(timeout=180000)
@@ -235,6 +245,12 @@ def verify_atlas(page, item: dict[str, Any], viewport: tuple[int, int], evidence
         # Re-query after each React render; stale element handles are not used.
         page.locator("[data-atlas-page-option]").nth(index).click()
         page_id = page.locator(".topology-panel").get_attribute("data-atlas-active-page") or ""
+        page_resources = json.loads(panel.get_attribute("data-atlas-page-resource-ids") or "[]")
+        require(page_resources, f'{item["key"]}: Atlas page {page_id} has no resource IDs')
+        # The read camera is intentionally focused before measuring screen
+        # geometry; a raw overview of a 60-node page would make labels too
+        # small even though the page itself is complete.
+        focus_atlas_resource(page, panel, page_resources[len(page_resources) // 2])
         evidence = capture_page_evidence(page, panel, page_id, viewport)
         require(panel.get_attribute("data-atlas-render-ready") == "true", f'{item["key"]}: Atlas page {page_id} not render-ready')
         require(panel.get_attribute("data-atlas-global-builder-layout") == "NOT_RUN", f'{item["key"]}: global Builder layout ran in Atlas')
@@ -335,8 +351,7 @@ def verify_atlas(page, item: dict[str, Any], viewport: tuple[int, int], evidence
     }
 
 
-def verify_blocked(page, panel, item: dict[str, Any], viewport: tuple[int, int], evidence_dir: Path) -> dict[str, Any]:
-    before = exported_source(page)
+def verify_blocked(page, panel, before: dict[str, Any], item: dict[str, Any], viewport: tuple[int, int], evidence_dir: Path) -> dict[str, Any]:
     require(panel.get_attribute("data-network-import-decision") == "BLOCKED", f'{item["key"]}: policy did not block 1001 resources')
     expect(panel.locator('[data-network-import-layout-blocked="true"]')).to_be_visible(timeout=30000)
     expect(panel.locator('[data-network-import-layout-diagnostic="NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED"]')).to_be_visible()
@@ -382,9 +397,11 @@ def run_case(browser, url: str, evidence_dir: Path, manifest: dict[str, Any], ca
         page, errors, outside = open_page(browser, url, viewport)
         try:
             started = page.evaluate("performance.now()")
+            before = exported_source(page) if case["status"] == "BLOCKED_BY_POLICY" else None
             panel, _payload = open_import(page, fixture, item)
             if case["status"] == "BLOCKED_BY_POLICY":
-                result = verify_blocked(page, panel, item, viewport, evidence_dir)
+                require(before is not None, f'{item["key"]}: missing pre-import Builder snapshot')
+                result = verify_blocked(page, panel, before, item, viewport, evidence_dir)
             else:
                 decision = "NORMAL" if case["status"] == "FULL_UI_PASS" else "BOUNDED_ATLAS"
                 require(panel.get_attribute("data-network-import-decision") == decision, f'{item["key"]}: expected {decision} policy')
