@@ -43,7 +43,7 @@ try {
   fs.mkdirSync(path.join(gitRoot,"asset-library/builtin"),{recursive:true});
   fs.mkdirSync(path.join(gitRoot,"ui/public"),{recursive:true});
   fs.writeFileSync(path.join(gitRoot,"asset-library/builtin/known.svg"),"<svg/>");
-  for (const name of ["acceptance.html","acceptance-probe.js","manifest.webmanifest","app-shell.js"]) {
+  for (const name of ["acceptance.html","acceptance-probe.js","manifest.webmanifest","app-shell.js","elk-worker-proxy.js"]) {
     fs.writeFileSync(path.join(gitRoot,"ui/public",name),"fixture");
   }
   run("add","package.json","package-lock.json","asset-library/builtin","ui/public"); run("commit","-q","-m","fixture");
