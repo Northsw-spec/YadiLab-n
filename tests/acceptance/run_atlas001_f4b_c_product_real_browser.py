@@ -131,7 +131,11 @@ def run_100_800(page, evidence_dir: Path) -> dict:
     expect(panel.locator('[data-network-import-layout-status="RUNNING"]')).to_have_count(0, timeout=TIMEOUT_MS)
     elapsed = round((time.perf_counter() - started) * 1000, 1)
     outcome = panel.get_attribute("data-network-import-layout-worker-outcome")
-    diagnostic = panel.locator('[role="alert"]').inner_text(timeout=10_000)
+    # Chromium 1187 can return an empty inner_text for an alert whose text is
+    # visually present while a bounded Worker failure is settling. The DOM
+    # text content is the stable evidence channel across the pinned Chromium
+    # versions used locally and in CI.
+    diagnostic = panel.locator('[role="alert"]').text_content(timeout=10_000) or ""
     require(outcome == "TIMEOUT", f"100/800 expected Worker TIMEOUT, got {outcome!r}")
     require("LAYOUT_TIMEOUT_ABORTED" in diagnostic, "100/800 timeout diagnostic was not preserved")
     require(panel.get_attribute("data-network-import-layout-worker-serialization-ms") not in (None, ""), "missing serialization metric")
