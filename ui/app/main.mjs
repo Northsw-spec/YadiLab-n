@@ -7539,7 +7539,7 @@ function App() {
     onRestoreDeclaredOfficeHierarchyFocus: restoreDeclaredOfficeHierarchyFocus,
     onReviewDeclaredOfficeHierarchy: () => setDeclaredOfficePanelOpen(true) });
 
-  return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
+  return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-project-generation": scenarioTransitionRef.current, "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
     e("header", { className: "app-header" },
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
     ),
