@@ -136,6 +136,12 @@ def run_100_800(page, evidence_dir: Path) -> dict:
     require("LAYOUT_TIMEOUT_ABORTED" in diagnostic, "100/800 timeout diagnostic was not preserved")
     require(panel.get_attribute("data-network-import-layout-worker-serialization-ms") not in (None, ""), "missing serialization metric")
     require(panel.get_attribute("data-network-import-layout-worker-start-ms") not in (None, ""), "missing Worker-start metric")
+    worker_metrics = {
+        "serializationMs": panel.get_attribute("data-network-import-layout-worker-serialization-ms"),
+        "workerStartMs": panel.get_attribute("data-network-import-layout-worker-start-ms"),
+        "roundTripMs": panel.get_attribute("data-network-import-layout-worker-roundtrip-ms"),
+        "validationMs": panel.get_attribute("data-network-import-layout-worker-validation-ms"),
+    }
     close_panel(page, panel)
     require(exported_source(page) == baseline, "100/800 timeout changed active Builder")
     recovered = reimport_small(page, small)
@@ -152,12 +158,7 @@ def run_100_800(page, evidence_dir: Path) -> dict:
         "builderUnchanged": True,
         "postAbortReimport": recovered,
         "mainThreadResponsiveness": responsiveness,
-        "workerMetrics": {
-            "serializationMs": panel.get_attribute("data-network-import-layout-worker-serialization-ms"),
-            "workerStartMs": panel.get_attribute("data-network-import-layout-worker-start-ms"),
-            "roundTripMs": panel.get_attribute("data-network-import-layout-worker-roundtrip-ms"),
-            "validationMs": panel.get_attribute("data-network-import-layout-worker-validation-ms"),
-        },
+        "workerMetrics": worker_metrics,
         "screenshot": screenshot,
     }
 
