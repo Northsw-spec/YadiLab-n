@@ -22,13 +22,35 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
 
 
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 def start_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
     button = page.locator('[data-guided-lab-start="direct"]')
     expect(button).to_be_visible()
     button.click()
@@ -55,8 +77,8 @@ def wait_summary_status(page, expected):
 def run_observation(page, target_id, command_id, expected_text):
     panel = page.locator('[data-observation-engine="wave1"]')
     open_details(page, '[data-observation-engine="wave1"]')
-    field(panel, "Mål").select_option(target_id)
-    field(panel, "Modellerat kommando").select_option(command_id)
+    choose(field(panel, "Mål"), target_id)
+    choose(field(panel, "Modellerat kommando"), command_id)
     panel.get_by_role("button", name="Kör modellerad observation").click()
     transcript = panel.locator('[data-observation-transcript="ready"]')
     expect(transcript).to_contain_text(expected_text, timeout=15000)
@@ -66,37 +88,37 @@ def run_observation(page, target_id, command_id, expected_text):
 def run_probe(page, probe_id, expected_truth, save=True):
     panel = page.locator('[data-active-probe-engine="wave2"]')
     open_details(page, '[data-active-probe-engine="wave2"]')
-    field(panel, "Källvärd").select_option("client1")
-    field(panel, "Aktiv probe").select_option(probe_id)
+    choose(field(panel, "Källvärd"), "client1")
+    choose(field(panel, "Aktiv probe"), probe_id)
     if probe_id == "windows.ping":
-        field(panel, "Destination").select_option("server1")
+        choose(field(panel, "Destination"), "server1")
     elif probe_id == "linux.nc_tcp":
-        field(panel, "Destination").select_option("server1")
-        field(panel, "TCP port", "input").fill("22")
+        choose(field(panel, "Destination"), "server1")
+        fill_value(field(panel, "TCP port", "input"), "22")
     else:
-        field(panel, "DNS-namn", "input").fill("app.lab.test")
+        fill_value(field(panel, "DNS-namn", "input"), "app.lab.test")
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
     if save:
         transcript.get_by_role("button", name="Spara evidens i anteckningar").click()
-    return transcript.inner_text()
+    return transcript.text_content() or ""
 
 
 def add_hypothesis(page, text):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(text)
+    fill_value(field(panel, "Learner note", "textarea"), text)
     panel.get_by_role("button", name="Add note to proof chain").click()
 
 
 def apply_remediation(page, target_id, action_id, value):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Target").select_option(target_id)
-    field(panel, "Typed remediation action").select_option(action_id)
+    choose(field(panel, "Target"), target_id)
+    choose(field(panel, "Typed remediation action"), action_id)
     if action_id == "set_windows_network_profile":
-        field(panel, "Windows network profile").select_option(value)
+        choose(field(panel, "Windows network profile"), value)
     else:
         raise AssertionError(f"Unsupported acceptance action: {action_id}")
     panel.get_by_role("button", name="Preview remediation").click()
@@ -144,9 +166,9 @@ def main():
             run_probe(page, "windows.ping", "FALSE")
             add_hypothesis(page, "Klientens standard-gateway kan vara felaktig.")
             panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
-            field(panel, "Target").select_option("client1")
-            field(panel, "Typed remediation action").select_option("change_default_gateway")
-            field(panel, "Gateway IPv4 address", "input").fill("10.78.1.1")
+            choose(field(panel, "Target"), "client1")
+            choose(field(panel, "Typed remediation action"), "change_default_gateway")
+            fill_value(field(panel, "Gateway IPv4 address", "input"), "10.78.1.1")
             panel.get_by_role("button", name="Preview remediation").click()
             expect(panel).to_contain_text("0 → 1", timeout=10000)
             panel.get_by_role("button", name="Commit remediation").click()
@@ -199,7 +221,12 @@ def main():
             apply_remediation(page, "client1", "set_windows_network_profile", "public")
             run_probe(page, "windows.resolve_dnsname", "UNKNOWN")
             dns_report = wait_summary_status(page, "NO_VERIFIED_IMPROVEMENT")
-            require("VERIFIED_IMPROVEMENT" not in dns_report.inner_text(), "UNKNOWN DNS result was presented as verified success")
+            dns_status = dns_report.locator('[data-troubleshooting-summary-status]')
+            require(
+                dns_status.get_attribute("data-troubleshooting-summary-status") == "NO_VERIFIED_IMPROVEMENT"
+                and dns_report.locator('[data-summary-verification="RESTORED"]').count() == 0,
+                "UNKNOWN DNS result was presented as verified success",
+            )
             expect(dns_report).to_contain_text("UNKNOWN")
             evidence["dns"] = {"status": "NO_VERIFIED_IMPROVEMENT", "unknownPreserved": True}
 

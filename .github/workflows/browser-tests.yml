@@ -15,6 +15,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Install locked dependencies and build actual app
         env:
           YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
@@ -24,11 +27,79 @@ jobs:
           npm run build:browser
           node scripts/verify_browser_release.mjs
       - name: Install one pinned Chromium
+        shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m venv "$RUNNER_TEMP/yadilab-playwright"
-          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m pip install --disable-pip-version-check 'playwright==1.55.0'
-          "$RUNNER_TEMP/yadilab-playwright/bin/python" -m playwright install --with-deps chromium
+          venv="$RUNNER_TEMP/yadilab-playwright"
+          python3 -m venv "$venv"
+          PYTHON="$venv/bin/python"
+
+          "$PYTHON" -m pip install \
+            --disable-pip-version-check \
+            --retries 3 \
+            --timeout 60 \
+            'playwright==1.55.0'
+
+          install_dependencies() {
+            echo "Installing Chromium Linux dependencies via Playwright"
+            DEBIAN_FRONTEND=noninteractive "$PYTHON" -m playwright install-deps chromium
+          }
+
+          dependencies_installed=false
+          for attempt in 1 2 3; do
+            echo "Chromium dependency installation attempt $attempt/3"
+            if install_dependencies; then
+              dependencies_installed=true
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              delay=$((attempt * 15))
+              echo "Dependency installation failed; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+
+          if [ "$dependencies_installed" != true ]; then
+            echo "::error::Chromium Linux dependencies failed after 3 attempts; this is an infrastructure failure."
+            exit 1
+          fi
+
+          # Install the browser separately so the dependency retry cannot mask
+          # a missing Playwright browser binary or a failed browser download.
+          "$PYTHON" -m playwright install chromium
+
+          browser_path="$($PYTHON - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              print(playwright.chromium.executable_path)
+          PY
+          )"
+          test -x "$browser_path"
+          browser_ldd="$(ldd "$browser_path")"
+          if grep -Fq 'not found' <<<"$browser_ldd"; then
+            echo "::error::Pinned Chromium has unresolved shared-library dependencies."
+            printf '%s\n' "$browser_ldd"
+            exit 1
+          fi
+
+          "$PYTHON" - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(
+                  headless=True,
+                  args=[
+                      "--disable-background-networking",
+                      "--disable-dev-shm-usage",
+                  ],
+              )
+              page = browser.new_page()
+              page.goto("about:blank")
+              assert page.title() == ""
+              print("PASS: Pinned Playwright Chromium launched:", browser.version)
+              browser.close()
+          PY
       - name: Mounted UI identity, import truth and reviewed graph
         env:
           YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
@@ -120,6 +191,192 @@ jobs:
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project089-import-consent"
           npm run test:project089-import-consent
+          npm run test:project090-hierarchy
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project090_hierarchical_stability_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project090-hierarchy"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project091_arvidsjaur_layout_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project091-layout"
+          # PROJECT-092: topology-first toolbar, anchored popovers, responsive viewports and active counts.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project092_ui_redesign_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project092-ui-redesign"
+          # PROJECT-093: source-faithful semantic icons, exact Access-0025
+          # reconciliation, orthogonal canonical paths and readable cameras.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project093_semantic_explorer_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project093-semantic-explorer"
+          # PROJECT-094: one ELK node/port/edge pipeline, A/B/C quality bake-off,
+          # exact source reconciliation, route geometry and real screenshots.
+          npm run test:project094-engine
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_project094_topology_engine_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/project094-topology-engine"
+          # ATLAS-001 G5.1: reviewed original DOCX -> canonical Builder -> Atlas
+          # with real Chromium screenshots and an explicit replacement approval.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_g5_1_reviewed_docx_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-g5-1"
+          # ATLAS-001 capacity gate: real file-input import through Builder,
+          # Normal Canvas and every bounded Atlas page for the independent
+          # 50/100/200/201/300/500/1000/1001 XLSX matrix.
+          export YADILAB_MAIN_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_import_visualization_capacity_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-capacity"
+          # ATLAS-001 F4B: product NORMAL 200/1600 timeout + operator cancel,
+          # Builder preservation, event-loop responsiveness and fresh 50/49
+          # re-import through the real compiled Chromium application.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_worker_product_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-worker-product"
+      - name: ATLAS-001 F4B-C production Worker verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18981 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-f4b-c-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18981/build-marker.json >/dev/null
+          # Independent 100/800 timeout recovery, project switch and
+          # Builder-edit races, plus Save/Open after abort. The test
+          # explicitly reports mock versus durable file-system evidence.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_c_product_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-c-product"
+      - name: ATLAS-001 F5A NORMAL final-view acceptance
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18983 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-f5a-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18983/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18983/build-marker.json >/dev/null
+          # 200/199 linear must be a genuine final-view PASS. Star and
+          # redundant profiles remain explicit negative controls and must stay
+          # fail-closed until a separately approved port-density solution.
+          ATLAS001_CASE_TIMEOUT_MS=45000 \
+            "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f5a_normal_final_view_real_browser.py \
+              --url http://127.0.0.1:18983/ \
+              --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f5a-normal-final-view"
+      - name: ATLAS-001 F5B port-density safety matrix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18984 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-f5b-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18984/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18984/build-marker.json >/dev/null
+          ATLAS001_CASE_TIMEOUT_MS=45000 \
+            "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f5b_port_density_real_browser.py \
+              --url http://127.0.0.1:18984/ \
+              --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f5b-port-density"
+      - name: ATLAS-001 F4B-D compiled Linux x86_64 distribution
+        shell: bash
+        env:
+          YADILAB_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          npm run build:launcher
+          dist="distribution/linux-x86_64"
+          test -x "$dist/app-launcher"
+          file "$dist/app-launcher" | grep -F 'ELF 64-bit' | grep -F 'x86-64'
+          ( cd "$dist" && sha256sum -c SHA256SUMS.txt )
+          test -s "$dist/web/assets/elk-worker.js"
+          test -s "$dist/web/assets/elk-worker-proxy.js"
+          node scripts/verify_browser_release.mjs "$dist/web"
+          node scripts/verify_release_identity.mjs "$dist/web"
+          mkdir -p "$RUNNER_TEMP/yadilab-f4b-d-runtime-home"
+          env -i PATH=/nonexistent HOME="$RUNNER_TEMP/yadilab-f4b-d-runtime-home" \
+            "$dist/app-launcher" --port 18982 >"$RUNNER_TEMP/yadilab-f4b-d-launcher.log" 2>&1 &
+          launcher_pid=$!
+          trap 'kill "$launcher_pid" 2>/dev/null || true; wait "$launcher_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18982/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18982/build-marker.json >/dev/null
+          curl -fsSI http://127.0.0.1:18982/ | grep -i '^content-security-policy:'
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_d_worker_error_real_browser.py \
+            --url http://127.0.0.1:18982/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-d-worker-errors"
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_d_filesystem_capability_real_browser.py \
+            --url http://127.0.0.1:18982/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-d-filesystem"
+      - name: Publish ATLAS-001 F4B-D Linux evidence distribution
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yadilab-atlas001-f4b-d-linux-${{ github.sha }}
+          path: distribution/linux-x86_64/
+          if-no-files-found: error
+          retention-days: 30
+      - name: ATLAS-001 G5.0 evidence hardening
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fontconfig fonts-dejavu-core fonts-liberation2 python3-venv
+          renderer_venv="$RUNNER_TEMP/yadilab-g5-renderer"
+          python3 -m venv "$renderer_venv"
+          "$renderer_venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
+            --retries 3 --timeout 60 'python-docx==1.2.0'
+          evidence_dir="$RUNNER_TEMP/yadilab-evidence/atlas001-g5-0"
+          mkdir -p "$evidence_dir"
+          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_fixture.py \
+            --evidence-dir "$evidence_dir"
+          "$renderer_venv/bin/python" tests/qualification/run_atlas001_g5_0_negative.py
+      - name: Package verified compiled YadiLab app and original capacity XLSX files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node scripts/verify_browser_release.mjs
+          test -s ui/dist/index.html
+          test -s ui/dist/assets/app.js
+          test -s ui/dist/build-marker.json
+          out="$RUNNER_TEMP/yadilab-compiled-delivery"
+          mkdir -p "$out/app" "$out/testfiler"
+          cp -a ui/dist/. "$out/app/"
+          cp tests/fixtures/import/atlas001-capacity-{50-grid,100-grid,200-grid,201-linear,300-branch-lowercase,500-branch,1000-linear,1001-linear}.xlsx "$out/testfiler/"
+          cat > "$out/START_HERE.txt" <<'END_README'
+          YadiLab – REAL COMPILED BROWSER APPLICATION
+          The app/ folder is the compiled, CI-verified ui/dist/ output.
+          It is not a source checkout and does not require npm or compilation.
+
+          LINUX/macOS (Python 3):
+            cd app && python3 -m http.server 18981 --bind 127.0.0.1
+          WINDOWS (Python 3):
+            cd app
+            py -3 -m http.server 18981 --bind 127.0.0.1
+          Then open http://127.0.0.1:18981/
+
+          Import one XLSX file from ../testfiler via Network import:
+          50 and 100 resources: NORMAL Canvas; 300 and 500: ATLAS PAGES.
+          1001 resources: intentionally BLOCKED. These are synthetic fixtures.
+          Source and build identity: app/build-marker.json
+          END_README
+      - name: Publish verified compiled YadiLab app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yadilab-compiled-app-${{ github.sha }}
+          path: ${{ runner.temp }}/yadilab-compiled-delivery/
+          if-no-files-found: error
+          retention-days: 30
       - name: Persist Chromium evidence
         if: always()
         uses: actions/upload-artifact@v4

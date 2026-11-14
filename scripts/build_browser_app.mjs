@@ -55,6 +55,11 @@ writeInventoryArtifacts(root, resolvedInventory, {
 
 const publicFiles = ["acceptance.html", "acceptance-probe.js", "manifest.webmanifest", "app-shell.js"];
 for (const file of publicFiles) fs.copyFileSync(path.join(root, "ui/public", file), path.join(temp, file));
+// The app bundle uses elk-api.js with an explicit Worker URL. Ship the local
+// envelope proxy together with the exact locked ELK worker so compiled
+// Chromium/Parrot runs cannot fall back to inline ELK.
+fs.copyFileSync(path.join(root, "ui/public/elk-worker-proxy.js"), path.join(temp, "assets/elk-worker-proxy.js"));
+fs.copyFileSync(path.join(root, "node_modules/elkjs/lib/elk-worker.js"), path.join(temp, "assets/elk-worker.js"));
 fs.writeFileSync(path.join(temp, "build-marker.json"), `${JSON.stringify({
   formatId: "yadilab.browser-build-marker",
   version: release.version,

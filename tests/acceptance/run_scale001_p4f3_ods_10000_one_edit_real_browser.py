@@ -87,8 +87,7 @@ def case(browser, url):
                 edited["connections"] == baseline["connections"] and
                 edited["resources"][-1]["id"] == ADDED,
                 "One unlinked append changed approved ODS source")
-        menu_builder = page.locator(".workspace-menu").filter(
-            has=page.locator("summary").filter(has_text="Builder"))
+        menu_builder = page.locator(".workspace-menu-advanced")
         if menu_builder.get_attribute("open") is None:
             menu_builder.locator("summary").click()
         menu_builder.get_by_role("button", name="Kompilera + layout").click()

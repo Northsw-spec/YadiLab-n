@@ -36,13 +36,35 @@ jobs:
           # A valid JSON schema alone does not reject dangling test subjects,
           # ignored port arrays, or an invalid protocol being defaulted.
           npm run test:compiler
+          # ATLAS-001 F4B: the 112px zone-header geometry contract and its
+          # negative 72px regression must remain a source-level gate.
+          npm run test:layout
           npm run test:engine
           npm run test:enterprise-import
+          # ATLAS-001 G5.0: immutable DOCX bytes, source locators and the
+          # structure-only truth boundary. Physical pagination runs in the
+          # existing Chromium job after its renderer install.
+          node tests/enterprise-import/run_atlas001_g5_0_fixture_tests.mjs
+          node tests/browser/run_atlas001_g5_1_reviewed_docx_atlas_tests.mjs
+          node tests/browser/run_atlas001_g5_2_contract_tests.mjs
+          # ATLAS-001 capacity: independent source truth, canonical sheet
+          # compatibility and the exact NORMAL/BOUNDED/BLOCKED policy matrix.
+          npm run test:atlas001-capacity-source
+          # ATLAS-001 NORMAL density: independent XLSX source truth and the
+          # red reproducer proving that all measured density points currently
+          # enter NORMAL without an independently verified link budget.
+          npm run test:atlas001-normal-density-source
+          node tests/browser/run_connected_explorer_geometry_tests.mjs
           npm run test:import-helper
           # PROJECT-086: canonical focus paging/counts and topology-aware 10k fallback.
           npm run test:topology-navigation
           npm run test:project088-topology
           npm run test:project089-import-consent
+          npm run test:project090-hierarchy
+          npm run test:project091-layout
+          npm run test:project091-edge-renderer
+          npm run test:project093-contract
+          npm run test:project094-engine
           npm run test:scale001-p0-source
           npm run test:scale001-p4b1-hierarchical
           node tests/browser/run_scale001_p4b1_10000_bounded_source_frozen_tests.mjs

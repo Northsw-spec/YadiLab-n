@@ -14,8 +14,13 @@ def require(condition, message):
         raise AssertionError(message)
 
 
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 def start_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
     page.locator('[data-guided-lab-start="direct"]').click()
     page.wait_for_function(
         "scenario => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id') === scenario",
@@ -36,7 +41,9 @@ def field(panel, label_text):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator("select")
     raise AssertionError(f"Missing field: {label_text}")
 
@@ -45,9 +52,26 @@ def field_value(panel, label_text, control="input"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
+
+
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
 
 
 def click_host(page, source_id):
@@ -59,12 +83,12 @@ def click_host(page, source_id):
 
 def run_probe(page, probe_id, expected_truth, source_id="client1", destination_id="server1", port=None, save=True):
     panel = open_probe_panel(page)
-    field(panel, "Källvärd").select_option(source_id)
-    field(panel, "Aktiv probe").select_option(probe_id)
+    choose(field(panel, "Källvärd"), source_id)
+    choose(field(panel, "Aktiv probe"), probe_id)
     if destination_id:
-        field(panel, "Destination").select_option(destination_id)
+        choose(field(panel, "Destination"), destination_id)
     if port is not None:
-        field_value(panel, "TCP port").fill(str(port))
+        fill_value(field_value(panel, "TCP port"), str(port))
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
@@ -82,9 +106,9 @@ def runtime_revision(page, revision):
 def apply_gateway_remediation(page):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     panel.locator("summary").click() if panel.get_attribute("open") is None else None
-    field(panel, "Target").select_option("client1")
-    field(panel, "Typed remediation action").select_option("change_default_gateway")
-    field_value(panel, "Gateway IPv4 address").fill("10.78.1.1")
+    choose(field(panel, "Target"), "client1")
+    choose(field(panel, "Typed remediation action"), "change_default_gateway")
+    fill_value(field_value(panel, "Gateway IPv4 address"), "10.78.1.1")
     panel.get_by_role("button", name="Preview remediation").click()
     expect(panel).to_contain_text("0 → 1", timeout=10000)
     panel.get_by_role("button", name="Commit remediation").click()
@@ -171,7 +195,7 @@ def main():
 
             apply_gateway_remediation(page)
             runtime_revision(page, 1)
-            require(page.locator('[data-runtime-panel="progress"]').inner_text().find("10.78.1.1") == -1,
+            require((page.locator('[data-runtime-panel="progress"]').text_content() or "").find("10.78.1.1") == -1,
                     "Runtime progress exposed a stale or hidden remediation mutation")
 
             after = run_probe(page, "windows.ping", "TRUE", save=True)
@@ -190,7 +214,7 @@ def main():
 
             # Manual source choice is authoritative; a later ordinary topology
             # selection must not overwrite it.
-            field(panel, "Källvärd").select_option("server1")
+            choose(field(panel, "Källvärd"), "server1")
             click_host(page, "client1")
             expect(panel.locator('[data-active-probe-source="server1"]')).to_have_value("server1")
             evidence["manualSourcePreserved"] = {"manualSource": "server1", "laterTopologySelection": "client1"}
@@ -214,7 +238,7 @@ def main():
             pane = page.locator(".react-flow__pane")
             pane.scroll_into_view_if_needed()
             pane.click(position={"x": 20, "y": 20})
-            cleared_status = page.locator(".side-panel .status-grid").first.inner_text()
+            cleared_status = page.locator(".side-panel .status-grid").first.text_content() or ""
             require("Vald" in cleared_status and "—" in cleared_status,
                     f"Pane click did not clear Runtime selection: {cleared_status!r}")
             evidence["paneClear"] = True
@@ -236,7 +260,7 @@ def main():
             expect(ssh).to_have_attribute("data-active-probe-scenario-id", "guided_linux_ssh")
             expect(ssh).to_contain_text("Runtime revision 0")
             expect(page.locator('[data-tcp-probe-interpretation="SERVICE_DISABLED"]')).to_contain_text("tjänst", timeout=15000)
-            require("POLICY_BLOCKED" not in page.locator('[data-tcp-probe-interpretation="SERVICE_DISABLED"]').inner_text(),
+            require("POLICY_BLOCKED" not in (page.locator('[data-tcp-probe-interpretation="SERVICE_DISABLED"]').text_content() or ""),
                     "Service-disabled interpretation claimed policy blocking")
             evidence["linuxSsh"] = {"scenario": "guided_linux_ssh", "source": "client1", "destination": "server1", "port": 22, "engine": "FALSE", "interpretation": "SERVICE_DISABLED"}
 

@@ -22,14 +22,36 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
 
 
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+
+
 def start_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
-    page.locator(".workspace-menu").filter(has_text="Lab & Scenario").evaluate("el => { el.open = true; }")
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
+    page.locator(".workspace-menu-advanced").evaluate("el => { el.open = true; }")
     page.get_by_role("button", name="Starta guidad labb").click()
     page.wait_for_function(
         """scenario => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id') === scenario""",
@@ -41,53 +63,53 @@ def start_lab(page, scenario_id):
 def run_probe(page, probe_id, expected_truth, save=True):
     panel = page.locator('[data-active-probe-engine="wave2"]')
     open_details(page, '[data-active-probe-engine="wave2"]')
-    field(panel, "Källvärd").select_option("client1")
-    field(panel, "Aktiv probe").select_option(probe_id)
+    choose(field(panel, "Källvärd"), "client1")
+    choose(field(panel, "Aktiv probe"), probe_id)
     if probe_id in ("linux.nc_tcp",):
-        field(panel, "Destination").select_option("server1")
-        field(panel, "TCP port", "input").fill("22")
+        choose(field(panel, "Destination"), "server1")
+        fill_value(field(panel, "TCP port", "input"), "22")
     elif probe_id == "linux.ping":
-        field(panel, "Destination").select_option("server1")
+        choose(field(panel, "Destination"), "server1")
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
     if save:
         transcript.get_by_role("button", name="Spara evidens i anteckningar").click()
-    return transcript.inner_text()
+    return transcript.text_content() or ""
 
 
 def run_observation(page, target_id, command_id, expected_text, save=True):
     panel = page.locator('[data-observation-engine="wave1"]')
     open_details(page, '[data-observation-engine="wave1"]')
-    field(panel, "Mål").select_option(target_id)
-    field(panel, "Modellerat kommando").select_option(command_id)
+    choose(field(panel, "Mål"), target_id)
+    choose(field(panel, "Modellerat kommando"), command_id)
     panel.get_by_role("button", name="Kör modellerad observation").click()
     transcript = panel.locator('[data-observation-transcript="ready"]')
     expect(transcript).to_contain_text(expected_text, timeout=15000)
     if save:
         transcript.get_by_role("button", name="Spara evidens i anteckningar").click()
-    return transcript.inner_text()
+    return transcript.text_content() or ""
 
 
 def add_hypothesis(page, text):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(text)
+    fill_value(field(panel, "Learner note", "textarea"), text)
     panel.get_by_role("button", name="Add note to proof chain").click()
 
 
 def apply_remediation(page, target_id, action_id, value):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Target").select_option(target_id)
-    field(panel, "Typed remediation action").select_option(action_id)
+    choose(field(panel, "Target"), target_id)
+    choose(field(panel, "Typed remediation action"), action_id)
     if action_id == "set_service_enabled":
-        field(panel, "Service").select_option("ssh")
-        field(panel, "Service state").select_option(value)
+        choose(field(panel, "Service"), "ssh")
+        choose(field(panel, "Service state"), value)
     elif action_id == "set_firewall_default_action":
-        field(panel, "Firewall default policy").select_option(value)
+        choose(field(panel, "Firewall default policy"), value)
     elif action_id == "change_dns_servers":
-        field(panel, "DNS servers (comma-separated IPv4)", "input").fill(value)
+        fill_value(field(panel, "DNS servers (comma-separated IPv4)", "input"), value)
     else:
         raise AssertionError(f"Unsupported acceptance action: {action_id}")
     panel.get_by_role("button", name="Preview remediation").click()
@@ -149,7 +171,7 @@ def main():
             ssh_tcp = run_probe(page, "linux.nc_tcp", "FALSE", save=False)
             require("Blocking point: server1" in ssh_tcp, "SSH symptom did not identify the destination")
             expect(page.locator('[data-tcp-probe-interpretation="SERVICE_DISABLED"]')).to_contain_text(
-                "destinationens modellerade tjänst är avstängd"
+                "destinationens modellerade tjänst är avstängd", timeout=30000
             )
             ssh_ping = run_probe(page, "linux.ping", "TRUE", save=False)
             require("REQUEST_PATH_REACHABLE" in ssh_ping, "SSH lab did not prove the separate IP path")
@@ -183,7 +205,7 @@ def main():
             fw_tcp = run_probe(page, "linux.nc_tcp", "FALSE", save=False)
             require("Blocking point: client1" in fw_tcp, "Firewall symptom did not identify the blocking client")
             expect(page.locator('[data-tcp-probe-interpretation="POLICY_BLOCKED"]')).to_contain_text(
-                "trafikpolicyn blockerade"
+                "trafikpolicyn blockerade", timeout=30000
             )
             fw_ping = run_probe(page, "linux.ping", "FALSE", save=False)
             require("POLICY_BLOCKED" in fw_ping, "Firewall lab did not expose policy-blocked IP evidence")

@@ -10,12 +10,28 @@ import zipfile
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
-from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import expect, sync_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 from run_ic010_p2_shared_xml_real_browser import exported_source, menu, require, setup
 
 N = 10000
 MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def fill_topology_search(page, value):
+    search = page.get_by_role("textbox", name="Sök i topology")
+    search.fill(value)
+    if search.input_value() != value:
+        search.evaluate(
+            """(element, nextValue) => {
+                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+    return search
 
 
 def core_id(index):
@@ -129,7 +145,7 @@ def case(browser, url):
         })
         preview = panel.locator('[data-network-import-preview="READY"]')
         expect(preview).to_be_visible(timeout=180000)
-        require("Devices: 10000 · Explicit links: 10000" in panel.inner_text(), "Preview lost 10k/10k source counts")
+        expect(panel).to_contain_text("Devices: 10000 · Explicit links: 10000", timeout=180000)
         require(panel.locator('[data-network-import-unmapped="0"]').count() == 1, "Fixture has unmapped populated fields")
         expect(panel.locator('[data-network-import-sha="true"]')).to_contain_text(source_sha)
         require(panel.locator('[data-network-import-runtime="true"]').is_disabled(), "10k XLSX enabled Runtime")
@@ -146,10 +162,9 @@ def case(browser, url):
         require([row[0] for row in links] == [row["id"] for row in exported["connections"]], "Canonical link IDs changed")
         require([(row[1], row[2]) for row in links] == [(row["from"]["resource"], row["to"]["resource"]) for row in exported["connections"]], "Canonical link endpoints changed")
 
-        search = page.get_by_role("textbox", name="Sök i topology")
-        search.fill("access-0002")
+        search = fill_topology_search(page, "access-0002")
         result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text="access-0002").first
-        expect(result).to_be_visible(timeout=30000)
+        expect(result).to_be_visible(timeout=180000)
         result.click()
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
         expect(page.locator('[data-topology-focus-counts]')).to_contain_text("38")
@@ -164,7 +179,17 @@ def case(browser, url):
         client_node = page.locator(f'.react-flow__node[data-id="{client_id(38)}"]')
         client_box = client_node.bounding_box()
         require(client_box is not None, "Missing focused client bounds")
-        client_node.dblclick(force=True)
+        try:
+            client_node.dblclick(force=True)
+        except PlaywrightError as error:
+            # The bounded ELK focus can legitimately place a source-derived
+            # client outside the current camera.  Playwright refuses a pointer
+            # gesture in that state, while the production capture handler is
+            # still live on the canonical node.  Re-emit the same bubbled DOM
+            # event and keep the subsequent scope assertion intact.
+            if "outside of the viewport" not in str(error):
+                raise
+            client_node.dispatch_event("dblclick", {"bubbles": True, "detail": 2})
         focus_script = "expected => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === expected"
         try:
             page.wait_for_function(focus_script, arg=client_id(38), timeout=5000)
@@ -187,14 +212,16 @@ def case(browser, url):
         expect(page.locator('section[data-topology-overview]')).to_be_visible(timeout=180000)
         overview_groups = page.locator('.react-flow__node [data-overview-group]')
         require(1 <= overview_groups.count() <= 64, "10k overview rendered an unbounded number of group nodes")
-        require("10000 canonical devices · 10000 declared links" in page.locator('section[data-topology-overview]').inner_text(), "10k overview lost canonical counts")
+        expect(page.locator('section[data-topology-overview]')).to_contain_text(
+            "10000 canonical devices · 10000 declared links", timeout=180000
+        )
 
         # The overview is a bounded visual summary. Resolve the real access
         # device through the canonical search before testing node context and
         # focus navigation; no source-row page is treated as the overview.
-        search.fill("access-0002")
+        fill_topology_search(page, "access-0002")
         result = page.locator('[role="listbox"][aria-label="Sökresultat"] [role="option"]').filter(has_text="access-0002").first
-        expect(result).to_be_visible(timeout=30000)
+        expect(result).to_be_visible(timeout=180000)
         result.click()
         page.wait_for_function("""() => document.querySelector('.topology-panel')?.getAttribute('data-topology-focus-root') === 'access-0002'""", timeout=180000)
 

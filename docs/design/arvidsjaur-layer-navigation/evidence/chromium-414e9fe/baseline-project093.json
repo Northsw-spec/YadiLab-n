@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "project094.baseline.v1",
+  "sourceKind": "synthetic-ci-fixture",
+  "repo": "Northsw-spec/YadiLab-n",
+  "baselineHead": "7fc25e0852804c7ca12ca4883c6ad04751c240ef",
+  "scope": "Access25",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "canonical": {
+    "resources": 40,
+    "links": 39,
+    "physicalSvgPaths": 39
+  },
+  "metrics": {
+    "totalCableLength": 49206.00018507434,
+    "p95DetourRatio": 1.537736060237084,
+    "medianDetourRatio": 1.000000043487311,
+    "totalBends": 78,
+    "cableCrossings": 0,
+    "nodePenetrations": 0,
+    "nodeOverlaps": 0,
+    "bboxArea": 1655231.8904202373,
+    "medianLayoutMs": 0,
+    "minReadNameCssPx": 13.76
+  },
+  "evidence": {
+    "screenshotDirectory": "/tmp/project094-baseline",
+    "metricDirectory": "/tmp/project094-baseline-metrics",
+    "source": "Wave A compiled Chromium run before PROJECT-094 edits"
+  }
+}

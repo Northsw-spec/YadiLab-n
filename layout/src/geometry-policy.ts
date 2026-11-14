@@ -13,7 +13,11 @@ export const ROOT_LAYOUT_PADDING = Object.freeze({
 });
 
 export const ZONE_CONTENT_PADDING = Object.freeze({
-  top: 64,
+  // The rendered Arvidsjaur group header contains an icon, a primary label
+  // and a secondary provenance line. Reserve a full card-height band before
+  // ELK places the first child; 64px was enough for the old zone-only canvas
+  // but allowed compact Chromium cards to touch the header after scaling.
+  top: 112,
   left: 32,
   bottom: 32,
   right: 32,

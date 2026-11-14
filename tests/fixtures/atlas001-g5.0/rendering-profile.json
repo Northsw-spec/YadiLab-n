@@ -1,0 +1,62 @@
+{
+  "profileId": "atlas001-g5.0.github-ubuntu-24.04-renderer.v1",
+  "profileVersion": 1,
+  "acceptedEnvironment": {
+    "osId": "ubuntu",
+    "osVersionId": "24.04",
+    "architecture": "x86_64",
+    "locale": "C.UTF-8",
+    "toolVersionPatterns": {
+      "libreoffice": "^LibreOffice 24\\.2\\.",
+      "pdfinfo": "^pdfinfo version 24\\.",
+      "pdftotext": "^pdftotext version 24\\.",
+      "python": "^3\\.12\\.",
+      "pythonDocx": "^1\\.2\\.0$"
+    },
+    "requiredFontFamilies": [
+      "DejaVu Sans",
+      "Liberation Sans"
+    ],
+    "fontFingerprintPolicy": "record-in-evidence-and-require-listed-families"
+  },
+  "renderingCommands": {
+    "render": [
+      "soffice",
+      "--headless",
+      "--convert-to",
+      "pdf",
+      "--outdir",
+      "<temporary>",
+      "<source.docx>"
+    ],
+    "pageCount": [
+      "pdfinfo",
+      "<rendered.pdf>"
+    ],
+    "pageText": [
+      "pdftotext",
+      "-layout",
+      "<rendered.pdf>",
+      "<page-text.txt>"
+    ]
+  },
+  "layoutContract": {
+    "pageSizeTwips": {
+      "width": "12240",
+      "height": "15840"
+    },
+    "marginsTwips": {
+      "top": "1440",
+      "right": "1800",
+      "bottom": "1440",
+      "left": "1800",
+      "header": "720",
+      "footer": "720",
+      "gutter": "0"
+    }
+  },
+  "generator": {
+    "file": "generate_g5_fixtures.py",
+    "sha256": "8453793367a7f1f54ca30a37f96473e36c792756cd89d2eed8635240c7798315"
+  }
+}

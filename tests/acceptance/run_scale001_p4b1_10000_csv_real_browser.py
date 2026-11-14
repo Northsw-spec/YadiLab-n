@@ -136,8 +136,7 @@ def case(browser,url):
                 after["connections"]==approved["connections"],
                 "One local edit changed original imported source or link identities")
         # Existing Builder compile UI must be compiler-only and remain blank.
-        builder_menu=page.locator('.workspace-menu').filter(
-            has=page.locator('summary').filter(has_text='Builder'))
+        builder_menu=page.locator('.workspace-menu-advanced')
         if builder_menu.get_attribute('open') is None:
             builder_menu.locator('summary').click()
         builder_menu.get_by_role('button',name='Kompilera + layout').click()

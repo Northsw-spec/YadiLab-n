@@ -314,12 +314,22 @@ import { createCompilerSchemaValidator } from "../../validator/src/compiler-adap
 import { validateContract } from "../../validator/src/index.ts";
 import { SafePackageIO, ZipJsArchiveBackend } from "../../package-io/src/index.ts";
 import { ElkLayoutBackend } from "../../layout/src/elk-backend.ts";
+import { CancellableElkLayoutBackend } from "../../layout/src/elk-worker-backend.ts";
 import { scenarioLaunchStillCurrent } from "./scenario-launch-guard.mjs";
 import { ENGINE_VERSION } from "../../engine/src/index.ts";
 import { buildTopologyFocusPage, buildTopologySearchIndex, buildTopologySearchIndexFromNetwork, filterTopologyNodes, searchTopologyWithCount } from "../src/canvas/topology-navigation.ts";
 import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.ts";
+import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
+import { createTopologyRequestKey, layoutHierarchicalTopologyView, topologyViewportBucket, TOPOLOGY_LAYOUT_CONFIG_VERSION } from "../src/canvas/topology-elk-adapter.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
+import { inspectConnectedExplorerGeometry } from "./connected-explorer-guard.mjs";
+import { projectScenarioSubsetToCanvas } from "../src/canvas/projection.ts";
+import { atlasPageForResource, buildAtlasIndex, projectAtlasPage } from "../src/canvas/atlas-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
+import { anchorOrthogonalRoute, orthogonalEdgePath } from "./semantic-edge-routing.mjs";
+import { iconDescriptor, iconRegistry } from "../src/canvas/icon-registry.ts";
+import { ATLAS_ACTIVATION_KINDS, classifyNetworkImportActivation, evaluateBoundedAtlasEligibility } from "./atlas-activation-policy.mjs";
+import { recordNetworkImportGlobalLayoutInvocation } from "./atlas-activation-trace.mjs";
 
 const e = React.createElement;
 const NORMAL_TOPOLOGY_RESOURCE_BUDGET = 200;
@@ -327,6 +337,7 @@ const TOPOLOGY_VIEW_MODES = Object.freeze({
   NORMAL: "normal",
   CONNECTED_EXPLORER: "connected-explorer",
   INVENTORY_SUMMARY: "inventory-summary",
+  ATLAS: "atlas",
 });
 const packageIO = new SafePackageIO(
   new ZipJsArchiveBackend(),
@@ -365,17 +376,50 @@ const builtinGuidedLabs = guidedLabCatalog.ok ? guidedLabCatalog.labs : [];
 
 function handlesFor(data) {
   const interfaces = Array.isArray(data?.interfaces) ? data.interfaces : [];
+  const visualAttachments = Array.isArray(data?.visualAttachmentHandles) ? data.visualAttachmentHandles : [];
   const activeInterfaces = new Set(Array.isArray(data?.activeInterfaceIds) ? data.activeInterfaceIds : []);
+  const sidePosition = (side) => side === "NORTH" ? Position.Top : side === "SOUTH" ? Position.Bottom : side === "WEST" ? Position.Left : Position.Right;
+  const sideKey = (side, fallback) => side === "NORTH" || side === "SOUTH" || side === "EAST" || side === "WEST" ? side : fallback;
+  const sideGroups = (getSide, fallback) => new Map(["NORTH", "SOUTH", "EAST", "WEST"].map((side) => [side, interfaces.filter((iface) => sideKey(getSide(iface), fallback) === side)]));
+  const sourceGroups = sideGroups((iface) => iface.sourceSide, "EAST");
+  const targetGroups = sideGroups((iface) => iface.targetSide, "WEST");
+  const indexedSide = (groups, iface, getSide, fallback) => {
+    const side = sideKey(getSide(iface), fallback);
+    const members = groups.get(side) ?? [];
+    return { side, index: Math.max(0, members.findIndex((item) => item.interfaceId === iface.interfaceId)), count: Math.max(1, members.length) };
+  };
+  const handleStyle = ({ side, index, count }) => {
+    const percent = `${20 + ((index + 1) * 60) / (count + 1)}%`;
+    return side === "NORTH" || side === "SOUTH" ? { left: percent } : { top: percent };
+  };
   const result = [
-    e(Handle, { key: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment" }),
-    e(Handle, { key: "generic-out", type: "source", position: Position.Right, className: "semantic-handle generic-handle", title: "Semantic attachment" }),
+    e(Handle, { key: "generic-in", id: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-in", "data-react-flow-handle-type": "target" }),
+    e(Handle, { key: "generic-out", id: "generic-out", type: "source", position: Position.Right, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-out", "data-react-flow-handle-type": "source" }),
   ];
-  interfaces.forEach((iface, index) => {
-    const top = `${20 + ((index + 1) * 60) / (interfaces.length + 1)}%`;
+  interfaces.forEach((iface) => {
+    const targetPlacement = indexedSide(targetGroups, iface, (value) => value.targetSide, "WEST");
+    const sourcePlacement = indexedSide(sourceGroups, iface, (value) => value.sourceSide, "EAST");
     const active = activeInterfaces.has(iface.interfaceId);
     const title = `${iface.label} · ${iface.stateLabel}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`;
-    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: Position.Left, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase() }));
-    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: Position.Right, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase() }));
+    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: sidePosition(targetPlacement.side), style: handleStyle(targetPlacement), className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-side": targetPlacement.side, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.targetHandleId, "data-react-flow-handle-type": "target" }));
+    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: sidePosition(sourcePlacement.side), style: handleStyle(sourcePlacement), className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-side": sourcePlacement.side, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.sourceHandleId, "data-react-flow-handle-type": "source" }));
+  });
+  visualAttachments.forEach((attachment, index) => {
+    const top = `${Number.isFinite(attachment.topPercent) ? attachment.topPercent : 20 + ((index + 1) * 60) / (visualAttachments.length + 1)}%`;
+    const isSource = attachment.direction === "source";
+    result.push(e(Handle, {
+      key: attachment.handleId,
+      id: attachment.handleId,
+      type: isSource ? "source" : "target",
+      position: isSource ? Position.Right : Position.Left,
+      style: { top },
+      className: "semantic-handle visual-attachment-handle",
+      title: "Visual attachment · source port NOT DOCUMENTED",
+      "data-visual-attachment": "true",
+      "data-connection-id": attachment.connectionId,
+      "data-react-flow-handle-id": attachment.handleId,
+      "data-react-flow-handle-type": isSource ? "source" : "target",
+    }));
   });
   return result;
 }
@@ -401,6 +445,12 @@ function DeviceChassis({ family, active }) {
     e("i", { className: `device-activity-led${active ? " active" : ""}` }));
 }
 
+function SemanticIcon({ iconKey = "unknown-resource", label, className = "" }) {
+  const icon = iconDescriptor(iconKey);
+  return e("span", { className: `semantic-icon semantic-icon-${icon.className} ${className}`.trim(), "data-icon-key": icon.key, "data-icon-class": icon.className, title: label ?? icon.title, "aria-label": label ?? icon.accessibleName, role: "img" },
+    e("svg", { viewBox: icon.viewBox, width: 22, height: 22, focusable: "false", "aria-hidden": "true" }, e("path", { d: icon.path })));
+}
+
 function ResourceNode({ data, selected }) {
   if (data.overviewGroup) {
     const members = Array.isArray(data.overviewMembers) ? data.overviewMembers : [];
@@ -412,6 +462,7 @@ function ResourceNode({ data, selected }) {
     },
       e(Handle, { key: "overview-in", id: "overview-in", type: "target", position: Position.Top, className: "overview-handle overview-handle-in", title: "Visual summary input", "data-overview-handle": "in" }),
       e(Handle, { key: "overview-out", id: "overview-out", type: "source", position: Position.Bottom, className: "overview-handle overview-handle-out", title: "Visual summary output", "data-overview-handle": "out" }),
+      e(SemanticIcon, { iconKey: "presentation-group", label: "Visningsgrupp" }),
       e("strong", null, data.label ?? data.overviewGroupId),
       e("span", { className: "overview-group-role" }, data.deviceRoleLabel ?? "DOCUMENTED TYPE · NEUTRAL VIEW"),
       e("span", { className: "overview-group-summary" }, data.overviewSummary ?? "Visual summary of declared source data; not a physical link or resource."),
@@ -421,37 +472,57 @@ function ResourceNode({ data, selected }) {
   const family = data.deviceFamily ?? "generic";
   const modeledStateFocus = Boolean(data.modeledStateFocus);
   const active = modeledStateFocus || ["current", "arrived", "dropped", "uncertain", "no_path"].includes(data.journeyState) || (data.activeInterfaceIds?.length ?? 0) > 0;
+  const hierarchyVisual = data.hierarchyVisual === true;
+  const connectionState = hierarchyVisual ? (data.connectionState ?? "SOURCE_ISOLATED") : undefined;
+  const boundaryCount = Number(data.boundaryConnectionCount ?? 0);
+  const atlasBoundaryReferences = Array.isArray(data.atlasBoundaryReferences) ? data.atlasBoundaryReferences : [];
+  const visibleConnectionCount = Number(data.visibleConnectionCount ?? 0);
+  const omittedConnectionCount = Number(data.omittedConnectionCount ?? 0);
   const isProxmox = String(data.resourceType ?? "").toLowerCase().includes("proxmox") || String(data.vendor ?? "").toLowerCase().includes("proxmox") || String(data.product ?? "").toLowerCase().includes("proxmox");
   const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-  return e("div", { className: `resource-node device-${family}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family },
+  const semanticBadges = Array.isArray(data.semanticBadges) ? data.semanticBadges : [];
+  const icon = iconDescriptor(data.iconKey ?? "unknown-resource");
+  return e("div", { className: `resource-node device-${family}${hierarchyVisual ? ` topology-connection-${connectionState.toLowerCase()}` : ""}${isProxmox ? " device-proxmox" : ""}${modeledStateFocus ? " modeled-state-focus" : ""}${selected ? " selected" : ""}${data.journeyState && data.journeyState !== "idle" ? ` journey-node-${data.journeyState}` : ""}`, onDoubleClick: data.onDoubleClick, "data-journey-node-state": data.journeyState ?? "idle", "data-journey-outcome-marker": data.journeyOutcomeMarker ?? "none", "data-modeled-state-focus": modeledStateFocus ? "true" : "false", "data-device-family": family, "data-device-role": isProxmox ? "proxmox" : family, ...(hierarchyVisual ? { "data-topology-connection-state": connectionState, "data-topology-visible-links": String(visibleConnectionCount), "data-topology-boundary-links": String(boundaryCount), "data-topology-omitted-links": String(omittedConnectionCount), ...(data.presentationGroupId ? { "data-topology-presentation-group": data.presentationGroupId } : {}) } : {}), ...(data.atlasPageId ? { "data-atlas-page-id": data.atlasPageId, "data-atlas-boundary-count": String(atlasBoundaryReferences.length) } : {}) },
     ...handlesFor(data),
     e("div", { className: "device-heading" },
-      e(DeviceChassis, { family, active }),
+      e("div", { className: "device-icon-stack" }, e(SemanticIcon, { iconKey: icon.key, label: data.iconAccessibleName ?? icon.accessibleName }), e(DeviceChassis, { family, active })),
       e("span", { className: "device-identity" },
         e("strong", null, data.label ?? data.semanticId),
         e("small", null, data.deviceRoleLabel ?? data.resourceType ?? "Resource"),
-        data.vendor ? e("small", { className: "device-vendor" }, `${data.vendor}${data.product ? ` · ${data.product}` : ""}`) : null)),
+        data.vendor ? e("small", { className: "device-vendor" }, `${data.vendor}${data.product ? ` · ${data.product}` : ""}`) : null,
+        ...semanticBadges.map((badge) => e("span", { key: badge, className: "semantic-badge", "data-semantic-badge": badge }, badge)))),
     data.asset ? e("img", { className: "resource-asset", src: `./${data.asset.path}`, alt: "", "aria-hidden": "true", draggable: false }) : null,
     interfaces.length ? e("div", { className: "resource-port-strip", "aria-label": "Declared interfaces" },
       ...interfaces.slice(0, 3).map((iface) => e("span", { key: iface.interfaceId, className: `compact-port${data.activeInterfaceIds?.includes(iface.interfaceId) ? " active" : ""}`, title: `${iface.label}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`, "data-port-state": "declared" },
         e("i", { "aria-hidden": "true" }), e("b", null, iface.label), e("small", null, iface.addresses[0] ?? "DECLARED"))),
       interfaces.length > 3 ? e("span", { className: "compact-port more-ports" }, `+${interfaces.length - 3}`) : null)
       : e("span", { className: "ports-not-modeled" }, "PORTS NOT MODELED"),
+    hierarchyVisual ? e("span", { className: `topology-connection-badge topology-connection-badge-${connectionState.toLowerCase()}`, "data-topology-connection-badge": connectionState }, connectionState === "CONNECTED"
+      ? `${visibleConnectionCount} connected`
+      : connectionState === "BOUNDARY_CONNECTED"
+        ? `${boundaryCount} outside current view`
+        : connectionState === "INCOMPLETE_VIEW"
+          ? `${omittedConnectionCount} links omitted — view incomplete`
+          : "Source isolated") : null,
+    hierarchyVisual && boundaryCount > 0 ? e("span", { className: "topology-boundary-badge", "data-topology-boundary-indicator": "true" }, `${boundaryCount} boundary link${boundaryCount === 1 ? "" : "s"}`) : null,
+    data.atlasPageId && atlasBoundaryReferences.length > 0 ? e("span", { className: "atlas-boundary-badge", "data-atlas-boundary-indicator": "true" }, `${atlasBoundaryReferences.length} fortsättningslänk${atlasBoundaryReferences.length === 1 ? "" : "ar"}`) : null,
     data.journeyState && data.journeyState !== "idle" ? e("span", { className: `journey-node-badge ${data.journeyState}`, "aria-hidden": "true" }, data.journeyState === "current" ? "●" : data.journeyState === "source" ? "▶" : data.journeyState === "destination" ? "◎" : data.journeyState === "uncertain" ? "?" : "●") : null,
   );
 }
 
 function ZoneNode({ data, selected }) {
-  return e("div", { className: `zone-node zone-${data.zoneKind ?? "custom"}${selected ? " selected" : ""}`, "data-zone-kind": data.zoneKind ?? "custom" },
+  const presentationOnly = data.presentationOnly === true;
+  const members = Array.isArray(data.memberIds) ? data.memberIds : [];
+  return e("div", { className: `zone-node zone-${data.zoneKind ?? "custom"}${presentationOnly ? " navigation-group-node" : ""}${selected ? " selected" : ""}`, "data-zone-kind": data.zoneKind ?? "custom", "data-navigation-group": presentationOnly ? "true" : undefined, "data-navigation-group-kind": data.navigationGroupKind, "data-navigation-group-members": members.join(",") },
     data.builderEditable ? e(NodeResizer, {
       isVisible: selected,
       minWidth: BUILDER_ZONE_RESIZE_LIMITS.minWidth,
       minHeight: BUILDER_ZONE_RESIZE_LIMITS.minHeight,
       onResizeEnd: (_event, params) => data.onResizeEnd?.(params),
     }) : null,
-    e("div", { className: "zone-heading" }, e("i", { className: "zone-status", "aria-hidden": "true" }), e("span", null,
+    e("div", { className: "zone-heading" }, presentationOnly ? e(SemanticIcon, { iconKey: "presentation-group", label: "Visningsgrupp" }) : e(SemanticIcon, { iconKey: "place", label: "Dokumenterad zon" }), e("i", { className: "zone-status", "aria-hidden": "true" }), e("span", null,
       e("strong", null, data.label ?? data.semanticId),
-      e("small", null, data.zoneKind ?? "zone"))),
+      e("small", null, presentationOnly ? `${data.navigationGroupKind ?? "derived-navigation"} · ${members.length} devices` : (data.zoneKind ?? "zone")))),
   );
 }
 
@@ -492,42 +563,44 @@ function JourneyPacket({ mode, motionPath, duration, source, target }) {
     );
 }
 
-function orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points = [] }) {
-  const pathPoints = [{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }]
-    .filter((point, index, all) => index === 0 || point.x !== all[index - 1].x || point.y !== all[index - 1].y);
-  const d = pathPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  let total = 0;
-  for (let index = 1; index < pathPoints.length; index += 1) total += Math.abs(pathPoints[index].x - pathPoints[index - 1].x) + Math.abs(pathPoints[index].y - pathPoints[index - 1].y);
-  let remaining = total / 2;
-  let labelX = (sourceX + targetX) / 2;
-  let labelY = (sourceY + targetY) / 2;
-  for (let index = 1; index < pathPoints.length; index += 1) {
-    const from = pathPoints[index - 1];
-    const to = pathPoints[index];
-    const length = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
-    if (remaining <= length) {
-      const ratio = length ? remaining / length : 0;
-      labelX = from.x + (to.x - from.x) * ratio;
-      labelY = from.y + (to.y - from.y) * ratio;
-      break;
-    }
-    remaining -= length;
-  }
-  return [d, labelX, labelY];
+// The live eth1 handle is 8 canvas units wide. Chromium measured a 5.4px
+// separation at 1.35× camera zoom, i.e. exactly half that handle width.
+// Inset only the Atlas SVG path endpoints by the handle radius; preserve
+// ELK bends, canonical endpoints and source-declared port identity.
+function atlasHandleAnchor(x, y, position, atlasEdge) {
+  if (!atlasEdge) return { x, y };
+  const inset = 4;
+  if (position === Position.Left) return { x: x + inset, y };
+  if (position === Position.Right) return { x: x - inset, y };
+  if (position === Position.Top) return { x, y: y + inset };
+  if (position === Position.Bottom) return { x, y: y - inset };
+  return { x, y };
 }
 
 function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleId, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }) {
+  const atlasEdge = data?.atlasPageLink === true;
+  const visualSource = atlasHandleAnchor(sourceX, sourceY, sourcePosition, atlasEdge);
+  const visualTarget = atlasHandleAnchor(targetX, targetY, targetPosition, atlasEdge);
+  const renderSourceX = visualSource.x, renderSourceY = visualSource.y;
+  const renderTargetX = visualTarget.x, renderTargetY = visualTarget.y;
   const hasRoute = data?.routeKind === "orthogonal" && Array.isArray(data?.route);
+  const isHierarchical = data?.hierarchyVisual === true;
+  const route = hasRoute ? anchorOrthogonalRoute({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, route: data.route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition }) : [];
+  // The route is computed from source geometry, then anchored to the actual
+  // live React Flow handles. Hierarchical edges never discard bends for a
+  // shared fallback corridor and never fall back to a Bezier path.
   const [basePath, labelX, labelY] = hasRoute
-    ? orthogonalEdgePath({ sourceX, sourceY, targetX, targetY, points: data.route })
-    : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+    ? orthogonalEdgePath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, route, routeOrigin: data?.routeOrigin, sourcePosition, targetPosition })
+    : isHierarchical
+      ? orthogonalEdgePath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, sourcePosition, targetPosition })
+      : getBezierPath({ sourceX: renderSourceX, sourceY: renderSourceY, targetX: renderTargetX, targetY: renderTargetY, sourcePosition, targetPosition });
   const journey = data?.journey;
   const journeyEndpoint = data?.journeyEndpoint;
   const endpoint = (resourceId, fallbackX, fallbackY) => resourceId === journeyEndpoint?.resourceId
     ? { x: journeyEndpoint.x, y: journeyEndpoint.y }
     : { x: fallbackX, y: fallbackY };
-  const motionSource = endpoint(source, sourceX, sourceY);
-  const motionTarget = endpoint(target, targetX, targetY);
+  const motionSource = endpoint(source, renderSourceX, renderSourceY);
+  const motionTarget = endpoint(target, renderTargetX, renderTargetY);
   const pathComparison = data?.pathComparison;
   const visual = data?.visual ?? { tone: "network", kindLabel: "NETWORK", enabled: true, direction: "unspecified", accessibleLabel: "NETWORK" };
   const reverse = journey?.direction?.from === target && journey?.direction?.to === source;
@@ -539,7 +612,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
   const comparisonForwardMarkerId = `comparison-forward-arrow-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const comparisonReturnMarkerId = `comparison-return-arrow-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const comparisonPath = (direction) => direction?.from === target && direction?.to === source
-    ? getBezierPath({ sourceX: targetX, sourceY: targetY, targetX: sourceX, targetY: sourceY, sourcePosition: targetPosition, targetPosition: sourcePosition })[0]
+    ? getBezierPath({ sourceX: renderTargetX, sourceY: renderTargetY, targetX: renderSourceX, targetY: renderSourceY, sourcePosition: targetPosition, targetPosition: sourcePosition })[0]
     : basePath;
   // Playback advances every 900 ms at 1×. Keep a packet segment within that
   // event window so a hop reaches its next Engine-authoritative node before
@@ -563,6 +636,7 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
         e("path", { d: "M 0 0 L 10 5 L 0 10 z", className: "path-comparison-arrowhead forward" })),
       e("marker", { id: comparisonReturnMarkerId, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: "auto-start-reverse" },
         e("path", { d: "M 0 0 L 10 5 L 0 10 z", className: "path-comparison-arrowhead return" }))),
+    e("path", { className: "semantic-edge-hit-area", d: basePath, fill: "none", "aria-hidden": "true", focusable: "false" }),
     e("path", {
       id,
       d: basePath,
@@ -579,14 +653,19 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       "data-connection-source-port": sourceHandleId?.startsWith("out:") ? sourceHandleId.slice(4) : undefined,
       "data-connection-target-port": targetHandleId?.startsWith("in:") ? targetHandleId.slice(3) : undefined,
       "data-link-enabled": visual.enabled ? "true" : "false",
+      "data-link-vlan": visual.vlanLabel ?? "NOT_DOCUMENTED",
+      "data-hierarchy-visual": isHierarchical ? "true" : undefined,
+      "data-route-kind": hasRoute ? "orthogonal" : isHierarchical ? "orthogonal-fallback" : "bezier",
+      "data-route-origin": data?.routeOrigin ?? (hasRoute ? "legacy" : undefined),
       "aria-label": visual.accessibleLabel,
       ...(summaryOnly ? {
         "data-overview-summary-edge": "true",
         "data-overview-declared-links": String(Number.isFinite(declaredLinkCount) ? declaredLinkCount : 0),
+        "data-overview-source-hash": String(data?.overviewSourceHash ?? ""),
         "data-overview-summary-label": visual.accessibleLabel,
       } : {}),
     }),
-    e("text", { x: labelX, y: labelY - 7, className: `semantic-edge-label tone-${visual.tone}`, textAnchor: "middle", "aria-hidden": "true" }, visual.accessibleLabel),
+    selected || data?.showEdgeLabel === true ? e("text", { x: labelX, y: labelY - 8, className: `semantic-edge-label tone-${visual.tone}`, textAnchor: "middle" }, visual.accessibleLabel) : null,
     pathComparison?.forward ? e("path", {
       d: comparisonPath(pathComparison.forwardDirection),
       fill: "none",
@@ -601,8 +680,8 @@ function SemanticJourneyEdge({ id, source, target, sourceHandleId, targetHandleI
       className: `path-comparison-edge return symmetry-${String(pathComparison.symmetry ?? "UNRESOLVED").toLowerCase()}`,
       "data-path-comparison": "return",
     }) : null,
-    e("circle", { cx: sourceX, cy: sourceY, r: active ? 5 : 3.5, className: `link-led source tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
-    e("circle", { cx: targetX, cy: targetY, r: active ? 5 : 3.5, className: `link-led target tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
+    e("circle", { cx: renderSourceX, cy: renderSourceY, r: active ? 5 : 3.5, className: `link-led source tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
+    e("circle", { cx: renderTargetX, cy: renderTargetY, r: active ? 5 : 3.5, className: `link-led target tone-${visual.tone}${active ? " active" : highlighted ? " completed" : ""}`, "data-link-activity": active ? "active" : highlighted ? "completed" : "idle" }),
     highlighted && (state !== "active" || motionGeometryResolved) ? e("path", {
       d: motionPath,
       fill: "none",
@@ -644,6 +723,15 @@ function ReactFlowGeometryRepair({ panelRef, nodeIds, revision }) {
         const nodesInitialized = [...next.nodeLookup.values()]
           .filter((node) => !node.hidden)
           .every((node) => node.measured?.width > 0 && node.measured?.height > 0 && node.internals.handleBounds);
+        panel.dataset.topologyReactFlowStoreNodeCount = String(next.nodeLookup.size);
+        panel.dataset.topologyReactFlowStoreEdgeCount = String(next.edges.length);
+        panel.dataset.topologyReactFlowStoreEdgeIds = next.edges.map((edge) => edge.id).sort((left, right) => left.localeCompare(right, "en")).join(",");
+        panel.dataset.topologyReactFlowStoreUnmeasuredNodeIds = [...next.nodeLookup.values()]
+          .filter((node) => !node.hidden && !(node.measured?.width > 0 && node.measured?.height > 0 && node.internals.handleBounds))
+          .map((node) => node.id)
+          .sort((left, right) => left.localeCompare(right, "en"))
+          .join(",");
+        panel.dataset.topologyReactFlowStoreNodesInitialized = String(nodesInitialized);
         // React Flow mutates its internal lookup while measuring. Clone the
         // lookup to publish the geometry change to EdgeRenderer in controlled
         // mode, where no onNodesChange callback is supplied by the app.
@@ -694,7 +782,7 @@ function pretty(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, getPendingDraftChanges, setWorkspace, setDiagnostics, journey, stateFocus, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
+function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTransitionId, getPendingDraftChanges, setWorkspace, setDiagnostics, journey, stateFocus, openAtlasRequest = 0, scaledThousandFocus, onScaledThousandFocusPage, scaledThousandFocusBusy, scaledFiveThousandFocus, onScaledFiveThousandFocusPage, scaledFiveThousandFocusBusy, scaledFiveThousandSessionActive, scaledFiveThousandSafeCompileAttempted, onReviewEditedFiveThousandFocus, scaledTenThousandFocus, scaledTenThousandSessionActive, scaledTenThousandFocusBusy, onScaledTenThousandFocusPage, onReviewEditedTenThousandFocus, declaredOfficeHierarchy, onReviewDeclaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy, onFocusDeclaredOfficeHierarchy, onRestoreDeclaredOfficeHierarchyFocus }) {
   // ReactFlow may deliver an onSelectionChange/pane click or drag callback
   // from a render that predates an inspector Apply, New/Open, or source import.
   // Never publish the closed-over workspace: it may silently restore a stale
@@ -725,8 +813,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const [topologyFocusRoot, setTopologyFocusRoot] = useState(null);
   const [topologyFocusPage, setTopologyFocusPage] = useState(1);
   const [topologyFocusProjection, setTopologyFocusProjection] = useState(null);
+  const [topologyHierarchyScope, setTopologyHierarchyScope] = useState(null);
   const [topologyViewMode, setTopologyViewMode] = useState(TOPOLOGY_VIEW_MODES.NORMAL);
+  const [atlasPageId, setAtlasPageId] = useState(null);
+  const [atlasPageHistory, setAtlasPageHistory] = useState([]);
+  const [topologyOverviewReadyIdentity, setTopologyOverviewReadyIdentity] = useState("");
+  const [topologyCameraMode, setTopologyCameraMode] = useState("read");
   const topologyFocusRequestRef = useRef(0);
+  const topologyLayoutRequestRef = useRef(0);
+  const [hierarchicalTopologyLayout, setHierarchicalTopologyLayout] = useState(null);
+  const [atlasLayout, setAtlasLayout] = useState(null);
+  const atlasLayoutRequestRef = useRef(0);
   const [topologyViewHistory, setTopologyViewHistory] = useState([{ kind: "overview", label: "Nätverksöversikt" }]);
   const [topologyGroup, setTopologyGroup] = useState(null);
   const [topologyGroupQuery, setTopologyGroupQuery] = useState("");
@@ -747,21 +844,45 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const reducedMotion = useMemo(() => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true, []);
   const journeyKey = journey ? `${journey.scenarioHash}:${journey.stateRevision}:${journey.playbackIdentity ?? journey.flowId}` : "";
   const canonicalNetwork = useMemo(() => workspace.mode === "builder"
-    ? { resources: workspace.source.resources, connections: workspace.source.connections }
-    : { resources: workspace.scenario.resources, connections: workspace.scenario.connections }, [workspace.mode, workspace.mode === "builder" ? workspace.source : workspace.scenario]);
+    ? { resources: workspace.source.resources, connections: workspace.source.connections, zones: workspace.source.zones }
+    : { resources: workspace.scenario.resources, connections: workspace.scenario.connections, zones: workspace.scenario.zones }, [workspace.mode, workspace.mode === "builder" ? workspace.source : workspace.scenario]);
   const canonicalResourceById = useMemo(() => new Map(canonicalNetwork.resources.map((resource) => [resource.id, resource])), [canonicalNetwork]);
   const canonicalConnectionById = useMemo(() => new Map(canonicalNetwork.connections.map((connection) => [connection.id, connection])), [canonicalNetwork]);
   const sourceIdentity = workspace.mode === "builder" ? `${workspace.sourceRevision}:${workspace.source.scenarioId}` : workspace.scenario.sourceHash;
+  const atlasIndex = useMemo(() => {
+    try {
+      return buildAtlasIndex({
+        resources: canonicalNetwork.resources,
+        connections: canonicalNetwork.connections,
+        zones: canonicalNetwork.zones,
+        sourceIdentity,
+      }, { version: "atlas-001-v1" });
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [canonicalNetwork, sourceIdentity]);
+  const validAtlasIndex = atlasIndex && !atlasIndex.error ? atlasIndex : null;
+  const firstAtlasPageId = validAtlasIndex?.pages[0]?.id ?? null;
+  const atlasPage = validAtlasIndex?.pageById.get(atlasPageId ?? firstAtlasPageId ?? "") ?? null;
+  const atlasPageProjection = useMemo(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !validAtlasIndex || !atlasPage) return null;
+    try { return projectAtlasPage(canonicalNetwork, validAtlasIndex, atlasPage.id); }
+    catch { return null; }
+  }, [canonicalNetwork, topologyViewMode, validAtlasIndex, atlasPage]);
   useEffect(() => {
     const defaultMode = canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET
       ? TOPOLOGY_VIEW_MODES.NORMAL
       : TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER;
     setTopologyViewMode(defaultMode);
+    setAtlasPageId(null);
+    setAtlasPageHistory([]);
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyViewHistory([{ kind: "overview", label: "Nätverksöversikt" }]);
+    setTopologyCameraMode("read");
     setTopologyGroup(null);
     setTopologyGroupQuery("");
     setTopologyGroupPage(1);
@@ -769,6 +890,15 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     setTopologyQuery("");
   }, [projectGeneration, getScenarioTransitionId(), sourceIdentity, canonicalNetwork.resources.length]);
+  useEffect(() => {
+    if (!openAtlasRequest || !validAtlasIndex) return;
+    const first = validAtlasIndex.pages[0];
+    if (!first) return;
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(first.id);
+    setAtlasPageHistory([{ pageId: first.id, label: first.label }]);
+    setTopologyViewHistory([{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }]);
+  }, [openAtlasRequest, validAtlasIndex?.pages?.length, sourceIdentity]);
   useEffect(() => {
     if (!topologyContextMenu) return undefined;
     const onKeyDown = (event) => { if (event.key === "Escape") setTopologyContextMenu(null); };
@@ -914,7 +1044,69 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     scaledTenThousandFocus?.source===workspace.source&&
     scaledTenThousandFocus?.model===workspace.compile.model
       ?scaledTenThousandFocus:null;
+  const tenThousandHierarchyIndex = useMemo(() => {
+    if (!validTenThousandFocus?.model || validTenThousandFocus.model.resources.length !== 10000 || validTenThousandFocus.model.connections.length !== 10000) return null;
+    try { return buildHierarchicalTopologyIndex(validTenThousandFocus.model); }
+    catch { return null; }
+  }, [validTenThousandFocus?.model]);
+  const hierarchicalTopologySelection = useMemo(() => {
+    if (!tenThousandHierarchyIndex || topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY) return null;
+    try {
+      return buildHierarchicalTopologyView(
+        tenThousandHierarchyIndex,
+        topologyHierarchyScope?.rootId ? "branch" : "overview",
+        topologyHierarchyScope?.rootId,
+        topologyFocusPage,
+      );
+    } catch { return null; }
+  }, [tenThousandHierarchyIndex, topologyHierarchyScope?.rootId, topologyFocusPage, topologyViewMode]);
   useEffect(() => {
+    if (!hierarchicalTopologySelection || !tenThousandHierarchyIndex) {
+      topologyLayoutRequestRef.current += 1;
+      setHierarchicalTopologyLayout(null);
+      return undefined;
+    }
+    const panelWidth = topologyViewportState.width || topologyPanelRef.current?.getBoundingClientRect?.().width || 0;
+    const request = {
+      sourceHash: tenThousandHierarchyIndex.sourceHash,
+      scope: hierarchicalTopologySelection.kind,
+      ...(hierarchicalTopologySelection.rootId ? { rootId: hierarchicalTopologySelection.rootId } : {}),
+      page: hierarchicalTopologySelection.page,
+      viewportBucket: topologyViewportBucket(panelWidth),
+      configVersion: TOPOLOGY_LAYOUT_CONFIG_VERSION,
+    };
+    const requestKey = createTopologyRequestKey(request);
+    const token = ++topologyLayoutRequestRef.current;
+    if (hierarchicalTopologyLayout?.requestKey !== requestKey) setHierarchicalTopologyLayout(null);
+    let cancelled = false;
+    void layoutHierarchicalTopologyView(hierarchicalTopologySelection, request)
+      .then((result) => {
+        if (cancelled || token !== topologyLayoutRequestRef.current || result.requestKey !== requestKey) return;
+        setHierarchicalTopologyLayout(result);
+      })
+      .catch((error) => {
+        if (cancelled || token !== topologyLayoutRequestRef.current) return;
+        // Fail closed: an ELK failure must never silently fall back to the
+        // pre-P094 manual grid/cable strategy.  Keep the selection unavailable
+        // until a fresh, identity-matched ELK result is produced.
+        setHierarchicalTopologyLayout(null);
+        setDiagnostics((current) => [...current, {
+          severity: "error",
+          code: "TOPOLOGY_LAYOUT_ELK_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        }]);
+      });
+    return () => { cancelled = true; };
+  }, [hierarchicalTopologySelection, tenThousandHierarchyIndex, topologyViewportState.width]);
+  const hierarchicalTopologyView = hierarchicalTopologySelection && hierarchicalTopologyLayout
+    ? { ...hierarchicalTopologySelection, projection: hierarchicalTopologyLayout.projection, layoutStrategy: "elk.layered" }
+    : null;
+  useEffect(() => {
+    if (tenThousandHierarchyIndex) {
+      topologyFocusRequestRef.current += 1;
+      setTopologyFocusProjection(null);
+      return undefined;
+    }
     const source = validTenThousandFocus?.source;
     const model = validTenThousandFocus?.model;
     const rootId = topologyFocusRoot;
@@ -941,7 +1133,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         }
       });
     return () => { topologyFocusRequestRef.current += 1; };
-  }, [validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
+  }, [tenThousandHierarchyIndex, validTenThousandFocus?.source, validTenThousandFocus?.model, validTenThousandFocus?.nodeOrder, topologyFocusRoot, topologyFocusPage, projectGeneration]);
   const tenThousandGuard=workspace.mode==="builder"&&(
     workspace.source.resources.length>=5000||
     (scaledTenThousandSessionActive&&
@@ -969,6 +1161,59 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         connections: canonicalNetwork.connections,
       })
     : null;
+  const topologyOverviewIdentity = topologyOverview
+    ? `${projectGeneration}:${getScenarioTransitionId()}:${sourceIdentity}:${topologyOverview.sourceHash}:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
+    : "none";
+  useEffect(() => {
+    setTopologyOverviewReadyIdentity("");
+    if (!topologyOverview) return undefined;
+    let firstFrame;
+    let retryInterval;
+    let readyTimer;
+    let attempts = 0;
+    let stableFrames = 0;
+    const schedule = globalThis.requestAnimationFrame ?? ((callback) => globalThis.setTimeout(callback, 0));
+    const cancel = (handle) => {
+      if (typeof globalThis.cancelAnimationFrame === "function") globalThis.cancelAnimationFrame(handle);
+      else globalThis.clearTimeout(handle);
+    };
+    const checkRenderedEdges = () => {
+      const panel = topologyPanelRef.current;
+      const rendered = [...(panel?.querySelectorAll('path[data-overview-summary-edge="true"]') ?? [])]
+        .filter((edge) => edge.getAttribute("data-overview-source-hash") === topologyOverview.sourceHash).length;
+      if (rendered >= topologyOverview.edges.length) {
+        stableFrames += 1;
+        // React Flow can finish its internal edge commit one frame after the
+        // controlled projection is rendered. Require two stable observations,
+        // then yield once more before exposing the sidebar summary so callers
+        // never observe the summary card without its actual SVG paths.
+        if (stableFrames >= 2 && readyTimer === undefined) {
+          readyTimer = globalThis.setTimeout(() => {
+            readyTimer = undefined;
+            const latestPanel = topologyPanelRef.current;
+            const latestRendered = [...(latestPanel?.querySelectorAll('path[data-overview-summary-edge="true"]') ?? [])]
+              .filter((edge) => edge.getAttribute("data-overview-source-hash") === topologyOverview.sourceHash).length;
+            if (latestRendered >= topologyOverview.edges.length) {
+              if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+              setTopologyOverviewReadyIdentity(topologyOverviewIdentity);
+            } else {
+              stableFrames = 0;
+            }
+          }, 32);
+        }
+      } else if (++attempts >= 120 && retryInterval !== undefined) {
+        globalThis.clearInterval(retryInterval);
+        stableFrames = 0;
+      }
+    };
+    firstFrame = schedule(checkRenderedEdges);
+    retryInterval = globalThis.setInterval(checkRenderedEdges, 16);
+    return () => {
+      if (firstFrame !== undefined) cancel(firstFrame);
+      if (retryInterval !== undefined) globalThis.clearInterval(retryInterval);
+      if (readyTimer !== undefined) globalThis.clearTimeout(readyTimer);
+    };
+  }, [topologyOverviewIdentity]);
   const activeTopologyGroup = topologyGroup && !topologyFocusRoot ? topologyGroup : null;
   const topologyGroupMembers = activeTopologyGroup
     ? activeTopologyGroup.members.map((memberId) => canonicalResourceById.get(memberId)).filter(Boolean)
@@ -982,25 +1227,193 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const boundedTopologyGroupPage = Math.min(Math.max(1, topologyGroupPage), topologyGroupPageCount);
   const topologyGroupPageItems = filteredTopologyGroupMembers.slice((boundedTopologyGroupPage - 1) * 50, boundedTopologyGroupPage * 50);
   // An edited 5000 model with stale focus must never fall back to unbounded layout.
-  const vm = validThousandFocus || fiveThousandWorkspace || tenThousandGuard ? null :
-    workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace);
+  // Atlas renders a bounded canonical subset through the existing Canvas/ELK
+  // path.  Do not materialize a full Builder Canvas just to select a page;
+  // NORMAL TOPOLOGY retains the established view-model path unchanged.
+  const vm = useMemo(() => validThousandFocus || fiveThousandWorkspace || tenThousandGuard ||
+    (workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS) ? null :
+    workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace),
+    [workspace, topologyViewMode, validThousandFocus, fiveThousandWorkspace, tenThousandGuard]);
+  // Fail closed on stacked, off-parent or header-overlapping geometry. Atlas
+  // can safely show a bounded page; documents with complete Connected Explorer
+  // coordinates retain their existing mode and positions unchanged.
+  const connectedExplorerGeometry = useMemo(() =>
+    topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER && vm?.canvas
+      ? inspectConnectedExplorerGeometry(vm.canvas, ZONE_HEADER_RESERVED_HEIGHT)
+      : null,
+    [topologyViewMode, vm?.canvas]);
+  const connectedExplorerUnsafe = connectedExplorerGeometry?.safe === false;
+  useEffect(() => {
+    if (!connectedExplorerUnsafe) return;
+    if (canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET) {
+      setTopologyViewMode(TOPOLOGY_VIEW_MODES.NORMAL);
+      return;
+    }
+    const first = validAtlasIndex?.pages[0];
+    if (!first) return; // Keep canvas empty, never fall back to stacked cards.
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(first.id);
+    setAtlasPageHistory([{ pageId: first.id, label: first.label }]);
+    setTopologyViewHistory([{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }]);
+  }, [connectedExplorerUnsafe, canonicalNetwork.resources.length, validAtlasIndex, sourceIdentity]);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
-  const normalTopologyCanvas = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
+  const normalTopologyEligible = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
-    vm?.canvas && !hasManualLayoutOverrides
+    Boolean(vm?.canvas) && !hasManualLayoutOverrides;
+  const normalTopologyProjection = normalTopologyEligible && vm?.canvas
     ? compactNormalTopologyProjection(vm.canvas)
     : vm?.canvas;
+  const normalTopologyValidationBlocked = normalTopologyEligible && Boolean(normalTopologyProjection?.diagnostics.some((diagnostic) => diagnostic.severity === "error"));
+  // A failed final-view validation must never degrade to an unverified
+  // straight/Bezier cable graph.  Keep the raw ELK gate intact and expose an
+  // empty canvas until a fresh, identity-matched safe projection exists.
+  const normalTopologyCanvas = connectedExplorerUnsafe || normalTopologyValidationBlocked ? null : normalTopologyProjection;
+  const atlasScenario = workspace.mode === "builder"
+    ? workspace.compile.status === "valid" ? workspace.compile.model : null
+    : workspace.scenario;
+  const atlasTopologyCanvas = useMemo(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !atlasPageProjection || !atlasScenario) return null;
+    const pageCanvas = projectScenarioSubsetToCanvas(
+      atlasScenario,
+      atlasPageProjection.page.resourceIds,
+      atlasPageProjection.page.internalConnectionIds,
+    );
+    return {
+      ...pageCanvas,
+      edges: pageCanvas.edges.map((edge) => ({
+        ...edge,
+        data: { ...edge.data, atlasPageLink: true },
+      })),
+      nodes: pageCanvas.nodes.map((node) => node.type === "resource" ? {
+        ...node,
+        data: {
+          ...node.data,
+          atlasPageId: atlasPageProjection.page.id,
+          atlasPageBasis: atlasPageProjection.page.basis,
+          atlasBoundaryReferences: atlasPageProjection.boundaryReferences.filter((reference) => reference.localResourceId === node.id),
+        },
+      } : node),
+    };
+  }, [atlasPageProjection, atlasScenario, topologyViewMode]);
+  const atlasPageView = useMemo(() => {
+    if (!atlasTopologyCanvas || !atlasPageProjection) return null;
+    const directMembers = new Map();
+    for (const node of atlasTopologyCanvas.nodes) {
+      if (node.type !== "resource" || !node.parentId) continue;
+      const members = directMembers.get(node.parentId) ?? [];
+      members.push(node.id);
+      directMembers.set(node.parentId, members);
+    }
+    const projection = {
+      ...atlasTopologyCanvas,
+      nodes: atlasTopologyCanvas.nodes.map((node) => node.type === "zone" ? {
+        ...node,
+        data: {
+          ...node.data,
+          presentationOnly: true,
+          navigationGroupKind: "declared-zone",
+          memberIds: (directMembers.get(node.id) ?? []).slice().sort((left, right) => left.localeCompare(right, "en")),
+        },
+      } : node),
+    };
+    return {
+      kind: "overview",
+      page: 1,
+      pageCount: 1,
+      nodeIds: atlasPageProjection.page.resourceIds,
+      edgeIds: atlasPageProjection.page.internalConnectionIds,
+      hiddenNodeCount: 0,
+      hiddenConnectionCount: atlasPageProjection.page.boundaryConnectionIds.length + atlasPageProjection.page.externalConnectionIds.length,
+      hiddenNeighborCount: 0,
+      hiddenBoundaryConnectionCount: atlasPageProjection.page.boundaryConnectionIds.length,
+      visibleConnectionCount: atlasPageProjection.page.internalConnectionIds.length,
+      projection,
+      navigationGroups: atlasTopologyCanvas.nodes.filter((node) => node.type === "zone").map((node) => ({ id: node.id, label: node.data.label, memberIds: directMembers.get(node.id) ?? [], kind: "declared-zone", presentationOnly: true, level: 0 })),
+      partition: { internal: atlasPageProjection.connections, boundary: atlasPageProjection.page.boundaryConnectionIds.map((id) => validAtlasIndex.connectionById.get(id)).filter(Boolean), external: atlasPageProjection.page.externalConnectionIds.map((id) => validAtlasIndex.connectionById.get(id)).filter(Boolean) },
+      incompleteView: atlasPageProjection.page.renderMode === "link-list",
+      layoutStrategy: "elk.layered",
+      roleLabel: `ATLAS · ${atlasPageProjection.page.label}`,
+    };
+  }, [atlasPageProjection, atlasTopologyCanvas, validAtlasIndex]);
+  useEffect(() => {
+    if (topologyViewMode !== TOPOLOGY_VIEW_MODES.ATLAS || !atlasPageView) {
+      atlasLayoutRequestRef.current += 1;
+      setAtlasLayout(null);
+      return undefined;
+    }
+    const request = {
+      sourceHash: `${projectGeneration}:${atlasPageProjection?.sourceIdentity ?? "unknown-source"}:${atlasPageProjection?.page.id ?? "unknown-page"}`,
+      scope: "overview",
+      page: 1,
+      viewportBucket: topologyViewportBucket(topologyViewportState.width || 0),
+      configVersion: "atlas-001-elk-v1",
+    };
+    const token = ++atlasLayoutRequestRef.current;
+    const requestKey = createTopologyRequestKey(request);
+    setAtlasLayout((current) => current?.requestKey === requestKey ? current : null);
+    let cancelled = false;
+    void layoutHierarchicalTopologyView(atlasPageView, request)
+      .then((result) => {
+        if (cancelled || token !== atlasLayoutRequestRef.current || result.requestKey !== requestKey) return;
+        setAtlasLayout(result);
+      })
+      .catch((error) => {
+        if (cancelled || token !== atlasLayoutRequestRef.current) return;
+        setAtlasLayout({ requestKey, engine: "elk.layered", projection: atlasTopologyCanvas, quality: null, diagnostics: [{ severity: "error", code: "ATLAS_LAYOUT_ELK_FAILED", message: error instanceof Error ? error.message : String(error) }] });
+      });
+    return () => { cancelled = true; };
+  }, [atlasPageProjection?.sourceIdentity, atlasPageProjection?.page.id, atlasPageView, atlasTopologyCanvas, projectGeneration, topologyViewMode, topologyViewportState.width]);
+  // Do not present pre-ELK fallback cards/edge stubs as a connected Atlas
+  // graph. The layout must belong to the current page AND viewport bucket.
+  // Pending and stale geometry remain measurable for React Flow, but hidden
+  // until the exact reviewed route and its attachment handles are ready.
+  const expectedAtlasLayoutKey = atlasPageProjection ? createTopologyRequestKey({
+    sourceHash: `${projectGeneration}:${atlasPageProjection.sourceIdentity}:${atlasPageProjection.page.id}`,
+    scope: "overview", page: 1,
+    viewportBucket: topologyViewportBucket(topologyViewportState.width || 0),
+    configVersion: "atlas-001-elk-v1",
+  }) : null;
+  const atlasRenderReady = Boolean(atlasPageProjection && atlasLayout &&
+    atlasLayout.requestKey === expectedAtlasLayoutKey &&
+    atlasLayout.quality?.hardGate === "PASS" &&
+    atlasLayout.projection.nodes.filter((node) => node.type === "resource").length === atlasPageProjection.resources.length &&
+    atlasLayout.projection.edges.length === atlasPageProjection.connections.length);
+  const activeAtlasCanvas = atlasLayout?.projection ?? atlasTopologyCanvas;
   // Geographic focus is a view only; the whole 1000/999 Builder remains.
   const tenThousandTopologyProjection = validTenThousandFocus && topologyFocusRoot && topologyFocusProjection?.focusRoot === topologyFocusRoot
     ? topologyFocusProjection
     : null;
-  const projection = topologyOverview ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
+  const projection = activeAtlasCanvas ?? topologyOverview ?? hierarchicalTopologyView?.projection ?? tenThousandTopologyProjection?.focusCanvas ?? validHierarchyFocus?.focusCanvas ??
     validTenThousandFocus?.focusCanvas ??
     validFiveThousandFocus?.focusCanvas ??
     validThousandFocus?.focusCanvas ?? normalTopologyCanvas;
-  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
+  const localFocusPage = tenThousandTopologyProjection?.focusPage ?? (!tenThousandHierarchyIndex && !validDeclaredHierarchy && !validTenThousandFocus && !validFiveThousandFocus && !validThousandFocus && topologyFocusRoot && projection
     ? (() => { try { return buildTopologyFocusPage(canonicalNetwork, topologyFocusRoot, topologyFocusPage, 100, 250); } catch { return null; } })()
     : null);
+  // Keep the established focus-count contract available for the bounded
+  // PROJECT-090 hierarchy too. The values are derived from the canonical
+  // adjacency index; they are not synthetic summary links.
+  const hierarchicalFocusCounts = hierarchicalTopologyView?.kind === "branch" && hierarchicalTopologyView.rootId && tenThousandHierarchyIndex
+    ? (() => {
+      const rootId = hierarchicalTopologyView.rootId;
+      const rootNeighbors = tenThousandHierarchyIndex.adjacency.get(rootId) ?? [];
+      const visibleEdgeIds = new Set(hierarchicalTopologyView.edgeIds);
+      const visibleRootLinks = rootNeighbors.filter((neighbor) => visibleEdgeIds.has(neighbor.connectionId)).length;
+      const visibleNeighbors = new Set(rootNeighbors
+        .filter((neighbor) => visibleEdgeIds.has(neighbor.connectionId))
+        .map((neighbor) => neighbor.neighborId)).size;
+      const totalNeighbors = new Set(rootNeighbors.map((neighbor) => neighbor.neighborId)).size;
+      return {
+        visibleNeighbors,
+        totalNeighbors,
+        visibleRootLinks,
+        totalRootLinks: rootNeighbors.length,
+        hiddenRootLinks: Math.max(0, rootNeighbors.length - visibleRootLinks),
+        visibleNeighborLinks: Math.max(0, hierarchicalTopologyView.visibleConnectionCount - visibleRootLinks),
+        totalVisibleLinks: hierarchicalTopologyView.visibleConnectionCount,
+      };
+    })()
+    : null;
   const visibleProjection = localFocusPage && projection
     ? { ...projection, nodes: projection.nodes.filter((node) => localFocusPage.nodeIds.includes(node.id)), edges: projection.edges.filter((edge) => localFocusPage.edgeIds.includes(edge.id)) }
     : projection;
@@ -1009,13 +1422,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   // newly approved scope label while the controlled store catches up.
   // Remount only when the exact reviewed hierarchy page identity changes.
   const hierarchyCanvasKey = topologyOverview
-    ? `network-overview:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
-    : `${topologyViewMode}:` + (validHierarchyFocus
+    ? `network-overview:${projectGeneration}:${getScenarioTransitionId()}:${sourceIdentity}:${topologyOverview.sourceHash}:${topologyOverview.strategy}:${topologyOverview.canonicalNodes}:${topologyOverview.canonicalLinks}:${topologyOverview.groups.map((group) => `${group.id}:${group.members.length}`).join(",")}`
+    : `${topologyViewMode}:` + (hierarchicalTopologyView
+      ? `project-090:${hierarchicalTopologyView.kind}:${hierarchicalTopologyView.rootId ?? "overview"}:${hierarchicalTopologyView.page}:${hierarchicalTopologyView.edgeIds.join(",")}`
+      : validHierarchyFocus
     ? `scale001-p2b2c:${validHierarchyFocus.sourceModelHash}:${validHierarchyFocus.scopeKind}:${validHierarchyFocus.scopeId}:${validHierarchyFocus.page}`
     : validTenThousandFocus
       ? `${validTenThousandFocus.editedBounded?(validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e2":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f3":"scale001-p4c4a"):validTenThousandFocus.sourceKind==="office-p4c3b"?"scale001-p4c3b":validTenThousandFocus.sourceKind==="ods-p4f2"?"scale001-p4f2":validTenThousandFocus.sourceKind==="xlsx-p4e1"?"scale001-p4e1":"scale001-p4b1"}:${validTenThousandFocus.sourceOriginalSha256}:${validTenThousandFocus.sourceModelHash}:${validTenThousandFocus.page}:${topologyFocusRoot ?? "overview"}`
     : validFiveThousandFocus
       ? `scale001-p3c2:${validFiveThousandFocus.sourceModelHash}:${validFiveThousandFocus.page}`
+      : atlasPageProjection
+        ? `atlas-001:${atlasPageProjection.sourceIdentity}:${atlasPageProjection.page.id}:${atlasPageProjection.page.internalConnectionIds.join(",")}:${atlasLayout?.requestKey ?? "pending"}`
       : "regular-topology");
   const baseFlow = useMemo(() => visibleProjection ? toReactFlowProjection(visibleProjection) : { nodes: [], edges: [] }, [visibleProjection]);
   void topologyGeometryRevision;
@@ -1044,7 +1461,29 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     const measure = (forceRepair = false) => {
       const rect = panel.getBoundingClientRect();
+      const previous = lifecycle.snapshot();
       const next = lifecycle.observe({ width: rect.width, height: rect.height });
+      // Atlas uses one bounded ELK page across all wide viewport buckets.
+      // React Flow keeps the old translation when a panel resizes, leaving the
+      // same two-node page stranded to the left on larger screens. Preserve
+      // the viewport's world-space center (and zoom) by compensating for the
+      // measured panel size delta. Do not modify any canonical node geometry
+      // or force an unrelated hierarchy user's camera back to overview.
+      if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS &&
+          previous.phase === "valid" && previous.lastValidSize &&
+          next.phase === "valid" && next.rebuildVisualGeometry) {
+        const instance = flowApi.current;
+        const currentViewport = instance?.getViewport?.() ?? topologyViewportRef.current;
+        if (currentViewport && instance?.setViewport) {
+          const compensated = {
+            x: currentViewport.x + (next.width - previous.lastValidSize.width) / 2,
+            y: currentViewport.y + (next.height - previous.lastValidSize.height) / 2,
+            zoom: currentViewport.zoom,
+          };
+          topologyViewportRef.current = compensated;
+          instance.setViewport(compensated, { duration: 0 });
+        }
+      }
       setTopologyViewportState(next);
       if (next.phase === "valid" && (forceRepair || next.rebuildVisualGeometry)) repairVisualGeometry();
     };
@@ -1064,18 +1503,61 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     const runInitialFit = () => {
       const rect = topologyPanelRef.current?.getBoundingClientRect();
       const instance = flowApi.current;
-      if (rect && rect.width > 0 && rect.height > 0 && instance) {
-        instance.fitView?.({ duration: 0, padding: topologyOverview ? 0.16 : 0.12, minZoom: topologyOverview ? 0.58 : 0.45, maxZoom: topologyOverview ? 1.25 : 1.35 });
-        setTopologyGeometryRevision((value) => value + 1);
+      if (!rect || rect.width <= 0 || rect.height <= 0 || !instance) return false;
+      // React Flow exposes the instance before its node internals have been
+      // measured. Fitting at that point records a stale transform (often
+      // scale=1 with the left side of the graph off-screen), and the old
+      // one-shot identity guard then prevents the real fit. Wait until every
+      // mounted node has usable measured geometry before consuming the fit
+      // identity.
+      const measured = baseFlow.nodes.every((node) => {
+        const internal = instance.getInternalNode?.(node.id);
+        const dimensions = internal?.measured ?? internal?.internals?.measured;
+        return Number(dimensions?.width ?? internal?.width ?? node.width ?? 0) > 0 &&
+          Number(dimensions?.height ?? internal?.height ?? node.height ?? 0) > 0;
+      });
+      if (!measured) return false;
+      const overviewCamera = topologyOverview || topologyCameraMode === "overview";
+      const hierarchyOverviewCamera = Boolean(hierarchicalTopologyView?.kind === "overview");
+      const readableHierarchy = Boolean(hierarchicalTopologyView && topologyCameraMode === "read");
+      const compactMobileRead = topologyCameraMode === "read" && rect.width < 600 && !hierarchicalTopologyView;
+      const readableRootId = readableHierarchy
+        ? hierarchicalTopologyView?.rootId ?? hierarchicalTopologyView.navigationGroups[0]?.memberIds[0]
+        : null;
+      const rootNode = readableRootId ? baseFlow.nodes.find((node) => node.id === readableRootId) : null;
+      const rootRect = rootNode ? topologyWorldRect(rootNode.id) : null;
+      if (rootRect && instance.setCenter) {
+        instance.setCenter(rootRect.x + rootRect.width / 2, rootRect.y + rootRect.height / 2, { zoom: 1, duration: 0 });
+      } else {
+        instance.fitView?.({
+          duration: 0,
+          padding: overviewCamera ? 0.2 : 0.08,
+          // A hierarchy overview must keep every source-derived group/card in
+          // the overview camera.  READ is the camera mode with the effective
+          // label-size gate; OVERVIEW is allowed to be a true map overview
+          // rather than cropping the lower Arvidsjaur groups.
+          minZoom: topologyOverview ? 0.58 : hierarchyOverviewCamera ? 0.08 : overviewCamera || compactMobileRead ? 0.32 : 1,
+          maxZoom: topologyOverview ? 1.25 : overviewCamera ? 1.05 : 1.35,
+        });
       }
+      setTopologyGeometryRevision((value) => value + 1);
+      return true;
     };
     measure(false);
     if (topologyInitialFitIdentityRef.current !== topologyGeometryIdentity) {
-      topologyInitialFitIdentityRef.current = topologyGeometryIdentity;
+      const fitIdentity = topologyGeometryIdentity;
+      const tryInitialFit = () => {
+        if (topologyInitialFitIdentityRef.current === fitIdentity) return;
+        if (runInitialFit()) {
+          topologyInitialFitIdentityRef.current = fitIdentity;
+          return;
+        }
+        initialFitTimer = globalThis.setTimeout(tryInitialFit, 32);
+      };
       initialFitFrame = globalThis.requestAnimationFrame?.(() => {
-        initialFitSecondFrame = globalThis.requestAnimationFrame?.(runInitialFit);
+        initialFitSecondFrame = globalThis.requestAnimationFrame?.(tryInitialFit);
       });
-      initialFitTimer = globalThis.setTimeout(runInitialFit, 120);
+      initialFitTimer = globalThis.setTimeout(tryInitialFit, 120);
     }
     return () => {
       resizeObserver?.disconnect();
@@ -1087,7 +1569,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       if (initialFitSecondFrame !== undefined) globalThis.cancelAnimationFrame?.(initialFitSecondFrame);
       if (initialFitTimer !== undefined) globalThis.clearTimeout(initialFitTimer);
     };
-  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks]);
+  }, [topologyGeometryIdentity, journeyKey, topologyOverview?.strategy, topologyOverview?.canonicalNodes, topologyOverview?.canonicalLinks, hierarchicalTopologyView?.kind, hierarchicalTopologyView?.rootId, topologyCameraMode, topologyViewMode]);
   const topologyIndex = useMemo(() => buildTopologySearchIndexFromNetwork(canonicalNetwork), [canonicalNetwork]);
   const topologySearch = useMemo(() => searchTopologyWithCount(topologyIndex, topologyQuery), [topologyIndex, topologyQuery]);
   const topologySearchResults = topologySearch.results;
@@ -1243,6 +1725,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         selected: selectedIds.has(edge.id),
         data: {
           ...edge.data,
+          showEdgeLabel: selectedIds.has(edge.id),
           ...(comparisonForward || comparisonReturn ? {
             pathComparison: {
               forward: Boolean(comparisonForward),
@@ -1289,6 +1772,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   const onSelectionChange = ({ nodes, edges }) => {
     const active = liveTopologyWorkspace();
     if (!active) return;
+    if (tenThousandHierarchyIndex) return;
     const nodeIds = nodes.map((node) => node.id);
     const edgeIds = edges.map((edge) => edge.id);
     if (active.mode !== "builder") return;
@@ -1345,7 +1829,6 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       openTopologyGroupFromNode(node);
       return;
     }
-    if (validTenThousandFocus) return;
     if (active.selection?.primary === node.id && active.selection?.ids?.length === 1) return;
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, { nodeIds: [node.id], primary: node.id }));
     else setWorkspace(setRuntimeSelection(active, [node.id], node.id));
@@ -1379,9 +1862,11 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
   };
   const onEdgeClick = (_event, edge) => {
     const active = liveTopologyWorkspace();
-    if (!active || active.mode !== "runtime") return;
+    if (!active || denyUnappliedCanvasChange(active, `edge-click:${edge.id}`)) return;
     if (active.selection?.primary === edge.id && active.selection?.ids?.length === 1) return;
-    setWorkspace(setRuntimeSelection(active, [edge.id], edge.id));
+    setWorkspace(active.mode === "builder"
+      ? applyBuilderCanvasSelection(active, { edgeIds: [edge.id], primary: edge.id })
+      : setRuntimeSelection(active, [edge.id], edge.id));
   };
   const onNodeContextMenu = (event, node) => node.data?.overviewGroup
     ? openTopologyContextMenu(event, { kind: "group", groupId: node.data?.overviewGroupId ?? node.id })
@@ -1414,10 +1899,53 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     if (active.mode === "builder") setWorkspace(applyBuilderCanvasSelection(active, {}));
     else setWorkspace(setRuntimeSelection(active, []));
   };
-  const navigateOverview = () => {
+  const openAtlasPage = (pageId, focusResourceId = null) => {
+    if (!validAtlasIndex) return;
+    const page = validAtlasIndex.pageById.get(pageId);
+    if (!page) return;
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(page.id);
+    setAtlasPageHistory((history) => history.at(-1)?.pageId === page.id ? history : [...history, { pageId: page.id, label: page.label }]);
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
+    topologyFocusRequestRef.current += 1;
+    setTopologyGroup(null);
+    setTopologyViewHistory((history) => history.at(-1)?.kind === "atlas" && history.at(-1)?.pageId === page.id
+      ? history
+      : [...history, { kind: "atlas", pageId: page.id, label: `Atlas · ${page.label}` }]);
+    setTopologyContextMenu(null);
+    setTopologyContextDetails(null);
+    globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: 0.12 }));
+    if (focusResourceId && page.resourceIds.includes(focusResourceId)) {
+      const centerFocused = () => {
+        const target = topologyWorldRect(focusResourceId);
+        if (target) flowApi.current?.setCenter?.(target.x + target.width / 2, target.y + target.height / 2, { zoom: 1.15, duration: 220 });
+      };
+      // React Flow's page fit can complete after the first animation frame.
+      // Re-apply the explicit READ focus after that fit so a nested resource
+      // remains visible in screen coordinates.
+      globalThis.requestAnimationFrame?.(centerFocused);
+      globalThis.setTimeout?.(centerFocused, 120);
+      globalThis.setTimeout?.(centerFocused, 320);
+    }
+  };
+  const navigateOverview = () => {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS && firstAtlasPageId) {
+      const first = validAtlasIndex?.pageById.get(firstAtlasPageId);
+      setAtlasPageId(firstAtlasPageId);
+      setAtlasPageHistory(first ? [{ pageId: first.id, label: first.label }] : []);
+      setTopologyViewHistory(first ? [{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }] : [{ kind: "overview", label: "Nätverksöversikt" }]);
+      setTopologyContextMenu(null);
+      setTopologyContextDetails(null);
+      globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 220, padding: 0.12 }));
+      return;
+    }
+    setTopologyFocusRoot(null);
+    setTopologyFocusPage(1);
+    setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyGroup(null);
     setTopologyGroupQuery("");
@@ -1427,31 +1955,104 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextDetails(null);
     flowApi.current?.fitView?.({ duration: 220, padding: 0.1 });
   };
+  const topologyWorldRect = (nodeId) => {
+    const byId = new Map(baseFlow.nodes.map((node) => [node.id, node]));
+    const cache = new Map();
+    const resolve = (id, visiting = new Set()) => {
+      if (cache.has(id)) return cache.get(id);
+      if (visiting.has(id)) return null;
+      const node = byId.get(id);
+      if (!node) return null;
+      const parent = node.parentId ? resolve(node.parentId, new Set([...visiting, id])) : null;
+      const value = {
+        x: (parent?.x ?? 0) + Number(node.position?.x ?? 0),
+        y: (parent?.y ?? 0) + Number(node.position?.y ?? 0),
+        width: Number(node.width ?? 168),
+        height: Number(node.height ?? 88),
+      };
+      cache.set(id, value);
+      return value;
+    };
+    return resolve(nodeId);
+  };
   const changeTopologyViewMode = (mode) => {
     if (!Object.values(TOPOLOGY_VIEW_MODES).includes(mode)) return;
     setTopologyViewMode(mode);
     setTopologyFocusRoot(null);
     setTopologyFocusPage(1);
     setTopologyFocusProjection(null);
+    setTopologyHierarchyScope(null);
     topologyFocusRequestRef.current += 1;
     setTopologyGroup(null);
     setTopologyGroupQuery("");
     setTopologyGroupPage(1);
+    if (mode === TOPOLOGY_VIEW_MODES.ATLAS) {
+      const first = firstAtlasPageId ? validAtlasIndex?.pageById.get(firstAtlasPageId) : null;
+      setAtlasPageId(first?.id ?? null);
+      setAtlasPageHistory(first ? [{ pageId: first.id, label: first.label }] : []);
+    } else {
+      setAtlasPageId(null);
+      setAtlasPageHistory([]);
+    }
     setTopologyContextMenu(null);
     setTopologyContextDetails(null);
     const label = mode === TOPOLOGY_VIEW_MODES.NORMAL
       ? "NORMAL TOPOLOGY"
       : mode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
         ? "CONNECTED EXPLORER"
-        : "INVENTORY SUMMARY";
-    setTopologyViewHistory([{ kind: "overview", label }]);
+        : mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY
+          ? "INVENTORY SUMMARY"
+          : `Atlas · ${firstAtlasPageId ? validAtlasIndex?.pageById.get(firstAtlasPageId)?.label ?? firstAtlasPageId : "ingen sida"}`;
+    setTopologyViewHistory(mode === TOPOLOGY_VIEW_MODES.ATLAS && firstAtlasPageId
+      ? [{ kind: "atlas", pageId: firstAtlasPageId, label }]
+      : [{ kind: "overview", label }]);
     globalThis.requestAnimationFrame?.(() => flowApi.current?.fitView?.({ duration: 180, padding: mode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY ? 0.16 : 0.12 }));
+  };
+  const changeTopologyCameraMode = (mode) => {
+    if (mode !== "read" && mode !== "overview") return;
+    setTopologyCameraMode(mode);
+    const instance = flowApi.current;
+    if (!instance) return;
+    const readableRootId = mode === "read" && hierarchicalTopologyView
+      ? hierarchicalTopologyView.rootId ?? hierarchicalTopologyView.navigationGroups[0]?.memberIds[0]
+      : null;
+    const readableRoot = readableRootId ? topologyWorldRect(readableRootId) : null;
+    if (readableRoot && instance.setCenter) {
+      // Every hierarchy READ camera is anchored to a real scope resource.
+      // React Flow positions child nodes in their parent-local frame, so the
+      // world-space rect must be resolved before centering; otherwise the root
+      // can be rendered above the panel while the breadcrumb still says READ.
+      instance.setCenter(readableRoot.x + readableRoot.width / 2, readableRoot.y + readableRoot.height / 2, { duration: 0, zoom: 1 });
+    } else if (mode === "overview") {
+      // Read the mounted panel identity as well as React state.  Camera
+      // buttons can be clicked during the async ELK commit; a closure from
+      // the pre-layout render must still select the bounded hierarchy fit.
+      const boundedHierarchy = Boolean(document.querySelector(".topology-panel")?.getAttribute("data-topology-layout-bakeoff"));
+      instance.fitView?.({ duration: 0, padding: boundedHierarchy ? 0.2 : 0.16, minZoom: boundedHierarchy ? 0.08 : 0.32, maxZoom: 1.05 });
+    }
+    else instance.fitView?.({ duration: 0, padding: 0.08, minZoom: 0.62, maxZoom: 1.35 });
   };
   const focusTopologyNode = (nodeId, label = nodeId) => {
     const active = liveTopologyWorkspace();
     if (!active || denyUnappliedCanvasChange(active, `focus:${nodeId}`)) return;
     const nodeOrder = validTenThousandFocus?.nodeOrder ?? scaledTenThousandFocus?.nodeOrder;
-    if (validTenThousandFocus) {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS && validAtlasIndex) {
+      const page = atlasPageForResource(validAtlasIndex, nodeId);
+      if (page) {
+        openAtlasPage(page.id, nodeId);
+        // Atlas search/navigation is view-only.  Do not publish a Builder
+        // selection update while React Flow is reconciling the new bounded
+        // page; that event can otherwise re-enter selection reconciliation.
+        return;
+      }
+    } else if (tenThousandHierarchyIndex) {
+      const role = tenThousandHierarchyIndex.roleById.get(nodeId) ?? "device";
+      const hierarchyLabel = role === "distribution" ? `Distribution branch: ${label}` : role === "access" ? `Access network: ${label}` : `Connected branch: ${label}`;
+      setTopologyHierarchyScope({ rootId: nodeId });
+      setTopologyFocusRoot(nodeId);
+      setTopologyFocusPage(1);
+      setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: hierarchyLabel, page: 1 }]);
+    } else if (validTenThousandFocus) {
       setTopologyFocusRoot(nodeId);
       setTopologyFocusPage(1);
       setTopologyViewHistory((history) => [...history, { kind: "focus", rootId: nodeId, label: `Fokuserad enhet: ${label}`, page: 1 }]);
@@ -1466,7 +2067,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     }
     // The bounded 10k explorer is a read-only visual projection. Avoid
     // rebuilding the 10,000-row Builder selection map during navigation.
-    if (!validTenThousandFocus) {
+    if (!validTenThousandFocus || tenThousandHierarchyIndex) {
       if (active.mode === "builder") setWorkspace(setBuilderSelection(active, [nodeId], nodeId));
       else setWorkspace(setRuntimeSelection(active, [nodeId], nodeId));
     }
@@ -1487,8 +2088,17 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     document.addEventListener("dblclick", onNativeDoubleClick, true);
     return () => document.removeEventListener("dblclick", onNativeDoubleClick, true);
-  }, [validTenThousandFocus, canonicalResourceById, topologyFocusRoot]);
+  }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById, topologyFocusRoot]);
   const goTopologyBack = () => {
+    if (topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS) {
+      const previous = atlasPageHistory.at(-2);
+      if (!previous) return;
+      setAtlasPageHistory((history) => history.slice(0, -1));
+      setAtlasPageId(previous.pageId);
+      setTopologyViewHistory((history) => history.length > 1 ? history.slice(0, -1) : history);
+      setTopologyContextMenu(null);
+      return;
+    }
     setTopologyViewHistory((history) => {
       if (history.length <= 1) return history;
       const next = history.slice(0, -1);
@@ -1502,12 +2112,14 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         }
         setTopologyFocusRoot(null);
         setTopologyFocusPage(1);
+        setTopologyHierarchyScope(null);
       } else {
         setTopologyGroup(null);
         setTopologyGroupQuery("");
         setTopologyGroupPage(1);
         setTopologyFocusRoot(previous?.rootId ?? null);
         setTopologyFocusPage(previous?.page ?? 1);
+        setTopologyHierarchyScope(previous?.rootId ? { rootId: previous.rootId } : null);
       }
       return next;
     });
@@ -1520,7 +2132,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     setTopologyContextMenu({ ...menu, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 300)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 280)) });
   };
   useEffect(() => {
-    if (!validTenThousandFocus) return undefined;
+    if (!validTenThousandFocus || tenThousandHierarchyIndex) return undefined;
     const onNativeContextMenu = (event) => {
       const resourceNode = event.target?.closest?.(".react-flow__node-resource, .react-flow__node[data-id]")?.closest?.(".react-flow__node[data-id]");
       const nodeId = resourceNode?.getAttribute?.("data-id");
@@ -1529,10 +2141,19 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     };
     document.addEventListener("contextmenu", onNativeContextMenu, true);
     return () => document.removeEventListener("contextmenu", onNativeContextMenu, true);
-  }, [validTenThousandFocus, canonicalResourceById]);
+  }, [validTenThousandFocus, tenThousandHierarchyIndex, canonicalResourceById]);
   const selectedCanonicalResource = workspace.selection.primary ? canonicalResourceById.get(workspace.selection.primary) : undefined;
+  const selectedCanonicalConnection = workspace.selection.primary ? canonicalConnectionById.get(workspace.selection.primary) : undefined;
+  const canonicalIncidentLinkCounts = useMemo(() => {
+    const counts = new Map();
+    for (const connection of canonicalNetwork.connections) {
+      counts.set(connection.from.resource, (counts.get(connection.from.resource) ?? 0) + 1);
+      counts.set(connection.to.resource, (counts.get(connection.to.resource) ?? 0) + 1);
+    }
+    return counts;
+  }, [canonicalNetwork.connections]);
   const selectedCanonicalLinkCount = selectedCanonicalResource
-    ? canonicalNetwork.connections.filter((connection) => connection.from.resource === selectedCanonicalResource.id || connection.to.resource === selectedCanonicalResource.id).length
+    ? canonicalIncidentLinkCounts.get(selectedCanonicalResource.id) ?? 0
     : 0;
   const contextResource = topologyContextMenu?.nodeId ? canonicalResourceById.get(topologyContextMenu.nodeId) : undefined;
   const contextGroup = topologyContextMenu?.groupId ? findTopologyGroup(topologyContextMenu.groupId) : undefined;
@@ -1554,6 +2175,9 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     ? canonicalNetwork.connections.filter((connection) => connection.from.resource === contextResource.id || connection.to.resource === contextResource.id).length
     : 0;
   const selectedResourceAddresses = selectedCanonicalResource?.interfaces?.flatMap((iface) => iface.addresses ?? []) ?? [];
+  const selectedLinkProperties = selectedCanonicalConnection?.properties ?? {};
+  const selectedLinkSourcePort = selectedCanonicalConnection?.from.port;
+  const selectedLinkTargetPort = selectedCanonicalConnection?.to.port;
   const topologyGroupNavigator = activeTopologyGroup ? e("section", {
     className: "topology-group-navigator",
     "data-topology-group-navigator": activeTopologyGroup.id,
@@ -1586,16 +2210,74 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       e("button", { type: "button", "data-topology-group-page": "next", disabled: boundedTopologyGroupPage >= topologyGroupPageCount, onClick: () => setTopologyGroupPage((page) => Math.min(topologyGroupPageCount, page + 1)) }, "Nästa"),
     ),
   ) : null;
+  const atlasBoundaryReferences = atlasPageProjection?.boundaryReferences ?? [];
+  const atlasPageRows = validAtlasIndex?.pages ?? [];
+  const atlasPageResourceIds = atlasPageProjection?.page.resourceIds ?? [];
+  const atlasPageInternalConnections = atlasPageProjection?.connections.map((connection) => ({
+    id: connection.id,
+    from: connection.from,
+    to: connection.to,
+  })) ?? [];
+  const atlasResourceParentMap = atlasTopologyCanvas
+    ? Object.fromEntries(atlasTopologyCanvas.nodes.filter((node) => node.type === "resource").map((node) => [node.id, node.parentId ?? null]))
+    : {};
+  const atlasLayoutRoutes = atlasLayout?.projection.edges.map((edge) => ({ id: edge.id, route: edge.data.route ?? null })) ?? [];
+  const atlasLayoutErrorCount = atlasLayout ? atlasLayout.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length : null;
+  const activeTopologyStats = atlasPageProjection
+    ? {
+      devices: atlasPageProjection.resources.length,
+      links: atlasPageProjection.connections.length,
+      groups: baseFlow.nodes.filter((node) => node.type === "zone").length,
+      hiddenLinks: atlasPageProjection.page.boundaryConnectionIds.length + atlasPageProjection.page.externalConnectionIds.length,
+      canonical: false,
+    }
+    : hierarchicalTopologyView
+    ? {
+      devices: hierarchicalTopologyView.nodeIds.length,
+      links: hierarchicalTopologyView.visibleConnectionCount,
+      groups: hierarchicalTopologyView.navigationGroups.length,
+      hiddenLinks: hierarchicalTopologyView.hiddenConnectionCount,
+      canonical: false,
+    }
+    : topologyOverview
+      ? {
+        devices: topologyOverview.canonicalNodes,
+        links: topologyOverview.canonicalLinks,
+        groups: topologyOverview.groups.length,
+        hiddenLinks: 0,
+        canonical: true,
+      }
+      : {
+        devices: baseFlow.nodes.filter((node) => node.type === "resource").length,
+        links: baseFlow.edges.length,
+        groups: baseFlow.nodes.filter((node) => node.type === "zone").length,
+        hiddenLinks: 0,
+        canonical: false,
+      };
   const topologyExplorer = e("aside", { className: "topology-explorer-sidebar", "data-topology-explorer": "true", "aria-label": "Topology Explorer" },
-    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
-    e("small", { "data-topology-active-mode": topologyViewMode }, topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL
+    e("div", { className: "topology-explorer-heading" },
+      e("div", null, e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"), e("small", { "data-topology-active-mode": topologyViewMode }, topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL
       ? "Verkliga resurser, zoner och deklarerade länkar · redigerbar Builder-yta"
       : topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER
         ? "Anslutningsbaserad, bunden delgraf · sök, fokusera och expandera verkliga grannar"
-        : "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar"),
-    e("p", null, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
-    e("p", null, `${baseFlow.nodes.length} enheter och ${baseFlow.edges.length} länkar i aktuell vy`),
-    topologyOverview ? e("section", { "data-topology-overview": topologyOverview.strategy },
+        : topologyViewMode === TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY
+          ? "Sekundär inventeringsöversikt · gruppkort och sammanfattningskanter är inte fysiska länkar"
+          : "ATLAS · aktiv sida med interna deklarerade länkar och klickbara fortsättningsreferenser")),
+      e("span", { className: "topology-truth-badge" }, activeTopologyStats.canonical ? "CANONICAL INVENTORY" : "VISIBLE SOURCE VIEW"),
+    ),
+    e("div", { className: "topology-stat-strip", "data-topology-active-stats": "true" },
+      e("div", { className: "topology-stat", "data-topology-active-device-count": String(activeTopologyStats.devices) }, e("strong", null, String(activeTopologyStats.devices)), e("span", null, "aktiva enheter")),
+      e("div", { className: "topology-stat", "data-topology-active-link-count": String(activeTopologyStats.links) }, e("strong", null, String(activeTopologyStats.links)), e("span", null, "aktiva länkar")),
+      e("div", { className: "topology-stat topology-stat-presentation", "data-topology-active-group-count": String(activeTopologyStats.groups) }, e("strong", null, String(activeTopologyStats.groups)), e("span", null, "presentationsgrupper")),
+      e("div", { className: "topology-stat topology-stat-canonical", "data-topology-canonical-counts": "true" }, e("strong", null, `${canonicalNetwork.resources.length} · ${canonicalNetwork.connections.length}`), e("span", null, "hela canonical-nätet")),
+    ),
+    e("span", { className: "sr-only", "data-topology-legacy-counts": "true" }, `${canonicalNetwork.resources.length} dokumenterade enheter · ${canonicalNetwork.connections.length} deklarerade länkar`),
+    e("p", { className: "topology-stat-note", "data-topology-active-stat-note": "true" }, activeTopologyStats.hiddenLinks > 0
+      ? `${activeTopologyStats.hiddenLinks} deklarerade länkar ligger utanför aktuell vy; de är inte aggregerade.`
+      : activeTopologyStats.canonical
+        ? "Gruppkort och sammanfattningskanter är presentation; de räknas inte som fysiska enheter eller länkar."
+        : "Presentationsgrupper är visuella behållare och räknas inte som fysiska nätverksenheter."),
+    topologyOverview && topologyOverviewReadyIdentity === topologyOverviewIdentity ? e("section", { "data-topology-overview": topologyOverview.strategy },
       e("strong", null, "Logisk nätverksöversikt"),
       e("p", null, `${topologyOverview.canonicalNodes} canonical devices · ${topologyOverview.canonicalLinks} declared links · ${topologyOverview.groups.length} bounded visual groups`),
       e("small", null, topologyOverview.strategy === "documented-role-bands"
@@ -1603,15 +2285,97 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         : "Neutral type bands are used because the source does not prove Core / Distribution / Access roles."),
       e("small", null, "Group cards and dashed summary edges are visual summaries; click a group to open a real source device."),
     ) : null,
+    e("section", { className: "topology-icon-overview", "data-topology-icon-overview": "true", "aria-label": "Ikonöversikt" },
+      e("strong", null, "Ikonöversikt"),
+      e("small", null, "Ikonerna följer dokumenterad semantik; VLAN och länkattribut visas som metadata, inte som extra enheter."),
+      e("div", { className: "topology-icon-overview-grid" },
+        ...iconRegistry().filter((icon) => ["switch", "router", "firewall", "server", "client", "hypervisor", "wireless", "storage", "vlan", "network-segment", "place", "presentation-group", "link-attribute", "service"].includes(icon.key)).map((icon) =>
+          e("span", { key: icon.key, className: "topology-icon-overview-item", "data-icon-overview-key": icon.key, title: icon.title },
+            e(SemanticIcon, { iconKey: icon.key, label: icon.accessibleName }),
+            e("small", null, icon.title),
+          )),
+      ),
+    ),
+    atlasPageProjection ? e("section", {
+      className: "atlas-page-status",
+      "data-atlas-page": atlasPageProjection.page.id,
+      "data-atlas-page-basis": atlasPageProjection.page.basis,
+      "data-atlas-render-mode": atlasPageProjection.page.renderMode,
+      "data-atlas-page-count": String(atlasPageRows.length),
+    },
+      e("strong", null, `ATLAS · ${atlasPageProjection.page.label}`),
+      e("p", null, `${atlasPageProjection.resources.length} dokumenterade enheter · ${atlasPageProjection.connections.length} interna deklarerade länkar`),
+      e("small", null, `${atlasPageProjection.page.boundaryConnectionIds.length} boundary-länkar · ${atlasPageProjection.page.externalConnectionIds.length} externa länkar i denna sida; inget är tyst borttaget.`),
+      atlasPageProjection.page.renderMode === "link-list" ? e("strong", { className: "topology-hierarchy-incomplete", "data-atlas-link-list": "true" }, atlasPageProjection.page.blockedReason) : null,
+      atlasLayout?.quality ? e("small", { "data-atlas-layout-quality": atlasLayout.quality.hardGate, "data-atlas-layout-quality-gate": atlasLayout.quality.baselineComparison.qualityGate, "data-atlas-layout-error-count": String(atlasLayoutErrorCount ?? 0), "data-atlas-layout-winner": atlasLayout.quality.winnerId }, `ELK bake-off: ${atlasLayout.quality.hardGate} · ${atlasLayout.quality.winnerId}`) : e("small", { "data-atlas-layout-status": "PENDING", "data-atlas-layout-error-count": "PENDING" }, "ELK-layout: väntar på identitetsmatchat svar"),
+      atlasLayout?.diagnostics?.length ? e("small", { "data-atlas-layout-diagnostic": "true" }, atlasLayout.diagnostics[0].message) : null,
+      e("div", { className: "atlas-page-list", "data-atlas-page-list": "true", role: "listbox", "aria-label": "ATLAS-sidor" },
+        ...atlasPageRows.map((page) => e("button", {
+          key: page.id,
+          type: "button",
+          role: "option",
+          "aria-selected": page.id === atlasPageProjection.page.id,
+          "data-atlas-page-option": page.id,
+          onClick: () => openAtlasPage(page.id),
+        }, `${page.label} · ${page.resourceIds.length} enheter`)),
+      ),
+      e("div", { className: "atlas-boundary-list", "data-atlas-boundary-list": "true" },
+        e("strong", null, "Fortsättningsreferenser"),
+        atlasBoundaryReferences.length
+          ? atlasBoundaryReferences.map((reference) => e("button", {
+            key: `${reference.originalConnectionId}:${reference.localResourceId}:${reference.localPortId ?? ""}`,
+            type: "button",
+            className: "atlas-boundary-button",
+            "data-atlas-boundary-connection": reference.originalConnectionId,
+            "data-atlas-destination-page": reference.destinationPageId,
+            onClick: () => openAtlasPage(reference.destinationPageId, reference.remoteResourceId),
+          }, `${reference.originalConnectionId} · ${reference.remoteResourceId}${reference.remotePortId ? `:${reference.remotePortId}` : ""}`))
+          : e("small", null, "Inga boundary-länkar på denna sida."),
+      ),
+    ) : null,
+    hierarchicalTopologyView ? e("section", {
+      className: "topology-hierarchy-status",
+      "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
+      "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
+      "data-topology-hierarchy-hidden-boundary-links": String(hierarchicalTopologyView.hiddenBoundaryConnectionCount),
+      "data-topology-hierarchy-layout": hierarchicalTopologyView.layoutStrategy,
+      ...(hierarchicalTopologyLayout ? { "data-topology-layout-hard-gate": hierarchicalTopologyLayout.quality.hardGate, "data-topology-layout-winner": hierarchicalTopologyLayout.quality.winnerId } : {}),
+    },
+      e("strong", null, hierarchicalTopologyView.roleLabel),
+      e("p", null, hierarchicalTopologyView.kind === "overview"
+        ? `${tenThousandHierarchyIndex?.roleCounts.core ?? 0} core · ${tenThousandHierarchyIndex?.roleCounts.distribution ?? 0} distribution · ${hierarchicalTopologyView.nodeIds.length} synliga källnoder`
+        : `${hierarchicalTopologyView.nodeIds.length} synliga källnoder · ${hierarchicalTopologyView.visibleConnectionCount} synliga deklarerade länkar`),
+      e("small", { "data-topology-hierarchy-groups": String(hierarchicalTopologyView.navigationGroups.length) }, `${hierarchicalTopologyView.navigationGroups.length} Arvidsjaur-stilade presentationsgrupper`),
+      e("small", null, `${hierarchicalTopologyView.hiddenConnectionCount} deklarerade länkar ligger utanför vyn; ${hierarchicalTopologyView.hiddenBoundaryConnectionCount} korsar vygränsen och är inte aggregerade.`),
+      hierarchicalTopologyView.incompleteView ? e("strong", { className: "topology-hierarchy-incomplete", "data-topology-hierarchy-incomplete": "true" }, "INCOMPLETE VIEW · länkbudget överskriden; inga länkar döljs tyst") : null,
+      hierarchicalTopologyLayout?.diagnostics?.length ? e("strong", { className: "topology-hierarchy-incomplete", "data-topology-layout-diagnostic": "true" }, hierarchicalTopologyLayout.diagnostics[0]?.message) : null,
+      hierarchicalTopologyView.pageCount > 1 ? e("small", null, `Grenvy ${hierarchicalTopologyView.page}/${hierarchicalTopologyView.pageCount}`) : null,
+    ) : null,
     topologyGroupNavigator,
-    localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
-    selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
+    hierarchicalFocusCounts ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(hierarchicalFocusCounts.totalRootLinks), "data-topology-visible-root-links": String(hierarchicalFocusCounts.visibleRootLinks), "data-topology-hidden-root-links": String(hierarchicalFocusCounts.hiddenRootLinks), "data-topology-visible-neighbor-links": String(hierarchicalFocusCounts.visibleNeighborLinks), "data-topology-total-visible-links": String(hierarchicalFocusCounts.totalVisibleLinks) }, `${hierarchicalFocusCounts.visibleNeighbors} synliga av ${hierarchicalFocusCounts.totalNeighbors} direktanslutna grannar · ${hierarchicalFocusCounts.visibleRootLinks} av ${hierarchicalFocusCounts.totalRootLinks} direktlänkar synliga · ${hierarchicalFocusCounts.visibleNeighborLinks} synliga grannlänkar · ${hierarchicalFocusCounts.totalVisibleLinks} länkar totalt i vyn`) : localFocusPage ? e("p", { "data-topology-focus-counts": "true", "data-topology-total-root-links": String(localFocusPage.totalRootLinks ?? localFocusPage.totalLinks), "data-topology-visible-root-links": String(localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks), "data-topology-hidden-root-links": String(localFocusPage.hiddenRootLinks ?? localFocusPage.hiddenLinks), "data-topology-visible-neighbor-links": String(localFocusPage.visibleNeighborLinks ?? 0), "data-topology-total-visible-links": String(localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks) }, `${localFocusPage.visibleNeighbors} synliga av ${localFocusPage.totalNeighbors} direktanslutna grannar · ${localFocusPage.visibleRootLinks ?? localFocusPage.visibleLinks} av ${localFocusPage.totalRootLinks ?? localFocusPage.totalLinks} direktlänkar synliga · ${localFocusPage.visibleNeighborLinks ?? 0} synliga grannlänkar · ${localFocusPage.totalVisibleLinks ?? localFocusPage.visibleLinks} länkar totalt i vyn`) : null,
+    selectedCanonicalConnection ? e("section", { className: "topology-link-inspector", "data-topology-selected-link": selectedCanonicalConnection.id, "aria-label": `Vald länk ${selectedCanonicalConnection.id}` },
+      e("strong", null, selectedCanonicalConnection.id),
+      e("small", null, `${selectedCanonicalConnection.from.resource} → ${selectedCanonicalConnection.to.resource}`),
+      e("small", null, `Källport: ${selectedLinkSourcePort ?? "NOT DOCUMENTED"} · Målport: ${selectedLinkTargetPort ?? "NOT DOCUMENTED"}`),
+      e("small", null, `Typ: ${selectedCanonicalConnection.kind} · VLAN: ${typeof selectedLinkProperties.vlan === "number" || typeof selectedLinkProperties.vlan === "string" ? `VLAN ${selectedLinkProperties.vlan}` : "NOT DOCUMENTED"}`),
+      e("small", null, `Status: ${selectedLinkProperties.enabled === false ? "DISABLED" : "DECLARED"}`),
+      e("button", { type: "button", "data-topology-focus-link": selectedCanonicalConnection.id, onClick: () => { focusTopologyNode(selectedCanonicalConnection.from.resource, selectedCanonicalConnection.from.resource); } }, "Fokusera båda ändpunkter"),
+    ) : selectedCanonicalResource ? e("section", { "data-topology-selected-details": selectedCanonicalResource.id },
       e("strong", null, selectedCanonicalResource.label ?? selectedCanonicalResource.id),
       e("small", null, `${selectedCanonicalResource.id} · ${selectedCanonicalResource.type ?? "okänd typ"}`),
       selectedResourceAddresses.length ? e("small", null, selectedResourceAddresses.join(", ")) : null,
       e("small", null, `${selectedCanonicalLinkCount} deklarerade länkar`),
       e("button", { type: "button", onClick: () => focusTopologyNode(selectedCanonicalResource.id, selectedCanonicalResource.label ?? selectedCanonicalResource.id) }, "Öppna fokuserad topologi"),
-    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet för detaljer."),
+    ) : e("p", { className: "helper-note" }, "Välj en dokumenterad enhet eller länk för detaljer."),
+  );
+  const topologyActiveSummary = e("section", {
+    className: "topology-active-summary",
+    "data-topology-active-summary": "true",
+    "aria-label": "Aktiv topology",
+  },
+    e("strong", null, topologyViewHistory.at(-1)?.label ?? "Nätverksöversikt"),
+    e("span", null, `${activeTopologyStats.devices} aktiva enheter · ${activeTopologyStats.links} aktiva länkar · ${activeTopologyStats.groups} presentationsgrupper`),
+    e("small", null, `${canonicalNetwork.resources.length} · ${canonicalNetwork.connections.length} i hela canonical-nätet · gruppkort räknas inte som fysiska enheter`),
   );
   return e("div", { className: "topology-column" },
     e("section", { className: "topology-navigation", "aria-label": "Topology navigation" },
@@ -1621,6 +2385,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           [TOPOLOGY_VIEW_MODES.NORMAL, "NORMAL TOPOLOGY"],
           [TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER, "CONNECTED EXPLORER"],
           [TOPOLOGY_VIEW_MODES.INVENTORY_SUMMARY, "INVENTORY SUMMARY"],
+          [TOPOLOGY_VIEW_MODES.ATLAS, "ATLAS PAGES"],
         ].map(([mode, label]) => e("button", {
           key: mode,
           type: "button",
@@ -1629,12 +2394,30 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
           onClick: () => changeTopologyViewMode(mode),
         }, label)),
       ),
+      e("div", { className: "topology-camera-switcher", "data-topology-camera-mode": topologyCameraMode, role: "group", "aria-label": "Kameraläge" },
+        e("strong", null, "Kameraläge"),
+        e("button", { type: "button", "data-topology-camera": "read", "aria-pressed": topologyCameraMode === "read", onClick: () => changeTopologyCameraMode("read") }, "Läsvy"),
+        e("button", { type: "button", "data-topology-camera": "overview", "aria-pressed": topologyCameraMode === "overview", onClick: () => changeTopologyCameraMode("overview") }, "Översikt"),
+      ),
       e("nav", { className: "topology-breadcrumbs", "data-topology-breadcrumbs": "true", "aria-label": "Topology breadcrumb" },
         ...topologyViewHistory.map((item, index) => e(React.Fragment, { key: `${item.kind}:${item.rootId ?? "overview"}:${index}` },
           index > 0 ? e("span", { "aria-hidden": "true" }, " › ") : null,
           e("button", { type: "button", "data-topology-breadcrumb": item.kind, onClick: () => {
             setTopologyViewHistory((history) => history.slice(0, index + 1));
-            if (item.kind === "group") {
+            if (item.kind === "atlas") {
+              if (item.pageId) {
+                setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+                setAtlasPageId(item.pageId);
+                setAtlasPageHistory((history) => {
+                  const position = history.findIndex((entry) => entry.pageId === item.pageId);
+                  return position >= 0 ? history.slice(0, position + 1) : [...history, { pageId: item.pageId, label: item.label }];
+                });
+              }
+              setTopologyFocusRoot(null);
+              setTopologyFocusPage(1);
+              setTopologyHierarchyScope(null);
+              setTopologyGroup(null);
+            } else if (item.kind === "group") {
               const group = findTopologyGroup(item.groupId);
               if (group) setTopologyGroup({ id: group.id, label: group.label, role: group.role, members: [...group.members] });
               setTopologyGroupQuery("");
@@ -1647,6 +2430,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
               setTopologyGroupPage(1);
               setTopologyFocusRoot(item.rootId ?? null);
               setTopologyFocusPage(item.page ?? 1);
+              setTopologyHierarchyScope(item.rootId ? { rootId: item.rootId } : null);
             }
             setTopologyContextMenu(null);
           } }, item.label))),
@@ -1875,14 +2659,63 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
         e("span", null, `Sida ${topologyFocusPage}/${localFocusPage.pageCount}`),
         e("button", { type: "button", disabled: topologyFocusPage >= localFocusPage.pageCount, onClick: () => { const page = Math.min(localFocusPage.pageCount, topologyFocusPage + 1); setTopologyFocusPage(page); setTopologyViewHistory((history) => history.map((item, index) => index === history.length - 1 ? { ...item, page } : item)); } }, "Nästa fokusvy")) : null
     ),
+    topologyActiveSummary,
     e("section", {
       ref: topologyPanelRef,
       className: "topology-panel",
       "aria-label": "Topology",
+      "data-topology-camera-mode": topologyCameraMode,
+      "data-connected-explorer-geometry": connectedExplorerGeometry ? (connectedExplorerGeometry.safe ? "SAFE" : connectedExplorerGeometry.reason) : "NOT_APPLICABLE",
+      "data-normal-topology-validation": normalTopologyEligible ? (normalTopologyValidationBlocked ? "BLOCKED" : "PASS") : "NOT_APPLICABLE",
+      "data-topology-readable-mode": topologyCameraMode === "read" ? "true" : "false",
       "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,
       "data-topology-edge-count": String(baseFlow.edges.length),
+      ...(atlasPageProjection ? {
+        "data-atlas-activation-mode": "BOUNDED_SOURCE_PAGE",
+        "data-atlas-render-ready": atlasRenderReady ? "true" : "false",
+        "data-atlas-global-builder-layout": "NOT_RUN",
+        "data-atlas-active-page": atlasPageProjection.page.id,
+        "data-atlas-page-count": String(atlasPageRows.length),
+        "data-atlas-page-node-count": String(atlasPageProjection.resources.length),
+        "data-atlas-page-link-count": String(atlasPageProjection.connections.length),
+        "data-atlas-page-resource-ids": JSON.stringify(atlasPageResourceIds),
+        "data-atlas-page-internal-connection-ids": JSON.stringify(atlasPageProjection.page.internalConnectionIds),
+        "data-atlas-page-internal-connections": JSON.stringify(atlasPageInternalConnections),
+        "data-atlas-resource-parent-map": JSON.stringify(atlasResourceParentMap),
+        "data-atlas-boundary-count": String(atlasBoundaryReferences.length),
+        "data-atlas-boundary-connection-ids": atlasPageProjection.page.boundaryConnectionIds.join(","),
+        "data-atlas-layout-page-id": atlasPageProjection.page.id,
+        "data-atlas-layout-source-identity": atlasPageProjection.sourceIdentity,
+        "data-atlas-layout-error-count": atlasLayout ? String(atlasLayoutErrorCount ?? 0) : "PENDING",
+        ...(atlasLayout?.quality ? {
+          "data-atlas-layout-quality": atlasLayout.quality.hardGate,
+          "data-atlas-layout-quality-gate": atlasLayout.quality.baselineComparison.qualityGate,
+          "data-atlas-layout-winner": atlasLayout.quality.winnerId,
+          "data-atlas-layout-request-key": atlasLayout.requestKey,
+          "data-atlas-layout-routes": JSON.stringify(atlasLayoutRoutes),
+        } : {}),
+      } : {}),
       "data-topology-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-projection-edge-ids": (visibleProjection?.edges ?? []).map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-react-flow-edge-ids": baseFlow.edges.map((edge) => edge.id).sort((a, b) => a.localeCompare(b, "en")).join(","),
+      "data-topology-react-flow-edge-handles": JSON.stringify(baseFlow.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourceHandle ?? null, targetHandle: edge.targetHandle ?? null }))),
+      ...(hierarchicalTopologyLayout ? {
+        "data-topology-layout-quality": hierarchicalTopologyLayout.quality.hardGate,
+        "data-topology-layout-quality-gate": hierarchicalTopologyLayout.quality.baselineComparison.qualityGate,
+        "data-topology-layout-winner": hierarchicalTopologyLayout.quality.winnerId,
+        "data-topology-layout-request-key": hierarchicalTopologyLayout.requestKey,
+        "data-topology-layout-bakeoff": JSON.stringify(hierarchicalTopologyLayout.quality),
+      } : {}),
+      ...(hierarchicalTopologyView ? {
+        "data-topology-hierarchy": hierarchicalTopologyView.kind === "overview" ? "overview" : hierarchicalTopologyView.rootId,
+        "data-topology-hierarchy-node-count": String(hierarchicalTopologyView.nodeIds.length),
+        "data-topology-hierarchy-link-count": String(hierarchicalTopologyView.edgeIds.length),
+        "data-topology-hierarchy-edge-ids": hierarchicalTopologyView.edgeIds.slice().sort((a, b) => a.localeCompare(b, "en")).join(","),
+        "data-topology-hierarchy-hidden-links": String(hierarchicalTopologyView.hiddenConnectionCount),
+        "data-topology-hierarchy-group-count": String(hierarchicalTopologyView.navigationGroups.length),
+        "data-topology-hierarchy-incomplete": String(hierarchicalTopologyView.incompleteView),
+      } : {}),
       ...(topologyFocusRoot ? { "data-topology-focus-root": topologyFocusRoot, "data-topology-focus-page": String(topologyFocusPage) } : {}),
       "data-topology-last-valid-size": topologyViewportState.lastValidSize ? `${topologyViewportState.lastValidSize.width}x${topologyViewportState.lastValidSize.height}` : "UNMEASURED",
       "data-topology-preserve-canonical-geometry": String(topologyViewportState.preserveCanonicalGeometry),
@@ -1896,7 +2729,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       edgeTypes,
       fitView: true,
       minZoom: 0.15,
-      maxZoom: 2,
+      maxZoom: topologyOverview ? 1.05 : 2,
       nodesDraggable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       nodesConnectable: workspace.mode === "builder" && !validThousandFocus && !fiveThousandWorkspace,
       elementsSelectable: true,
@@ -4434,21 +5267,72 @@ function RuntimeResults({ workspace }) {
   );
 }
 
-function WorkspaceMenu({ label, children }) {
-  return e("details", { className: "workspace-menu" },
-    e("summary", null, label),
-    e("div", { className: "workspace-menu-panel" }, children),
+function WorkspaceMenu({ label, children, className = "", panelClassName = "", closeOnAction = true, alwaysOpen = false }) {
+  const menuRef = useRef(null);
+  const summaryRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (restoreFocus = false) => {
+      if (menuRef.current?.open) menuRef.current.open = false;
+      setOpen(false);
+      if (restoreFocus) summaryRef.current?.focus();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close(true);
+      }
+    };
+    const onPointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) close(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+  return e("details", {
+    ref: menuRef,
+    className: `workspace-menu ${className}`.trim(),
+    ...(alwaysOpen ? { open: true } : {}),
+    onToggle: (event) => {
+      if (alwaysOpen && !event.currentTarget.open) {
+        queueMicrotask(() => {
+          if (menuRef.current) menuRef.current.open = true;
+        });
+        setOpen(true);
+        return;
+      }
+      setOpen(event.currentTarget.open);
+    },
+    onClick: (event) => {
+      if (!closeOnAction) return;
+      if (event.target.closest("button, .file-button")) {
+        queueMicrotask(() => {
+          if (menuRef.current?.open) menuRef.current.open = false;
+        });
+      }
+    },
+  },
+    e("summary", { ref: summaryRef, "aria-haspopup": "menu" }, label),
+    e("div", { className: `workspace-menu-panel ${panelClassName}`.trim(), role: "menu" }, children),
   );
 }
 
 
-function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setDiagnostics, initialSelection, workspaceIdentity, getCurrentWorkspaceIdentity }) {
+function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setDiagnostics, initialSelection, workspaceIdentity, projectGeneration, getCurrentProjectGeneration, getCurrentWorkspaceIdentity }) {
   const panelRef = useRef(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [layoutBusy, setLayoutBusy] = useState(false);
+  const [layoutMetrics, setLayoutMetrics] = useState(null);
   const [failure, setFailure] = useState("");
   const [selectedLinkSource, setSelectedLinkSource] = useState(null);
   const [legacyWorkbookConsent, setLegacyWorkbookConsent] = useState(false);
+  const [boundedAtlasConsent, setBoundedAtlasConsent] = useState(false);
   const [tenThousandBoundedConsent,setTenThousandBoundedConsent]=useState(false);
   const [reimportReview, setReimportReview] = useState(null);
   const [reimportApproved, setReimportApproved] = useState(false);
@@ -4491,12 +5375,44 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     candidate.unmappedColumnCount===0&&!candidate.linkSourceConflict&&
     candidate.source.connections.every(link=>
       link.from?.port===undefined&&link.to?.port===undefined));
+  const boundedAtlasEligibility = candidate => evaluateBoundedAtlasEligibility(candidate, NORMAL_TOPOLOGY_RESOURCE_BUDGET);
+  const activationDecisionFor = candidate => {
+    const bounded = boundedAtlasEligibility(candidate);
+    const large = largeNetworkPreview(candidate);
+    const verifiedScaleProfile = large && (tenThousandCsvProfile(candidate) || tenThousandXlsxProfile(candidate) || tenThousandOdsProfile(candidate));
+    return classifyNetworkImportActivation(candidate, {
+      normalResourceBudget: NORMAL_TOPOLOGY_RESOURCE_BUDGET,
+      boundedDecision: bounded,
+      verifiedScaleProfile,
+      largeSource: large,
+    });
+  };
   const requestId = useRef(0);
   const selectedOriginal = useRef(null);
+  const layoutBackendRef = useRef(null);
+  if (!layoutBackendRef.current) layoutBackendRef.current = new CancellableElkLayoutBackend();
+  useEffect(() => () => { layoutBackendRef.current?.cancel("LAYOUT_ABORTED"); }, []);
+  const cancelLayout = (reason = "LAYOUT_ABORTED") => {
+    const cancelled = layoutBackendRef.current?.cancel(reason);
+    if (!cancelled) return false;
+    requestId.current++;
+    setLayoutBusy(false);
+    setBusy(false);
+    setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+    setFailure(reason === "LAYOUT_TIMEOUT_ABORTED"
+      ? "Layout timeout: the ELK Worker was terminated; the active Builder was not changed."
+      : "Layout cancelled: the ELK Worker was terminated; the active Builder was not changed.");
+    setDiagnostics([{ code: reason, severity: "warning", message: reason === "LAYOUT_TIMEOUT_ABORTED"
+      ? "The bounded ELK layout deadline expired. No partial layout was accepted or published."
+      : "The layout job was cancelled. No partial layout was accepted or published." }]);
+    return true;
+  };
   const invalidated = () => {
+    cancelLayout();
     requestId.current++;
     selectedOriginal.current = null;
-    setPreview(null); setFailure(""); setBusy(false); setSelectedLinkSource(null);
+    setPreview(null); setFailure(""); setBusy(false); setLayoutBusy(false); setLayoutMetrics(null); setSelectedLinkSource(null);
+    setBoundedAtlasConsent(false);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
@@ -4504,9 +5420,11 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   };
   const close = () => { invalidated(); onClose(); };
   const chooseFile = async (file) => {
+    if (layoutBusy) cancelLayout();
     const current = ++requestId.current;
     selectedOriginal.current = file ?? null;
     setFailure(""); setPreview(null); setDiagnostics([]); setSelectedLinkSource(null);
+    setBoundedAtlasConsent(false);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
@@ -4539,6 +5457,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     setBusy(true); setFailure(""); setPreview(null); setDiagnostics([]);
     setTenThousandBoundedConsent(false);
     setLegacyWorkbookConsent(false);
+    setBoundedAtlasConsent(false);
     setReimportReview(null); setReimportApproved(false); setSavedReplay(null);
     try {
       const next = await previewNetworkTopologyFile(original, { linkSourceChoice: choice });
@@ -4670,10 +5589,32 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     const isCurrent = () => Boolean(original) &&
       requestId.current === activationEpoch &&
       selectedOriginal.current === original &&
+      (getCurrentProjectGeneration?.() ?? projectGeneration) === projectGeneration &&
       getCurrentWorkspaceIdentity() === workspaceIdentity;
     if (!isCurrent()) { setFailure("IC020_P1_STALE"); return; }
+    const boundedAtlas = boundedAtlasEligibility(preview);
     const large=largeNetworkPreview(preview);
-    if(large&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
+    const activationDecision = classifyNetworkImportActivation(preview, {
+      normalResourceBudget: NORMAL_TOPOLOGY_RESOURCE_BUDGET,
+      boundedDecision: boundedAtlas,
+      verifiedScaleProfile: large && (tenThousandCsvProfile(preview) || tenThousandXlsxProfile(preview) || tenThousandOdsProfile(preview)),
+      largeSource: large,
+    });
+    if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED) {
+      setDiagnostics([...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })), {
+        code: "NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED",
+        severity: "error",
+        message: `Validated source exceeds a verified activation capacity (${activationDecision.resourceCount} resources, ${activationDecision.connectionCount} explicit links; reason: ${activationDecision.reason}). YadiLab preserved the canonical source and did not run global layout.`,
+      }]);
+      setFailure("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED");
+      return;
+    }
+    if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BOUNDED_ATLAS && (mode !== "builder" || !boundedAtlasConsent)) {
+      setFailure(mode === "runtime" ? "ATLAS_BOUNDED_RUNTIME_BLOCKED" : "ATLAS_BOUNDED_REVIEW_REQUIRED");
+      return;
+    }
+    if(activationDecision.kind === ATLAS_ACTIVATION_KINDS.EXISTING_VERIFIED_SCALE_PROFILE&&(
+       !(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
        mode!=="builder"||!tenThousandBoundedConsent)){
       setFailure(mode==="runtime"?"SCALE_P4B1_RUNTIME_BLOCKED":
         "SCALE_P4B1_BOUNDED_REVIEW_REQUIRED");
@@ -4694,7 +5635,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         setFailure(`Compilation blocked: ${diagnostics.map((d) => d.code).join(", ")}`);
         return;
       }
-      if(large){
+      if(activationDecision.kind === ATLAS_ACTIVATION_KINDS.EXISTING_VERIFIED_SCALE_PROFILE){
         // Complete compiled Builder source is retained unchanged. ONLY a
         // separately approved 100-original-row bounded source view enters ELK.
         const nodeOrder=preview.source.resources.map(r=>r.id);
@@ -4710,13 +5651,84 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         });
         return;
       }
-      const layout = await autoLayoutBuilder(next, new ElkLayoutBackend());
+      if (activationDecision.kind === ATLAS_ACTIVATION_KINDS.BOUNDED_ATLAS) {
+        // G4.1 proves the generic validated XLSX -> canonical -> Atlas -> bounded Canvas
+        // path.  Full Builder auto-layout is intentionally not run here;
+        // Atlas requests ELK only for the active page after activation.
+        await verifyNetworkTopologyOriginalForActivation(original, preview, isCurrent);
+        await verifyReimportApproval();
+        if (!isCurrent()) throw new Error("IC020_P1_STALE");
+        setDiagnostics(preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })));
+        onActivate(next, false);
+        return;
+      }
+      if (activationDecision.kind !== ATLAS_ACTIVATION_KINDS.NORMAL) {
+        throw new Error("NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED");
+      }
+      recordNetworkImportGlobalLayoutInvocation(activationDecision.kind);
+      const sourceTopologySignature = (source) => JSON.stringify({
+        resources: source.resources.map((resource) => ({
+          id: resource.id,
+          interfaces: resource.interfaces,
+        })),
+        connections: source.connections,
+      });
+      if (sourceTopologySignature(next.source) !== sourceTopologySignature(preview.source)) {
+        throw new Error("NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED");
+      }
+      setLayoutBusy(true);
+      // Test/evidence hook only: retain the last bounded Worker metrics after
+      // the import dialog closes so compiled Chromium can report the actual
+      // ELK phase without guessing from wall-clock activation time.
+      globalThis.__yadilabNetworkImportLayoutMetrics = null;
+      const layoutContext = {
+        requestId: `normal-import-${activationEpoch}-${preview.sourceSha256}`,
+        sourceSha: preview.sourceSha256,
+        sourceRevision: next.sourceRevision,
+        projectGeneration,
+        builderIdentity: `${workspaceIdentity.sourceRevision ?? "runtime"}:${workspaceIdentity.source?.scenarioId ?? workspaceIdentity.scenario?.scenarioId ?? "unknown"}:${projectGeneration}`,
+        compileIdentity: `${next.compile.model.sourceHash ?? preview.sourceSha256}:${next.sourceRevision}`,
+      };
+      // ELK geometry is an intermediate representation for NORMAL. Defer
+      // only its sibling-whitespace warning; the compacted projection below
+      // is still required to pass the complete final-view validator before
+      // this workspace can replace the active Builder.
+      const layout = await autoLayoutBuilder(next, layoutBackendRef.current, layoutContext, {
+        deferIntermediateWhitespace: true,
+        deferIntermediateEdgeOverlap: true,
+      });
+      setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+      globalThis.__yadilabNetworkImportLayoutMetrics = layoutBackendRef.current?.lastMetrics ?? null;
+      if (!isCurrent()) {
+        setFailure("NETWORK_IMPORT_LAYOUT_STALE");
+        return;
+      }
       if (!layout.ok) {
         setDiagnostics(layout.diagnostics);
-        setFailure("Layout failed; the active workspace was not replaced.");
+        const codes = layout.diagnostics.map((diagnostic) => diagnostic.code).filter(Boolean);
+        setFailure(`Layout failed (${codes.join(", ") || "UNKNOWN"}); the active workspace was not replaced.`);
         return;
       }
       next = layout.workspace;
+      if (sourceTopologySignature(next.source) !== sourceTopologySignature(preview.source)) {
+        setDiagnostics([{ code: "NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED", severity: "error", message: "The layout result changed canonical resource IDs, interfaces or explicit connections; activation was blocked." }]);
+        setFailure("Layout result changed canonical topology; the active workspace was not replaced.");
+        return;
+      }
+      const finalCanvas = buildBuilderViewModel(next).canvas;
+      const finalProjection = finalCanvas ? compactNormalTopologyProjection(finalCanvas) : null;
+      const finalErrors = finalProjection?.diagnostics.filter((diagnostic) => diagnostic.severity === "error") ?? [
+        { code: "TOPOLOGY_FINAL_VIEW_MISSING", severity: "error", message: "NORMAL layout did not produce a final Canvas projection." },
+      ];
+      if (!finalProjection || finalErrors.length) {
+        setDiagnostics([
+          ...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })),
+          ...layout.diagnostics,
+          ...finalErrors,
+        ]);
+        setFailure(`Final NORMAL validation failed (${finalErrors.map((diagnostic) => diagnostic.code).join(", ")}); the active workspace was not replaced.`);
+        return;
+      }
       setDiagnostics([...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })), ...layout.diagnostics]);
       if (mode === "runtime") {
         const runtime = previewRuntime(next);
@@ -4742,12 +5754,16 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         onActivate(next, false);
       }
     } catch (error) {
+      if (requestId.current !== activationEpoch) return;
+      setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+      globalThis.__yadilabNetworkImportLayoutMetrics = layoutBackendRef.current?.lastMetrics ?? null;
       setFailure(error instanceof Error ? error.message : String(error));
       setDiagnostics([{ code: "NETWORK_IMPORT_ACTIVATION_BLOCKED", severity: "error", message: error instanceof Error ? error.message : String(error) }]);
-    } finally { setBusy(false); }
+    } finally { setLayoutBusy(false); if (requestId.current === activationEpoch) setBusy(false); }
   };
+  const activationDecision = activationDecisionFor(preview);
   return e("div", { className: "network-import-overlay", "data-network-import-overlay": "true" },
-    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "aria-label": "Import Network from Excel / CSV" },
+    e("section", { id: "network-topology-import-panel", ref: panelRef, tabIndex: -1, role: "dialog", "aria-modal": "true", className: "network-import-panel", "data-network-import-panel": "ready", "data-network-import-decision": preview?.source ? activationDecision.kind : "NONE", "data-network-import-layout-worker-outcome": layoutMetrics?.outcome ?? "IDLE", "data-network-import-layout-worker-request": layoutMetrics?.requestId ?? "", "data-network-import-layout-worker-elapsed-ms": layoutMetrics?.elapsedMs ?? "", "data-network-import-layout-worker-graph-bytes": layoutMetrics?.graphBytes ?? "", "data-network-import-layout-worker-serialization-ms": layoutMetrics?.graphSerializationMs ?? "", "data-network-import-layout-worker-start-ms": layoutMetrics?.workerStartMs ?? "", "data-network-import-layout-worker-roundtrip-ms": layoutMetrics?.workerRoundTripMs ?? "", "data-network-import-layout-worker-validation-ms": layoutMetrics?.backendValidationMs ?? "", "aria-label": "Import Network from Excel / CSV" },
     e("div", { className: "network-import-heading" },
       e("div", null, e("h2", null, "Import Network from Excel / CSV"), e("p", null, "Offline import: select → review → validate → re-check original SHA-256 → open Runtime probes or Builder. Existing workspace remains unchanged until you confirm.")),
       e("button", { type: "button", onClick: close, disabled: busy, "aria-label": "Close network import" }, "Close")),
@@ -4830,6 +5846,17 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("input", { id: "legacy-workbook-consent", type: "checkbox", checked: legacyWorkbookConsent, disabled: busy, "aria-describedby": "legacy-workbook-consent-help", "data-legacy-workbook-consent": "true", onChange: event => setLegacyWorkbookConsent(event.currentTarget.checked) }),
           e("span", null, "I have reviewed the six SRC sheets and the supplementary documentation; activate only the canonical source model.")),
       ) : null,
+      preview?.source && activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ? e("section", { className: "network-import-consent", "data-network-import-layout-blocked": "true", role: "alert" },
+        e("strong", null, "Import blocked before global layout"),
+        e("p", { "data-network-import-layout-diagnostic": "NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED" }, "Diagnostic: NETWORK_IMPORT_LAYOUT_CAPACITY_BLOCKED"),
+        e("p", null, `This validated source exceeds a verified activation capacity (${activationDecision.resourceCount} resources, ${activationDecision.connectionCount} explicit links; ${activationDecision.reason}). The canonical source was not truncated or changed, and global ELK layout was not run.`),
+      ) : null,
+      boundedAtlasEligibility(preview).eligible ? e("section", { className: "network-import-consent", "data-atlas-bounded-profile": "REVIEW_REQUIRED", "data-atlas-g4-profile": "REVIEW_REQUIRED" },
+        e("p", null, `Validated XLSX exceeds the normal ${NORMAL_TOPOLOGY_RESOURCE_BUDGET}-resource graph budget (${preview.source.resources.length} resources, ${preview.source.connections.length} explicit links). Builder activation keeps the canonical source intact and defers ELK/React Flow to bounded Atlas pages; no physical-network claim is made.`),
+        e("label", { className: "network-import-consent-label" },
+          e("input", { type: "checkbox", checked: boundedAtlasConsent, disabled: busy, "data-atlas-bounded-consent": "true", "data-atlas-g4-consent": "true", onChange: event => setBoundedAtlasConsent(event.currentTarget.checked) }),
+          e("span", null, "I reviewed this source and approve bounded Atlas Builder activation.")),
+      ) : null,
       largeNetworkPreview(preview)&&!tenThousandXlsxProfile(preview)&&!tenThousandOdsProfile(preview)?e("section",{className:"network-import-consent", "data-scale-p4b1-profile":
         tenThousandCsvProfile(preview)?"REVIEW_REQUIRED":"UNSUPPORTED_LARGE_SOURCE"},
         e("p",null,"Large source: full-graph ELK/ReactFlow and Runtime are blocked. Only an explicit original 10,000/10,000 CSV bounded Builder profile can be activated."),
@@ -4858,13 +5885,16 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
           e("span",null,"I explicitly approve importing this genuine ODS source into editable Builder with only bounded source-row graph pages."))
       ):null,
       e("div", { className: "network-import-actions" },
-        e("button", { type: "button", disabled: !preview.ok || busy || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
-        e("button", { type: "button", disabled: !preview.ok || busy ||
+        layoutBusy ? e("button", { type: "button", className: "danger-button", "data-network-import-layout-cancel": "true", onClick: () => cancelLayout("LAYOUT_ABORTED") }, "Cancel layout") : null,
+        e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED || largeNetworkPreview(preview) || preview.workbookProfile === "legacy-src-22" || (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-runtime": "true", onClick: () => activate("runtime") }, busy ? "Validating…" : "Open modeled Runtime + Probes"),
+        e("button", { type: "button", disabled: !preview.ok || busy || activationDecision.kind === ATLAS_ACTIVATION_KINDS.BLOCKED ||
+          (boundedAtlasEligibility(preview).eligible && !boundedAtlasConsent) ||
           (largeNetworkPreview(preview)&&(!(tenThousandCsvProfile(preview)||tenThousandXlsxProfile(preview)||tenThousandOdsProfile(preview))||
             !tenThousandBoundedConsent))||
           (preview.workbookProfile === "legacy-src-22" && !legacyWorkbookConsent)||
           (isCoreReimport(preview) && (!reimportReview || !reimportApproved)), "data-network-import-activate": "true", onClick: () => activate("builder") }, busy ? "Validating…" : "Create topology in Builder (edit only)")),
       e("p", { className: "helper-note", "data-import-probe-boundary": "true" }, "Modeled probes use declared Windows/Linux source hosts and existing Engine evidence. A topology inventory alone cannot prove connectivity, routing, DNS or open ports: UNKNOWN is expected when required facts are absent. No real traffic is sent."),
+      layoutBusy ? e("p", { role: "status", "data-network-import-layout-status": "RUNNING" }, "Bounded ELK layout is running in a dedicated Worker. The active Builder remains unchanged until complete validation succeeds.") : null,
       ),
     ) : null,
     ),
@@ -4881,7 +5911,7 @@ function formatNetworkImportDiagnostic(d) {
     (location ? " (" + location + ")" : "") + " – " + d.message;
 }
 
-function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
+function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructuredXml, onInspectGraphml, onInspectNmap, onInspectNmapReplay, onInspectNessus, onInspectNessusReplay, onInspectDrawio, onReviewDrawioBuilder, onInspectDrawioReplay, onInspectAnsible, onInspectAnsibleYamlReplay, onInspectAnsibleIni, onInspectAnsibleIniReplay, onInspectDocx, onReviewOfficeBuilder, onReviewOfficeAtlas, onReviewScaledOfficeBuilder, onReviewScaledOfficeThousandBuilder, onReviewScaledOfficeFiveThousandBuilder, onReviewScaledOfficeTenThousandPreflight, onReviewScaledOfficeTenThousandBuilder, onInspectDocxReplay, onInspectOdt, onInspectOdtReplay, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }) {
   const fileAction = (label, accept, onChange, dataAttribute) => e("label",
     { className: "workspace-menu-action file-button" }, label,
     e("input", { type: "file", accept,
@@ -4893,6 +5923,7 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         finally { event.currentTarget.value = ""; }
       },
       hidden: true, ...(dataAttribute ? { "data-menu-action": dataAttribute } : {}) }));
+  const advancedFileAction = (label, accept, onChange, dataAttribute = null) => fileAction(label, accept, onChange, dataAttribute);
   const networkPickerRef = useRef(null);
   // Opening the native picker happens synchronously within the user's click,
   // not from an effect: browsers reject deferred file dialogs.
@@ -4906,16 +5937,94 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
     if (file) onImportNetworkFile(file);
   };
   const selectedGuidedLab = builtinGuidedLabs.find((lab) => lab.id === guidedLabId);
+  const [advancedQuery, setAdvancedQuery] = useState("");
+  const actionButton = (label, onClick, extra = {}) => e("button", { type: "button", onClick, ...extra, disabled: busy || extra.disabled }, label);
+  const category = (key, title, description, items) => {
+    const query = advancedQuery.trim().toLocaleLowerCase();
+    const visible = items.filter((item) => !query || `${item.label} ${item.searchTerms ?? ""}`.toLocaleLowerCase().includes(query));
+    if (!visible.length) return null;
+    return e("section", { key, className: "advanced-tools-category", "aria-label": title },
+      e("div", { className: "advanced-tools-category-heading" }, e("strong", null, title), e("small", null, description)),
+      e("div", { className: "advanced-tools-actions" }, ...visible.map((item) => item.node)),
+    );
+  };
+  const standardExportItems = workspace.mode === "builder"
+    ? [
+      { label: "Exportera källfil", searchTerms: "source json", node: actionButton("Exportera källfil", exportSource, { "data-export-action": "source" }) },
+      { label: "Exportera elevpaket", searchTerms: "student package", node: actionButton("Exportera elevpaket", () => exportPackage("student"), { disabled: workspace.compile?.status !== "valid", "data-export-action": "student" }) },
+      { label: "Exportera författarpaket", searchTerms: "author package", node: actionButton("Exportera författarpaket", () => exportPackage("author"), { disabled: workspace.compile?.status !== "valid", "data-export-action": "author" }) },
+    ]
+    : [
+      { label: "Exportera framsteg", searchTerms: "progress", node: actionButton("Exportera framsteg", exportProgress, { "data-export-action": "progress" }) },
+      { label: "Exportera sessionsbackup", searchTerms: "session troubleshooting backup", node: actionButton("Exportera sessionsbackup", exportTroubleshootingSession, { "data-export-action": "session" }) },
+      { label: "Läs in framsteg", searchTerms: "load progress", node: advancedFileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress") },
+      { label: "Importera sessionsbackup", searchTerms: "load session", node: advancedFileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") },
+    ];
+  const scenarioItems = [
+    { label: "Starta enterprise-labb", searchTerms: "enterprise scenario", node: actionButton("Starta enterprise-labb", () => openEnterpriseScenario(true), { disabled: !enterpriseScenarioId }) },
+    { label: "Starta verifierad leveransdemo", searchTerms: "verified delivery", node: actionButton("Starta verifierad leveransdemo", () => openVerifiedDeliveryScenario(true), { disabled: !verifiedDeliveryScenarioId }) },
+    { label: "Starta guidad labb", searchTerms: "guided lab troubleshooting", node: actionButton("Starta guidad labb", () => openGuidedLab(true), { disabled: !guidedLabId, "data-guided-lab-start": "advanced" }) },
+    { label: "Öppna scenario-JSON", searchTerms: "open json scenario", node: advancedFileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json") },
+    { label: "Öppna paketerad labb", searchTerms: "open package lab", node: advancedFileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab") },
+  ];
+  const builderItems = [
+    { label: "Öppna enterprise i byggläget", searchTerms: "enterprise builder", node: actionButton("Öppna enterprise i byggläget", () => openEnterpriseScenario(false), { disabled: !enterpriseScenarioId }) },
+    { label: "Öppna verifierad demo i byggläget", searchTerms: "verified builder", node: actionButton("Öppna verifierad demo i byggläget", () => openVerifiedDeliveryScenario(false), { disabled: !verifiedDeliveryScenarioId }) },
+    { label: "Öppna labb i byggläget", searchTerms: "guided builder", node: actionButton("Öppna labb i byggläget", () => openGuidedLab(false), { disabled: !guidedLabId }) },
+    { label: "Kompilera + layout", searchTerms: "compile layout builder", node: actionButton(busy ? "Kompilerar…" : "Kompilera + layout", compileAndLayout) },
+  ];
+  const runItems = [
+    { label: "Förhandsvisa körläge", searchTerms: "runtime preview", node: actionButton("Förhandsvisa körläge", preview, { disabled: workspace.compile?.status !== "valid" }) },
+    { label: "Tillbaka till byggläget", searchTerms: "builder", node: actionButton("Tillbaka till byggläget", backToBuilder) },
+    { label: "Autospara nu", searchTerms: "autosave runtime", node: actionButton("Autospara nu", autosaveProgress, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Återställ autosparning", searchTerms: "restore autosave runtime", node: actionButton("Återställ autosparning", restoreAutosave, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Rensa autosparning", searchTerms: "clear autosave runtime", node: actionButton("Rensa autosparning", clearAutosave, { disabled: workspace.mode !== "runtime" }) },
+    { label: "Open modeled Runtime + Probes", searchTerms: "modeled probes runtime", node: actionButton("Open modeled Runtime + Probes", () => {
+      const panel = document.querySelector('[data-active-probe-engine="wave2"]');
+      if (!panel) return;
+      panel.open = true;
+      panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, { disabled: workspace.mode !== "runtime", "data-open-active-probes": "true" }) },
+  ];
+  const inspectionItems = [
+    { label: "Inspect structured documents", searchTerms: "xml ansible read only", node: actionButton("Inspect structured documents (XML + static Ansible, read-only)", onInspectStructuredXml, { "data-ic010-p2-open": "true" }) },
+    { label: "Import Network from Excel / CSV", searchTerms: "import network xlsx ods csv tsv", node: actionButton("Import Network from Excel / CSV", openNetworkPicker, { "data-import-network-action": "true" }) },
+    { label: "Inspect GraphML", searchTerms: "graphml preview", node: actionButton("Inspect GraphML (read-only preview)", onInspectGraphml, { "data-inspect-graphml": "PREVIEW_ONLY" }) },
+    { label: "Inspect Nmap XML", searchTerms: "nmap observations replay", node: actionButton("Inspect Nmap XML (observations only)", onInspectNmap, { "data-inspect-nmap": "EVIDENCE_ONLY" }) },
+    { label: "Replay saved Nmap XML", searchTerms: "nmap replay saved", node: actionButton("Inspect saved Nmap XML references (read-only replay)", onInspectNmapReplay, { "data-inspect-nmap-replay": "EVIDENCE_OBSERVED" }) },
+    { label: "Inspect Nessus", searchTerms: "nessus severity replay", node: actionButton("Inspect Nessus .nessus (severity summary only)", onInspectNessus, { "data-inspect-nessus": "EVIDENCE_ONLY" }) },
+    { label: "Replay saved Nessus", searchTerms: "nessus replay saved", node: actionButton("Inspect saved Nessus references (read-only replay)", onInspectNessusReplay, { "data-inspect-nessus-replay": "EVIDENCE_OBSERVED" }) },
+    { label: "Inspect draw.io", searchTerms: "drawio structure preview", node: actionButton("Inspect draw.io .drawio (uncompressed structure)", onInspectDrawio, { "data-inspect-drawio": "PREVIEW_ONLY" }) },
+    { label: "Review diagrams.net", searchTerms: "drawio builder review", node: actionButton("Review diagrams.net (.drawio) into Builder", onReviewDrawioBuilder, { "data-review-drawio-builder": "REVIEW_REQUIRED" }) },
+    { label: "Replay saved draw.io", searchTerms: "drawio replay", node: actionButton("Inspect saved draw.io references (read-only replay)", onInspectDrawioReplay, { "data-inspect-drawio-replay": "TOPOLOGY_DECLARED" }) },
+    { label: "Inspect Ansible YAML", searchTerms: "ansible yaml inventory", node: actionButton("Inspect Ansible YAML (read-only inventory)", onInspectAnsible, { "data-inspect-ansible": "CONFIG_DOCUMENTED" }) },
+    { label: "Replay saved Ansible YAML", searchTerms: "ansible yaml replay", node: actionButton("Inspect saved Ansible YAML references (read-only replay)", onInspectAnsibleYamlReplay, { "data-inspect-ansible-yaml-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect Ansible INI", searchTerms: "ansible ini inventory", node: actionButton("Inspect Ansible INI (read-only inventory)", onInspectAnsibleIni, { "data-inspect-ansible-ini": "CONFIG_DOCUMENTED" }) },
+    { label: "Replay saved Ansible INI", searchTerms: "ansible ini replay", node: actionButton("Inspect saved Ansible INI references (read-only replay)", onInspectAnsibleIniReplay, { "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect Word DOCX", searchTerms: "docx structure office", node: actionButton("Inspect Word DOCX (structure only)", onInspectDocx, { "data-inspect-docx": "CONFIG_DOCUMENTED" }) },
+    { label: "Review DOCX / ODT", searchTerms: "office builder review", node: actionButton("Review DOCX / ODT nodes into Builder", onReviewOfficeBuilder, { "data-review-office-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review DOCX / ODT into Atlas", searchTerms: "office atlas g5.1 canonical", node: actionButton("Review DOCX / ODT into canonical Builder and Atlas", onReviewOfficeAtlas, { "data-review-office-g5-1": "REVIEW_REQUIRED" }) },
+    { label: "Inspect saved DOCX", searchTerms: "docx replay", node: actionButton("Inspect saved DOCX references (read-only)", onInspectDocxReplay, { "data-inspect-docx-replay": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect OpenDocument ODT", searchTerms: "odt structure office", node: actionButton("Inspect OpenDocument ODT (structure only)", onInspectOdt, { "data-inspect-odt": "CONFIG_DOCUMENTED" }) },
+    { label: "Inspect saved ODT", searchTerms: "odt replay", node: actionButton("Inspect saved ODT references (read-only)", onInspectOdtReplay, { "data-inspect-odt-replay": "CONFIG_DOCUMENTED" }) },
+  ];
+  const officeReviewItems = [
+    { label: "Review 100 DOCX / ODT source nodes", searchTerms: "office scale 100", node: actionButton("Review 100 DOCX / ODT source-declared network nodes into Builder", onReviewScaledOfficeBuilder, { "data-review-scaled-office-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 1,000 original DOCX / ODT devices", searchTerms: "office scale 1000", node: actionButton("Review 1,000 original DOCX / ODT network devices into focused Builder", onReviewScaledOfficeThousandBuilder, { "data-review-scaled-office-thousand-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 5,000 original DOCX / ODT devices", searchTerms: "office scale 5000", node: actionButton("Review 5,000 original DOCX / ODT devices and 5,000 port-linked source rows into bounded Builder", onReviewScaledOfficeFiveThousandBuilder, { "data-review-scaled-office-five-thousand-builder": "REVIEW_REQUIRED" }) },
+    { label: "Review 10,000 original DOCX / ODT preflight", searchTerms: "office scale 10000 preflight", node: actionButton("Review 10,000 original DOCX / ODT source devices + 10,000 original Links (source-only; no Builder activation)", onReviewScaledOfficeTenThousandPreflight, { "data-review-scaled-office-ten-thousand-preflight": "REVIEW_REQUIRED" }) },
+    { label: "Load 10,000 original DOCX / ODT Builder", searchTerms: "office scale 10000 builder", node: actionButton("Review and explicitly load 10,000 original DOCX / ODT devices + port-linked original Links into bounded editable Builder", onReviewScaledOfficeTenThousandBuilder, { "data-review-scaled-office-ten-thousand-builder": "REVIEW_REQUIRED" }) },
+  ];
   return e("section", { className: "main-actions", "aria-label": "Main actions" },
     e("div", { className: "main-actions-heading" },
-      e("div", null, e("strong", null, "MAIN ACTIONS"), e("span", null, "Common workspace actions are grouped; current lab context stays visible.")),
+      e("div", null, e("strong", null, "WORKSPACE TOOLBAR"), e("span", null, "Topology first · import, export and advanced tools remain available without pushing the canvas.")),
       e("div", { className: "main-actions-context" },
         e("label", { className: "context-select" }, "Enterprise-labb", e("select", { value: enterpriseScenarioId, onChange: (event) => setEnterpriseScenarioId(event.target.value), "data-enterprise-scenario-selector": "true" }, ...enterpriseOfficeScenarios.map((scenario) => e("option", { key: scenario.scenarioId, value: scenario.scenarioId }, scenario.metadata.title)))),
         e("label", { className: "context-select" }, "Verifierad leverans", e("select", { value: verifiedDeliveryScenarioId, onChange: (event) => setVerifiedDeliveryScenarioId(event.target.value), "data-verified-delivery-scenario-selector": "true" }, ...verifiedDeliveryScenarios.map((scenario) => e("option", { key: scenario.scenarioId, value: scenario.scenarioId }, scenario.metadata.title)))),
         e("label", { className: "context-select" }, "Guidad labb", e("select", { value: guidedLabId, onChange: (event) => setGuidedLabId(event.target.value), disabled: !builtinGuidedLabs.length, "data-guided-lab-catalog": "wave1" }, ...builtinGuidedLabs.map((lab) => e("option", { key: lab.id, value: lab.id }, `${lab.sequence}. ${lab.title} · ${lab.focus}`)))),
       ),
     ),
-    e("div", { className: "main-actions-guided-start", "data-guided-lab-entrypoint": "direct" },
+    e("div", { className: "main-actions-guided-start compact", "data-guided-lab-entrypoint": "direct" },
       e("button", {
         type: "button",
         className: "guided-lab-primary-button",
@@ -4923,70 +6032,33 @@ function MainActions({ onImportNetwork, onImportNetworkFile, onInspectStructured
         onClick: () => openGuidedLab(true),
         disabled: busy || !guidedLabId,
       }, busy ? "Startar valt labb…" : selectedGuidedLab ? `Starta valt labb · ${selectedGuidedLab.sequence}. ${selectedGuidedLab.title}` : "Starta valt labb"),
-      e("span", null, "Välj labb ovan och börja felsöka direkt; menyvägen finns kvar för övriga scenarieåtgärder."),
+      e("span", { title: selectedGuidedLab?.title ?? "Välj ett labb ovan" }, selectedGuidedLab ? `${selectedGuidedLab.sequence}. ${selectedGuidedLab.title} · ${selectedGuidedLab.focus}` : "Välj labb ovan"),
     ),
-    e("div", { className: "main-actions-primary-import", "data-network-import-entrypoint": "always-visible" },
-      e("button", { type: "button", className: "network-import-primary-button", "data-network-import-primary": "true", onClick: openNetworkPicker, disabled: busy, "aria-controls": "network-topology-import-panel" }, "Import JSON / Excel / CSV → Network Topology"),
+    e("div", { className: "main-actions-toolbar", "data-primary-toolbar": "true" },
+      e("button", { type: "button", className: "toolbar-primary-button toolbar-import", "data-network-import-primary": "true", onClick: openNetworkPicker, disabled: busy, "aria-controls": "network-topology-import-panel", title: "Importera JSON, Excel, ODS, CSV eller TSV" }, "Importera"),
       e("input", { type: "file", ref: networkPickerRef, accept: ".json,.xlsx,.ods,.csv,.tsv", onChange: acceptNetworkFile, style: { display: "none" }, tabIndex: -1, "aria-label": "Select network inventory document", "data-network-import-quick-file": "true" }),
-      e("span", null, "Select .json / .xlsx / .ods / .csv / .tsv directly. A review dialog opens before topology replacement."),
-    ),
-    workspace.mode === "runtime" ? e("button", { type: "button", "data-open-active-probes": "true", className: "network-import-runtime-button", onClick: () => {
-      const panel = document.querySelector('[data-active-probe-engine="wave2"]');
-      if (!panel) return;
-      panel.open = true;
-      panel.scrollIntoView({ block: "center", behavior: "smooth" });
-    } }, "Open Modeled Probes") : null,
-    e("div", { className: "main-actions-menus" },
-      e(WorkspaceMenu, { label: "Lab & Scenario" },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(true), disabled: busy || !enterpriseScenarioId }, busy ? "Startar enterprise-labb…" : "Starta enterprise-labb"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(true), disabled: busy || !verifiedDeliveryScenarioId }, busy ? "Startar verifierad demo…" : "Starta verifierad leveransdemo"),
-        e("button", { type: "button", onClick: () => openGuidedLab(true), disabled: busy || !guidedLabId }, busy ? "Startar labb…" : "Starta guidad labb"),
-        fileAction("Öppna scenario-JSON", ".json,application/json", (event) => openSource(event.target.files?.[0]), "open-scenario-json"),
-        fileAction("Öppna paketerad labb", `${branding.scenarioExtension},application/zip`, (event) => openPackage(event.target.files?.[0]), "open-packaged-lab"),
+      e(WorkspaceMenu, { label: e(React.Fragment, null, "Exportera", e("span", { className: "toolbar-caret", "aria-hidden": "true" }, "▾")), className: "workspace-menu-export", panelClassName: "export-menu-panel" },
+        e("div", { className: "menu-heading" }, e("strong", null, workspace.mode === "builder" ? "Builder-export" : "Runtime-export"), e("small", null, "Direkt åtkomst · ingen lång inspektionslista")),
+        ...standardExportItems.map((item) => React.cloneElement(item.node, { key: `export-${item.label}` })),
       ),
-      e(WorkspaceMenu, { label: "Builder" },
-        e("button", { type: "button", onClick: () => openEnterpriseScenario(false), disabled: busy || !enterpriseScenarioId }, "Öppna enterprise i byggläget"),
-        e("button", { type: "button", onClick: () => openVerifiedDeliveryScenario(false), disabled: busy || !verifiedDeliveryScenarioId }, "Öppna verifierad demo i byggläget"),
-        e("button", { type: "button", onClick: () => openGuidedLab(false), disabled: busy || !guidedLabId }, "Öppna labb i byggläget"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: compileAndLayout, disabled: busy }, busy ? "Kompilerar…" : "Kompilera + layout") : null,
-      ),
-      e(WorkspaceMenu, { label: "Run & Preview" },
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: preview, disabled: workspace.compile.status !== "valid" }, "Förhandsvisa körläge") : e("button", { type: "button", onClick: backToBuilder }, "Tillbaka till byggläget"),
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: autosaveProgress, disabled: !workspace }, "Autospara nu") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: restoreAutosave, disabled: !workspace }, "Återställ autosparning") : null,
-        workspace.mode === "runtime" ? e("button", { type: "button", onClick: clearAutosave, disabled: !workspace }, "Rensa autosparning") : null,
-      ),
-      e(WorkspaceMenu, { label: "Import / Export" },
-        e("button", { type: "button", "data-ic010-p2-open": "true", onClick: onInspectStructuredXml }, "Inspect structured documents (XML + static Ansible, read-only)"),
-        e("button", { type: "button", "data-import-network-action": "true", onClick: openNetworkPicker }, "Import Network from Excel / CSV"),
-        e("button", { type: "button", "data-inspect-graphml": "PREVIEW_ONLY", onClick: onInspectGraphml }, "Inspect GraphML (read-only preview)"),
-        e("button", { type: "button", "data-inspect-nmap": "EVIDENCE_ONLY", onClick: onInspectNmap }, "Inspect Nmap XML (observations only)"),
-        e("button", { type: "button", "data-inspect-nmap-replay": "EVIDENCE_OBSERVED", onClick: onInspectNmapReplay }, "Inspect saved Nmap XML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-nessus": "EVIDENCE_ONLY", onClick: onInspectNessus }, "Inspect Nessus .nessus (severity summary only)"),
-        e("button", { type: "button", "data-inspect-nessus-replay": "EVIDENCE_OBSERVED", onClick: onInspectNessusReplay }, "Inspect saved Nessus references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-drawio": "PREVIEW_ONLY", onClick: onInspectDrawio }, "Inspect draw.io .drawio (uncompressed structure)"),
-        e("button", { type: "button", "data-review-drawio-builder": "REVIEW_REQUIRED", onClick: onReviewDrawioBuilder }, "Review diagrams.net (.drawio) into Builder"),
-        e("button", { type: "button", "data-inspect-drawio-replay": "TOPOLOGY_DECLARED", onClick: onInspectDrawioReplay }, "Inspect saved draw.io references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible": "CONFIG_DOCUMENTED", onClick: onInspectAnsible }, "Inspect Ansible YAML (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-yaml-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleYamlReplay }, "Inspect saved Ansible YAML references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-ansible-ini": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIni }, "Inspect Ansible INI (read-only inventory)"),
-        e("button", { type: "button", "data-inspect-ansible-ini-replay": "CONFIG_DOCUMENTED", onClick: onInspectAnsibleIniReplay }, "Inspect saved Ansible INI references (read-only replay)"),
-        e("button", { type: "button", "data-inspect-docx": "CONFIG_DOCUMENTED", onClick: onInspectDocx }, "Inspect Word DOCX (structure only)"),
-        e("button", { type: "button", "data-review-office-builder": "REVIEW_REQUIRED", onClick: onReviewOfficeBuilder }, "Review DOCX / ODT nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeBuilder }, "Review 100 DOCX / ODT source-declared network nodes into Builder"),
-        e("button", { type: "button", "data-review-scaled-office-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeThousandBuilder }, "Review 1,000 original DOCX / ODT network devices into focused Builder"),
-        e("button", { type: "button", "data-review-scaled-office-five-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeFiveThousandBuilder }, "Review 5,000 original DOCX / ODT devices and 5,000 port-linked source rows into bounded Builder"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-preflight": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandPreflight }, "Review 10,000 original DOCX / ODT source devices + 10,000 original Links (source-only; no Builder activation)"),
-        e("button", { type: "button", "data-review-scaled-office-ten-thousand-builder": "REVIEW_REQUIRED", onClick: onReviewScaledOfficeTenThousandBuilder }, "Review and explicitly load 10,000 original DOCX / ODT devices + port-linked original Links into bounded editable Builder"),
-        e("button", { type: "button", "data-inspect-docx-replay": "CONFIG_DOCUMENTED", onClick: onInspectDocxReplay }, "Inspect saved DOCX references (read-only)"),
-        e("button", { type: "button", "data-inspect-odt": "CONFIG_DOCUMENTED", onClick: onInspectOdt }, "Inspect OpenDocument ODT (structure only)"),
-        e("button", { type: "button", "data-inspect-odt-replay": "CONFIG_DOCUMENTED", onClick: onInspectOdtReplay }, "Inspect saved ODT references (read-only)"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: exportSource }, "Exportera källfil") : e("button", { type: "button", onClick: exportProgress }, "Exportera framsteg"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("student"), disabled: workspace.compile.status !== "valid" }, "Exportera elevpaket") : fileAction("Läs in framsteg", `${branding.progressExtension},application/json`, (event) => loadProgress(event.target.files?.[0]), "load-progress"),
-        workspace.mode === "builder" ? e("button", { type: "button", onClick: () => exportPackage("author"), disabled: workspace.compile.status !== "valid" }, "Exportera författarpaket") : e("button", { type: "button", onClick: exportTroubleshootingSession }, "Exportera sessionsbackup"),
-        workspace.mode === "runtime" ? fileAction("Importera sessionsbackup", `${branding.sessionExtension},application/json`, (event) => loadTroubleshootingSession(event.target.files?.[0]), "load-session") : null,
+      e(WorkspaceMenu, { label: "Avancerade verktyg", className: "workspace-menu-advanced", panelClassName: "advanced-tools-panel" },
+        e("div", { className: "advanced-tools-heading" },
+          e("div", null, e("strong", null, "Avancerade verktyg"), e("small", null, "Inspektion, replay, Office-review och övriga arbetsflöden hålls separerade från canvasen.")),
+          e("label", null, e("span", { className: "sr-only" }, "Sök avancerade verktyg"), e("input", { type: "search", value: advancedQuery, onChange: (event) => setAdvancedQuery(event.target.value), placeholder: "Sök verktyg…", "aria-label": "Sök avancerade verktyg", "data-advanced-tools-search": "true" })),
+        ),
+        // The legacy source contract still names this path "Lab & Scenario";
+        // the visible category avoids colliding with its compatibility menu.
+        category("scenario", "Scenario & labb", "Ladda, starta eller kompilera en källa.", scenarioItems),
+        category("builder", "Builder-läge", "Enterprise, labb och canonical layout.", builderItems),
+        category("runtime", "Run & Preview", "Runtime, autosparning och modellerade probes.", runItems),
+        category("inspection", "Inspektion & replay", "Read-only dokument, observationer och sparade referenser.", inspectionItems),
+        category("office-review", "Office-review", "Separata, uttryckliga DOCX/ODT-granskningar med provenance.", officeReviewItems),
+        category("exports", "Exportgenvägar", "Samma validerade exportcallbacks är även åtkomliga här.", standardExportItems),
       ),
     ),
+    // PROJECT-093 removes the former zero-opacity compatibility rail. All
+    // callbacks and selectors are now owned by the visible Import, Export and
+    // Avancerade verktyg controls above.
   );
 }
 
@@ -5117,6 +6189,79 @@ function NetworkIntentPanel({ workspace, setDiagnostics, onOpenEngineRun }) {
   );
 }
 
+const ATLAS_G5_1_DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+function atlasG51SourceWithoutProvenance(source) {
+  const { officeReviewProvenance: _provenance, ...without } = source;
+  return without;
+}
+function atlasG51DocxLocator(locator, sourceSha256) {
+  if (!locator || locator.kind !== "docx-table-cell" || locator.part !== "word/document.xml" || locator.sourceSha256 !== sourceSha256)
+    throw Object.assign(new Error("ATLAS_G5_1_PROVENANCE_BLOCKED"), { code: "ATLAS_G5_1_PROVENANCE_BLOCKED" });
+  return { kind: "docx-table-cell", sourceSha256, part: "word/document.xml", tableOrdinal: locator.tableOrdinal, rowOrdinal: locator.rowOrdinal, cellOrdinal: locator.cellOrdinal };
+}
+async function verifyAtlasG51Candidate(file, expected, decision, isCurrent) {
+  try {
+    return await verifyOfficeCandidateFile(file, expected, decision, isCurrent);
+  } catch (cause) {
+    const code = cause?.code;
+    const mapped = code === "IC040_P1B_SOURCE_CHANGED" ? "ATLAS_G5_1_SOURCE_CHANGED" :
+      code === "IC040_P1B_STALE" ? "ATLAS_G5_1_STALE" :
+        code === "IC040_P1B_FILE_INVALID" ? "ATLAS_G5_1_DOCX_ONLY" : null;
+    if (mapped) throw Object.assign(new Error(mapped), { code: mapped, cause });
+    throw cause;
+  }
+}
+async function buildAtlasG51Provenance(mapped, source, originalFile, sourceRevision, isCurrent) {
+  const raw = await originalFile.arrayBuffer();
+  if (typeof isCurrent === "function" && !isCurrent())
+    throw Object.assign(new Error("ATLAS_G5_1_STALE"), { code: "ATLAS_G5_1_STALE" });
+  if (!(raw instanceof ArrayBuffer) || raw.byteLength < 4 || raw.byteLength > 16 * 1024 * 1024)
+    throw Object.assign(new Error("ATLAS_G5_1_SOURCE_CHANGED"), { code: "ATLAS_G5_1_SOURCE_CHANGED" });
+  const sha = mapped.sourceSha256;
+  const facts = [];
+  const add = (targetKind, targetId, field, locator) => facts.push({
+    factId: `office_ref_${facts.length + 1}`,
+    targetKind, targetId, field, mapping: "EXACT",
+    decision: "USER_CONSENTED_MODELED_UNVERIFIED",
+    locator: atlasG51DocxLocator(locator, sha),
+  });
+  for (const origin of mapped.origins ?? []) add("resource", origin.targetId, "resource.id", origin.locator);
+  const linkOrigins = mapped.linkRowOrigins?.length ? mapped.linkRowOrigins : (mapped.connectionOrigins ?? []);
+  for (const origin of linkOrigins) {
+    add("connection", origin.targetId, "connection.from.resource", origin.fromLocator);
+    add("connection", origin.targetId, "connection.to.resource", origin.toLocator ?? origin.peerLocator);
+    if (origin.sourcePortLocator && origin.targetPortLocator) {
+      add("connection", origin.targetId, "connection.from.port", origin.sourcePortLocator);
+      add("connection", origin.targetId, "connection.to.port", origin.targetPortLocator);
+    }
+  }
+  for (const port of mapped.portOrigins ?? []) {
+    if (!port.sourcePortLocator || !port.peerPortLocator) continue;
+    // P3 port origins are already represented by the link-row facts when the
+    // DOCX Links table path is used; retain this branch for the older P3 UI.
+    if (linkOrigins.some(origin => origin.targetId === port.targetLinkId && origin.sourcePortLocator && origin.targetPortLocator)) continue;
+    add("connection", port.targetLinkId, "connection.from.port", port.sourcePortLocator);
+    add("connection", port.targetLinkId, "connection.to.port", port.peerPortLocator);
+  }
+  if (!facts.length) throw Object.assign(new Error("ATLAS_G5_1_PROVENANCE_BLOCKED"), { code: "ATLAS_G5_1_PROVENANCE_BLOCKED" });
+  const sourceIdentity = await computeCanonicalSourceIdentity(atlasG51SourceWithoutProvenance(source));
+  return {
+    formatId: "yadilab.office-reviewed-provenance",
+    schemaVersion: "1.0.0",
+    status: "CURRENT",
+    semanticTrack: "CONFIG_DOCUMENTED",
+    source: { sourceId: `src_${sha}`, profileId: "office.docx-tables.structural.v1", sha256: sha, byteSize: raw.byteLength, mediaType: ATLAS_G5_1_DOCX_MEDIA, part: "word/document.xml" },
+    targetModel: { scenarioId: source.scenarioId, sourceRevision, sourceIdentity },
+    facts,
+    engineVerified: false,
+    physicalTopologyVerified: false,
+    warnings: [
+      "Reviewed DOCX cells are source-modeled facts selected by the operator; they are not independently verified asset identities.",
+      "Declared links and ports are not proof of physical cabling, reachability, Runtime truth or Engine verification.",
+    ],
+  };
+}
+
 function App() {
   const [runtimeMedia, setRuntimeMedia] = useState(null);
   const mediaRef = useRef(null);
@@ -5188,6 +6333,8 @@ function App() {
   const [ansibleIniReplayOpen, setAnsibleIniReplayOpen] = useState(false);
   const [docxStructureOpen, setDocxStructureOpen] = useState(false);
   const [officeReviewedBuilderOpen, setOfficeReviewedBuilderOpen] = useState(false);
+  const [officeReviewedAtlasOpen, setOfficeReviewedAtlasOpen] = useState(false);
+  const [atlasOpenRequest, setAtlasOpenRequest] = useState(0);
   const [scaledOfficeBuilderOpen, setScaledOfficeBuilderOpen] = useState(false);
   const [scaledOfficeThousandOpen, setScaledOfficeThousandOpen] = useState(false);
   const [scaledOfficeFiveThousandOpen, setScaledOfficeFiveThousandOpen] = useState(false);
@@ -6412,24 +7559,47 @@ function App() {
     try { const gate = await createPromotionVerificationGate({ caseId: troubleshootingCase?.caseId ?? "builder-case", caseWorkingSourceIdentity: await computeCaseSourceIdentity(troubleshootingCase?.workingSource ?? selectedExperiment.workingSource), candidateId: selectedExperiment.experimentId, candidateSourceIdentity: await computeCanonicalSourceIdentity(selectedExperiment.workingSource), baselineId: selectedBaseline.baselineId, suiteIdentity: selectedCampaign.suite.identity, campaign: selectedCampaign }); setPromotionVerificationGate(gate); setDiagnostics([{ severity: "warning", code: "PROMOTION_VERIFICATION_GATE_BUILT", message: `Verification gate: ${gate.state}. This is factual evidence only; explicit Promotion confirmation remains required.` }]); } catch (error) { setDiagnostics([{ severity: "error", code: "PROMOTION_VERIFICATION_GATE_BLOCKED", message: error instanceof Error ? error.message : String(error) }]); }
   };
   const transitionRows = transitionMatrix ? filterResultTransitionMatrix(transitionMatrix, transitionFilter ? { transition: transitionFilter } : {}) : [];
+  const topologyElement = e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+    openAtlasRequest: atlasOpenRequest,
+    getPendingDraftChanges: hasPendingBuilderDrafts,
+    projectGeneration: scenarioTransitionRef.current,
+    getScenarioTransitionId: () => scenarioTransitionRef.current,
+    setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
+    scaledThousandFocus: scaledOfficeThousandFocus,
+    scaledFiveThousandFocus: scaledOfficeFiveThousandFocus,
+    scaledTenThousandFocus, scaledTenThousandSessionActive,
+    scaledTenThousandFocusBusy, onScaledTenThousandFocusPage: showScaledTenThousandFocusPage,
+    onReviewEditedTenThousandFocus: reviewEditedTenThousandBoundedFocus,
+    scaledFiveThousandSessionActive: scaledOfficeFiveThousandSessionActive,
+    scaledFiveThousandSafeCompileAttempted: scaledOfficeFiveThousandSafeCompileAttempted,
+    onReviewEditedFiveThousandFocus: reviewEditedFiveThousandBoundedFocus,
+    scaledFiveThousandFocusBusy: scaledOfficeFiveThousandFocusBusy,
+    onScaledFiveThousandFocusPage: showScaledFiveThousandFocusPage,
+    scaledThousandFocusBusy: scaledOfficeThousandFocusBusy,
+    onScaledThousandFocusPage: showScaledThousandFocusPage,
+    declaredOfficeHierarchy, declaredOfficeFocus, declaredOfficeFocusBusy,
+    onFocusDeclaredOfficeHierarchy: showDeclaredOfficeHierarchyFocus,
+    onRestoreDeclaredOfficeHierarchyFocus: restoreDeclaredOfficeHierarchyFocus,
+    onReviewDeclaredOfficeHierarchy: () => setDeclaredOfficePanelOpen(true) });
 
-  return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
+  return e("div", { className: "app-frame", "data-app-runtime": "ready", "data-project-generation": scenarioTransitionRef.current, "data-runtime-scenario-id": workspace.mode === "runtime" ? workspace.scenario.scenarioId : workspace.source.scenarioId, "data-runtime-scenario-hash": workspace.mode === "runtime" ? workspace.scenario.sourceHash : "builder" },
     e("header", { className: "app-header" },
       e("div", null, e("strong", null, branding.displayName), e("span", null, branding.tagline), e("small", { className: "build-version", "data-yadilab-build-version": releaseIdentity.version, "data-source-commit": releaseIdentity.sourceCommit, title: `Git ${releaseIdentity.sourceCommit}` }, `v${releaseIdentity.version} · ${releaseIdentity.sourceCommit.slice(0,12)}`), e("small", { "data-development-checkpoint": releaseIdentity.checkpoint }, `${releaseIdentity.checkpoint} · ${releaseIdentity.description}`)),
-      e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
-        onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
-      e(ProjectFileControls, {
-        workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
-        setWorkspace, onReplace: replaceProjectDocument,
-        // Manual project documents may contain an intentionally empty New
-        // draft. Compilation still uses the stricter runnable "source" schema.
-        validateSource: source => validateContract("editableSource", source),
-        setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
-        getPendingDraftChanges: hasPendingBuilderDrafts,
-        pendingDraftCount: pendingBuilderDraftCount,
-        getScenarioTransitionId: () => scenarioTransitionRef.current,
-      }),
     ),
+    e(MainActions, { onInspectStructuredXml: () => setStructuredXmlInspectionOpen(true), onInspectGraphml: () => setGraphmlPreviewOpen(true), onInspectNmap: () => setNmapObservationOpen(true), onInspectNmapReplay: () => setNmapReplayOpen(true), onInspectNessus: () => setNessusSeverityOpen(true), onInspectNessusReplay: () => setNessusReplayOpen(true),
+      onInspectDrawio: () => setDrawioStructureOpen(true), onReviewDrawioBuilder: () => setDrawioBuilderReviewOpen(true), onInspectDrawioReplay: () => setDrawioReplayOpen(true), onInspectAnsible: () => setAnsibleInventoryOpen(true), onInspectAnsibleYamlReplay: () => setAnsibleYamlReplayOpen(true), onInspectAnsibleIni: () => setAnsibleIniOpen(true), onInspectAnsibleIniReplay: () => setAnsibleIniReplayOpen(true), onInspectDocx: () => setDocxStructureOpen(true), onReviewOfficeBuilder: () => setOfficeReviewedBuilderOpen(true), onReviewOfficeAtlas: () => setOfficeReviewedAtlasOpen(true), onReviewScaledOfficeBuilder: () => setScaledOfficeBuilderOpen(true), onReviewScaledOfficeThousandBuilder: () => setScaledOfficeThousandOpen(true), onReviewScaledOfficeFiveThousandBuilder: () => setScaledOfficeFiveThousandOpen(true), onReviewScaledOfficeTenThousandPreflight: () => setScaledOfficeTenThousandPreflightOpen(true), onReviewScaledOfficeTenThousandBuilder: () => setScaledOfficeTenThousandBuilderOpen(true), onInspectDocxReplay: () => setDocxReplayOpen(true), onInspectOdt: () => setOdtStructureOpen(true), onInspectOdtReplay: () => setOdtReplayOpen(true), onImportNetwork: () => setNetworkImportOpen(true), onImportNetworkFile: (file) => { setNetworkImportSelection({ file }); setNetworkImportOpen(true); }, workspace, busy, branding, enterpriseScenarioId, setEnterpriseScenarioId, enterpriseOfficeScenarios, openEnterpriseScenario, verifiedDeliveryScenarioId, setVerifiedDeliveryScenarioId, openVerifiedDeliveryScenario, guidedLabId, setGuidedLabId, builtinGuidedLabs, openGuidedLab, openSource, openPackage, compileAndLayout, preview, exportSource, exportPackage, exportProgress, loadProgress, exportTroubleshootingSession, loadTroubleshootingSession, autosaveProgress, restoreAutosave, clearAutosave, backToBuilder }),
+    topologyElement,
+    e(ProjectFileControls, {
+      workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
+      setWorkspace, onReplace: replaceProjectDocument,
+      // Manual project documents may contain an intentionally empty New
+      // draft. Compilation still uses the stricter runnable "source" schema.
+      validateSource: source => validateContract("editableSource", source),
+      setDiagnostics, beforeSwitchRef: projectGuardRef, busy,
+      getPendingDraftChanges: hasPendingBuilderDrafts,
+      pendingDraftCount: pendingBuilderDraftCount,
+      getScenarioTransitionId: () => scenarioTransitionRef.current,
+    }),
     e("section", { className: "mission-strip" }, e("strong", null, title)),
     selectedGuidedLab ? e("section", { className: "curriculum-strip", "data-curriculum-wave": "guided_troubleshooting_wave1" },
       e("div", null, e("strong", null, `Inbyggd guidad labb ${selectedGuidedLab.sequence}/8 · ${selectedGuidedLab.platform} · ${selectedGuidedLab.focus}`), e("span", null, selectedGuidedLab.summary)),
@@ -6440,7 +7610,9 @@ function App() {
         e("span", null, `Evidenssynlighet ${selectedGuidedLab.difficulty.evidenceVisibility}`),
         e("span", null, `Åtgärdsbegränsningar ${selectedGuidedLab.difficulty.remediationConstraints}`))) : null,
     networkImportOpen ? e(NetworkTopologyImportPanel, { compilerOptions, setDiagnostics,
-      workspaceIdentity: workspace, getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
+      workspaceIdentity: workspace, projectGeneration: scenarioTransitionRef.current,
+      getCurrentProjectGeneration: () => scenarioTransitionRef.current,
+      getCurrentWorkspaceIdentity: () => latestDrawioWorkspaceRef.current,
       initialSelection: networkImportSelection, onClose: () => { setNetworkImportOpen(false); setNetworkImportSelection(null); }, onActivate: (next, openProbes, bounded) => {
         if (!projectGuardRef.current()) return;
         beginScenarioTransition();
@@ -7312,6 +8484,101 @@ function App() {
         setScaledOfficeBuilderOpen(false);
       },
     }) : null,
+    officeReviewedAtlasOpen ? e(OfficeReviewedBuilderPanel, {
+      inspectFile: previewOfficeNodesFile,
+      manualRoleOptions: GRAPHML_MANUAL_ROLE_OPTIONS,
+      atlasActivation: true,
+      allowedFormats: ["docx"],
+      onClose: () => setOfficeReviewedAtlasOpen(false),
+      onConfirm: async (expected, decision, originalFile, isCurrentSelection) => {
+        const liveBefore = latestDrawioWorkspaceRef.current;
+        const workspaceIdentity = JSON.stringify(liveBefore);
+        const transitionIdentity = scenarioTransitionRef.current;
+        const blocked = code => { const error = new Error(code); error.code = code; throw error; };
+        const checkCurrent = () => {
+          if (scenarioTransitionRef.current !== transitionIdentity ||
+              JSON.stringify(latestDrawioWorkspaceRef.current) !== workspaceIdentity)
+            blocked("ATLAS_G5_1_WORKSPACE_CHANGED");
+          if (typeof isCurrentSelection !== "function" || !isCurrentSelection()) blocked("ATLAS_G5_1_STALE");
+        };
+        checkCurrent();
+        const mapped = await verifyAtlasG51Candidate(originalFile, expected, decision, isCurrentSelection);
+        checkCurrent();
+        const expectedConnections = Array.isArray(decision.linkRows)
+          ? decision.linkRows.length
+          : Array.isArray(decision.connections) ? decision.connections.length : 0;
+        if (mapped.status !== "READY_FOR_COMPILATION" || !mapped.source ||
+            mapped.source.connections.length !== expectedConnections || mapped.source.tests.length ||
+            mapped.canActivate !== false || mapped.engineVerified !== false)
+          blocked("ATLAS_G5_1_CANDIDATE_BLOCKED");
+        const stagingWorkspace = createBuilderWorkspace(mapped.source);
+        const provenance = await buildAtlasG51Provenance(mapped, mapped.source, originalFile, stagingWorkspace.sourceRevision, isCurrentSelection);
+        checkCurrent();
+        const source = { ...mapped.source, officeReviewProvenance: provenance };
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
+        checkCurrent();
+        if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
+        return {
+          status: "STAGED",
+          sourceSha256: mapped.sourceSha256,
+          expected,
+          decision,
+          originalFile,
+          provenance,
+          source,
+          workspaceIdentity,
+          transitionIdentity,
+          isCurrentSelection,
+          summary: {
+            resources: source.resources.length,
+            connections: source.connections.length,
+            ports: source.connections.reduce((count, link) => count + (link.from?.port ? 1 : 0) + (link.to?.port ? 1 : 0), 0),
+            resourceIds: source.resources.map(resource => resource.id),
+            connectionDetails: source.connections.map(link => ({ from: link.from.resource, to: link.to.resource, fromPort: link.from.port, toPort: link.to.port })),
+          },
+        };
+      },
+      onApprove: async staged => {
+        const blocked = code => { const error = new Error(code); error.code = code; throw error; };
+        const isCurrent = () => scenarioTransitionRef.current === staged.transitionIdentity &&
+          JSON.stringify(latestDrawioWorkspaceRef.current) === staged.workspaceIdentity &&
+          typeof staged.isCurrentSelection === "function" && staged.isCurrentSelection();
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        const mapped = await verifyAtlasG51Candidate(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (mapped.sourceSha256 !== staged.sourceSha256) blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const stagingWorkspace = createBuilderWorkspace(mapped.source);
+        const provenance = await buildAtlasG51Provenance(mapped, mapped.source, staged.originalFile, stagingWorkspace.sourceRevision, staged.isCurrentSelection);
+        if (JSON.stringify(provenance) !== JSON.stringify(staged.provenance)) blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const source = { ...mapped.source, officeReviewProvenance: provenance };
+        const compiled = await compileBuilderWorkspace(createBuilderWorkspace(source), compilerOptions);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (compiled.compile.status !== "valid") blocked("ATLAS_G5_1_COMPILE_BLOCKED");
+        const layout = await autoLayoutBuilder(compiled, new ElkLayoutBackend());
+        if (!layout.ok) blocked("ATLAS_G5_1_LAYOUT_BLOCKED");
+        const refreshed = await verifyAtlasG51Candidate(staged.originalFile, staged.expected, staged.decision, staged.isCurrentSelection);
+        if (!isCurrent()) blocked("ATLAS_G5_1_STALE");
+        if (JSON.stringify(refreshed.source) !== JSON.stringify(mapped.source) ||
+            JSON.stringify(refreshed.origins) !== JSON.stringify(mapped.origins) ||
+            JSON.stringify(refreshed.connectionOrigins ?? []) !== JSON.stringify(mapped.connectionOrigins ?? []) ||
+            JSON.stringify(refreshed.portOrigins ?? []) !== JSON.stringify(mapped.portOrigins ?? []) ||
+            JSON.stringify(refreshed.linkRowOrigins ?? []) !== JSON.stringify(mapped.linkRowOrigins ?? []) ||
+            refreshed.sourceSha256 !== mapped.sourceSha256)
+          blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        const refreshedProvenance = await buildAtlasG51Provenance(refreshed, refreshed.source, staged.originalFile, stagingWorkspace.sourceRevision, staged.isCurrentSelection);
+        if (JSON.stringify(refreshedProvenance) !== JSON.stringify(provenance)) blocked("ATLAS_G5_1_SOURCE_CHANGED");
+        if (!projectGuardRef.current()) blocked("ATLAS_G5_1_REPLACEMENT_BLOCKED");
+        beginScenarioTransition();
+        setImportedProbeAutoOpen(false);
+        setDiagnostics([...layout.diagnostics, {
+          severity: "warning", code: "ATLAS_G5_1_CANONICAL_ACTIVATED",
+          message: `Reviewed DOCX source ${mapped.sourceSha256.slice(0, 12)}… compiled and activated as canonical Builder source. ${mapped.source.resources.length} resources, ${mapped.source.connections.length} explicit connections; no physical or Engine truth asserted.`,
+        }]);
+        setWorkspace(layout.workspace);
+        setOfficeReviewedAtlasOpen(false);
+        setAtlasOpenRequest(value => value + 1);
+      },
+    }) : null,
     officeReviewedBuilderOpen ? e(OfficeReviewedBuilderPanel, {
       inspectFile: previewOfficeNodesFile,
       manualRoleOptions: GRAPHML_MANUAL_ROLE_OPTIONS,
@@ -7939,27 +9206,6 @@ function App() {
           e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, notebook, setNotebook, scenarioLoadKey: verifiedDeliveryLoadKey, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }),
         ) : null,
       ),
-      e(Topology, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current,
-        getPendingDraftChanges: hasPendingBuilderDrafts,
-        projectGeneration: scenarioTransitionRef.current,
-        getScenarioTransitionId: () => scenarioTransitionRef.current,
-        setWorkspace, setDiagnostics, journey: renderableJourney, stateFocus: topologyStateFocus,
-        scaledThousandFocus: scaledOfficeThousandFocus,
-        scaledFiveThousandFocus:scaledOfficeFiveThousandFocus,
-        scaledTenThousandFocus,scaledTenThousandSessionActive,
-        scaledTenThousandFocusBusy,onScaledTenThousandFocusPage:showScaledTenThousandFocusPage,
-        onReviewEditedTenThousandFocus:reviewEditedTenThousandBoundedFocus,
-        scaledFiveThousandSessionActive:scaledOfficeFiveThousandSessionActive,
-        scaledFiveThousandSafeCompileAttempted:scaledOfficeFiveThousandSafeCompileAttempted,
-        onReviewEditedFiveThousandFocus:reviewEditedFiveThousandBoundedFocus,
-        scaledFiveThousandFocusBusy:scaledOfficeFiveThousandFocusBusy,
-        onScaledFiveThousandFocusPage:showScaledFiveThousandFocusPage,
-        scaledThousandFocusBusy: scaledOfficeThousandFocusBusy,
-        onScaledThousandFocusPage: showScaledThousandFocusPage,
-        declaredOfficeHierarchy,declaredOfficeFocus,declaredOfficeFocusBusy,
-        onFocusDeclaredOfficeHierarchy:showDeclaredOfficeHierarchyFocus,
-        onRestoreDeclaredOfficeHierarchyFocus:restoreDeclaredOfficeHierarchyFocus,
-        onReviewDeclaredOfficeHierarchy:()=>setDeclaredOfficePanelOpen(true) }),
         workspace.mode === "runtime" ? e(Sidebar, { workspace, getWorkspace: () => latestDrawioWorkspaceRef.current, projectGeneration: scenarioTransitionRef.current, onPendingDraftChange, getPendingDraftChanges: hasPendingBuilderDrafts, getOtherPendingDrafts: hasOtherPendingBuilderDrafts, setWorkspace, diagnostics, setDiagnostics, scenarioLoadKey: verifiedDeliveryLoadKey, probeAutoOpen: importedProbeAutoOpen, diagnosticSourceRequest, onDiagnosticSourceRequestHandled: handleDiagnosticSourceRequest, onDiagnoseFromSource: requestDiagnoseFromSource, nextCheckPreparation, onNextCheckPreparationHandled: handleNextCheckPreparation, onPrepareNextCheck: prepareNextCheck, notebook, setNotebook, onVisualJourney: (nextJourney) => { setTopologyStateFocus(null); setActiveJourney(nextJourney); }, onTopologyState: (nextState) => { setActiveJourney(null); setTopologyStateFocus(nextState); } }) : null,
         e(RuntimeResults, { workspace }),
         evidenceWorkspace ? e("details", { className: "evidence-workspace", "aria-label": "Evidence workspace", "data-evidence-workspace": "ready" }, e("summary", null, "Evidence"), e("small", null, `Revision ${evidenceWorkspace.runtimeRevision} · ${evidenceWorkspace.records.length} Engine-event`), e("ol", null, ...evidenceWorkspace.records.slice(0, 12).map((record) => e("li", { key: record.eventId }, e("button", { type: "button", onClick: () => setDiagnostics([{ severity: "warning", code: "EVIDENCE_SELECTED", message: `${record.eventId} · ${record.domain} · ${record.summary}` }]) }, `${record.sequence}. ${record.domain} · ${record.eventType}`), e("small", null, record.summary)))) ) : null,

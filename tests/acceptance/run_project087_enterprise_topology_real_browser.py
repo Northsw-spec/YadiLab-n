@@ -206,8 +206,7 @@ def exercise_case(browser, url, profile, env_name, evidence_dir):
         })
         preview = panel.locator('[data-network-import-preview="READY"]')
         expect(preview).to_be_visible(timeout=120000)
-        text = panel.inner_text()
-        require("Devices: 47 · Explicit links: 46" in text, f"{profile}: preview lost canonical 47/46 counts")
+        expect(panel).to_contain_text("Devices: 47 · Explicit links: 46", timeout=120000)
         require(panel.locator('[data-network-import-unmapped="0"]').count() == 1, f"{profile}: populated fields were unmapped")
         expect(panel.locator('[data-network-import-sha="true"]')).to_contain_text(source_sha)
         if profile == "legacy-six":
@@ -245,7 +244,9 @@ def exercise_case(browser, url, profile, env_name, evidence_dir):
         for index in range(group_nodes.count()):
             group = group_nodes.nth(index)
             require(group.locator('[data-overview-handle="in"]').count() == 1 and group.locator('[data-overview-handle="out"]').count() == 1, f"{profile}: group {index} is missing overview handles")
-        require("47 dokumenterade enheter · 46 deklarerade länkar" in page.locator('[data-topology-explorer="true"]').inner_text(), f"{profile}: Explorer lost canonical counts")
+        expect(page.locator('[data-topology-explorer="true"]')).to_contain_text(
+            "47 dokumenterade enheter · 46 deklarerade länkar", timeout=120000
+        )
         overview_box = page.locator(".topology-panel").bounding_box()
         explorer_box = page.locator('[data-topology-explorer="true"]').bounding_box()
         require(overview_box and explorer_box and explorer_box["y"] >= overview_box["y"] + overview_box["height"] - 1, f"{profile}: Explorer is not below topology")

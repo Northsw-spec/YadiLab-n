@@ -36,7 +36,7 @@ def setup(browser, url):
 
 
 def inspect(page):
-    menu = page.locator(".workspace-menu", has=page.locator("summary", has_text="Import / Export"))
+    menu = page.locator(".workspace-menu-advanced")
     require(menu.count() == 1, "Import / Export menu missing")
     if menu.get_attribute("open") is None:
         menu.locator("summary").click()
@@ -58,7 +58,7 @@ def confirm_unchanged(page, base, errors, external):
 
 
 def export_builder_source(page):
-    menu = page.locator(".workspace-menu", has=page.locator("summary", has_text="Import / Export"))
+    menu = page.locator(".workspace-menu-advanced")
     require(menu.count() == 1, "Import / Export menu must be unique")
     if menu.get_attribute("open") is None:
         menu.locator("summary").click()

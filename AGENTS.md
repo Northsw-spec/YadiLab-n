@@ -11,6 +11,8 @@ A developer, coding agent or scheduled automation must be able to start from a f
 3. **This versioned `AGENTS.md`** defines the development policy and entrypoints. `README.md` is the user-facing overview. GitHub issues and PR descriptions record intentions and historical decisions, not present-day behavior until code is merged.
 4. **Older `docs/` snapshots and historical repository artifacts** may help explain design but are never a substitute for inspecting fresh code and CI. If any summary conflicts with current code or GitHub status, correct the stale summary; do not treat it as technical truth.
 
+The binding AV-001 Arvidsjaur navigation standard, its reference image, provenance record and machine-readable P0 controls are versioned in [`docs/design/arvidsjaur-layer-navigation/`](docs/design/arvidsjaur-layer-navigation/). Read those artifacts alongside the live topology code and active regressions when changing navigation layers.
+
 Do not hardcode the “latest main SHA,” latest CI result or active PR list into versioned guidance. Retrieve them afresh every run. If GitHub cannot be inspected, disclose the precise blocker and do not invent work, checks or outcomes.
 
 ## Mandatory cold-start sequence for every coding session
@@ -46,6 +48,15 @@ Exactly **three** permanent workflows exist. Do not add feature-specific workflo
 - `.github/workflows/release.yml`: independent Linux build/attestation and exact-commit artifact on `main`.
 
 The files themselves define the concrete commands and test scope. Do not imply that all historical tests run when only selected regressions are active. GitHub-hosted Ubuntu acceptance is the development gate; do not demand routine manual Parrot tests.
+
+## Operating-system test acceptance — owner-approved policy (2026-11-14)
+
+The project owner explicitly accepts **Debian Linux testing in place of Parrot OS testing** for YadiLab development, Chromium/Worker verification, Linux x86_64 packaging, and release acceptance. This is an enduring project requirement for Codex and other engineering agents.
+
+- **Do not require Parrot-specific testing** when equivalent YadiLab tests have been executed on Debian. Never block progress, mark a phase PARTIAL, or withhold approval **solely because the Linux test host was Debian rather than Parrot OS**. Debian 13 is acceptable.
+- Existing GitHub-hosted Ubuntu CI is also acceptable and remains mandatory where already required. Do not weaken CI, security, real Chromium, layout, release-identity, or exact-SHA checks.
+- **Always report the OS actually tested.** Debian PASS is a Debian PASS, not a claim that Parrot was directly tested. Investigate any actual OS-specific incompatibility rather than assuming it away.
+- This Linux distribution equivalence decision does **not** waive independent functional requirements, including proof of real durable Save/Open file bytes where that is required. Mock File System Access evidence alone is not a durable disk-write PASS.
 
 ## Reporting and ownership
 

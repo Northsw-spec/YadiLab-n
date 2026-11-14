@@ -3,6 +3,7 @@ export * from "./projection.js";
 export * from "./validation.js";
 export * from "./auto-layout.js";
 export * from "./elk-backend.js";
+export * from "./elk-worker-backend.js";
 
 export * from "./visual-validation.js";
 

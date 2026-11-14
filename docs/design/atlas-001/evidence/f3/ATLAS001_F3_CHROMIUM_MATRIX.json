@@ -1,0 +1,323 @@
+{
+  "format": "atlas001-normal-connection-density-evidence",
+  "schemaVersion": "1.0.0",
+  "status": "FAIL",
+  "commitSha": "e80647403fbcc3176966670aee531543fb4c3a8c",
+  "mainSha": "8b75e344b702a3ad645759b89ef47720952ec424",
+  "prNumber": 105,
+  "testProfile": "Compiled Chromium \u00b7 independent XLSX \u00b7 NORMAL 50/100/200 connection-density matrix",
+  "viewport": [
+    1366,
+    768
+  ],
+  "caseTimeoutMs": 45000,
+  "processBoundMs": 55000,
+  "eventLoopProbeMs": 250,
+  "normalConnectionBudget": "PENDING_DECISION",
+  "resourceAndConnectionPointsAreNotProposedLimits": true,
+  "isolatedChromiumPerCase": true,
+  "results": [
+    {
+      "key": "50-linear",
+      "topology": "linear",
+      "resources": 50,
+      "connections": 49,
+      "status": "PASS",
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 338.4,
+      "activationToBuilderCommitMs": 940.8,
+      "renderReadyMs": 365.2,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "responsiveness": {
+        "durationMs": 256,
+        "ticks": 16,
+        "maxDelayMs": 0
+      },
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "timeouts": [],
+      "abortedLayout": false,
+      "screenshot": "atlas001-normal-density-50-linear-1366x768.png",
+      "sourceProvenanceVerified": true,
+      "renderedResourceCount": 50,
+      "renderedZoneCount": 5,
+      "renderedSvgEdgeCount": 49,
+      "overlapPairs": 0,
+      "zoneHeaderOverlaps": 0,
+      "endpointPortErrors": 0,
+      "nonOrthogonalRoutes": 0,
+      "malformedSvgPaths": 0,
+      "memory": {
+        "usedJSHeapSize": 39206638,
+        "totalJSHeapSize": 66818890,
+        "jsHeapSizeLimit": 4395630592
+      },
+      "topologyPanel": {
+        "edgeCount": "49",
+        "connectedExplorerGeometry": "NOT_APPLICABLE",
+        "layoutQuality": "NOT_EXPOSED",
+        "layoutQualityGate": "NOT_EXPOSED",
+        "hierarchy": "NOT_EXPOSED"
+      },
+      "caseElapsedMs": 2785.5
+    },
+    {
+      "key": "50-star",
+      "topology": "star",
+      "resources": 50,
+      "connections": 150,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-star_zone_01' has excessive whitespace (area ratio 11.70 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0001, density_50-star_link_0050, density_50-star_link_0099, density_50-star_link_0148). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0002, density_50-star_link_0051, density_50-star_link_0100, density_50-star_link_0149). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0003, density_50-star_link_0052, density_50-star_link_0101, density_50-star_link_0150). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_50-star_link_0004, density_50-star_link_0053, density_50-star_link_0102). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_50-star_link_0005, density_50-star_link_0054, density_50-star_link_0103). | (+44 additional diagnostics omitted)",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE",
+        "LAYOUT_EDGE_OVERLAP_EXCESSIVE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 320.0,
+      "activationToBuilderCommitMs": 1456.6,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-50-star-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 2576.4
+    },
+    {
+      "key": "50-redundant",
+      "topology": "redundant-ring",
+      "resources": 50,
+      "connections": 400,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_01' has excessive whitespace (area ratio 11.20 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_02' has excessive whitespace (area ratio 13.28 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_03' has excessive whitespace (area ratio 12.18 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_04' has excessive whitespace (area ratio 15.62 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_05' has excessive whitespace (area ratio 14.20 > 8).",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 478.6,
+      "activationToBuilderCommitMs": 4664.7,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-50-redundant-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 6017.2
+    },
+    {
+      "key": "100-linear",
+      "topology": "linear",
+      "resources": 100,
+      "connections": 99,
+      "status": "PASS",
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 360.8,
+      "activationToBuilderCommitMs": 1132.8,
+      "renderReadyMs": 404.3,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "responsiveness": {
+        "durationMs": 256,
+        "ticks": 16,
+        "maxDelayMs": 4
+      },
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "timeouts": [],
+      "abortedLayout": false,
+      "screenshot": "atlas001-normal-density-100-linear-1366x768.png",
+      "sourceProvenanceVerified": true,
+      "renderedResourceCount": 100,
+      "renderedZoneCount": 10,
+      "renderedSvgEdgeCount": 99,
+      "overlapPairs": 0,
+      "zoneHeaderOverlaps": 0,
+      "endpointPortErrors": 0,
+      "nonOrthogonalRoutes": 0,
+      "malformedSvgPaths": 0,
+      "memory": {
+        "usedJSHeapSize": 61788639,
+        "totalJSHeapSize": 80987767,
+        "jsHeapSizeLimit": 4395630592
+      },
+      "topologyPanel": {
+        "edgeCount": "99",
+        "connectedExplorerGeometry": "NOT_APPLICABLE",
+        "layoutQuality": "NOT_EXPOSED",
+        "layoutQualityGate": "NOT_EXPOSED",
+        "hierarchy": "NOT_EXPOSED"
+      },
+      "caseElapsedMs": 3053.8
+    },
+    {
+      "key": "100-star",
+      "topology": "star",
+      "resources": 100,
+      "connections": 300,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-star_zone_01' has excessive whitespace (area ratio 39.53 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0001, density_100-star_link_0100, density_100-star_link_0199, density_100-star_link_0298). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0002, density_100-star_link_0101, density_100-star_link_0200, density_100-star_link_0299). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0003, density_100-star_link_0102, density_100-star_link_0201, density_100-star_link_0300). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_100-star_link_0004, density_100-star_link_0103, density_100-star_link_0202). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_100-star_link_0005, density_100-star_link_0104, density_100-star_link_0203). | (+94 additional diagnostics omitted)",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE",
+        "LAYOUT_EDGE_OVERLAP_EXCESSIVE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 350.2,
+      "activationToBuilderCommitMs": 2588.7,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-100-star-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 3768.6
+    },
+    {
+      "key": "100-redundant",
+      "topology": "redundant-ring",
+      "resources": 100,
+      "connections": 800,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_01' has excessive whitespace (area ratio 15.47 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_02' has excessive whitespace (area ratio 14.13 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_03' has excessive whitespace (area ratio 15.94 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_04' has excessive whitespace (area ratio 20.43 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_05' has excessive whitespace (area ratio 15.30 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_06' has excessive whitespace (area ratio 14.03 > 8). | (+5 additional diagnostics omitted)",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 651.1,
+      "activationToBuilderCommitMs": 24483.3,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-100-redundant-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 25861.7
+    },
+    {
+      "key": "200-linear",
+      "topology": "linear",
+      "resources": 200,
+      "connections": 199,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_01' has excessive whitespace (area ratio 9.14 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_02' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_03' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_04' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_05' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_06' has excessive whitespace (area ratio 9.35 > 8). | (+5 additional diagnostics omitted)",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 352.2,
+      "activationToBuilderCommitMs": 1154.6,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-200-linear-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 2420.4
+    },
+    {
+      "key": "200-star",
+      "topology": "star",
+      "resources": 200,
+      "connections": 600,
+      "status": "FAIL",
+      "failureKind": "ACTIVATION_BLOCKED",
+      "failureDiagnostic": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-star_zone_01' has excessive whitespace (area ratio 71.46 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0001, density_200-star_link_0200, density_200-star_link_0399, density_200-star_link_0598). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0002, density_200-star_link_0201, density_200-star_link_0400, density_200-star_link_0599). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0003, density_200-star_link_0202, density_200-star_link_0401, density_200-star_link_0600). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_200-star_link_0004, density_200-star_link_0203, density_200-star_link_0402). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_200-star_link_0005, density_200-star_link_0204, density_200-star_link_0403). | (+194 additional diagnostics omitted)",
+      "failureCodes": [
+        "LAYOUT_UNREASONABLE_WHITESPACE",
+        "LAYOUT_EDGE_OVERLAP_EXCESSIVE"
+      ],
+      "activationDecision": "NORMAL",
+      "importPreviewMs": 1166.8,
+      "activationToBuilderCommitMs": 11172.3,
+      "canonicalCompileMs": "NOT_EXPOSED",
+      "globalElkDurationMs": "NOT_EXPOSED",
+      "globalElkInvocationCount": 1,
+      "globalElkLastDecision": "NORMAL",
+      "timeouts": [],
+      "abortedLayout": false,
+      "builderUnchanged": true,
+      "screenshot": "atlas001-normal-density-200-star-1366x768-failure.png",
+      "pageErrors": [],
+      "consoleErrors": [],
+      "externalRequests": [],
+      "caseElapsedMs": 13183.5
+    }
+  ],
+  "failures": [
+    {
+      "key": "50-star",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-star_zone_01' has excessive whitespace (area ratio 11.70 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0001, density_50-star_link_0050, density_50-star_link_0099, density_50-star_link_0148). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0002, density_50-star_link_0051, density_50-star_link_0100, density_50-star_link_0149). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_50-star_link_0003, density_50-star_link_0052, density_50-star_link_0101, density_50-star_link_0150). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_50-star_link_0004, density_50-star_link_0053, density_50-star_link_0102). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_50-star_link_0005, density_50-star_link_0054, density_50-star_link_0103). | (+44 additional diagnostics omitted)"
+    },
+    {
+      "key": "50-redundant",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_01' has excessive whitespace (area ratio 11.20 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_02' has excessive whitespace (area ratio 13.28 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_03' has excessive whitespace (area ratio 12.18 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_04' has excessive whitespace (area ratio 15.62 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_50-redundant_zone_05' has excessive whitespace (area ratio 14.20 > 8)."
+    },
+    {
+      "key": "100-star",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-star_zone_01' has excessive whitespace (area ratio 39.53 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0001, density_100-star_link_0100, density_100-star_link_0199, density_100-star_link_0298). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0002, density_100-star_link_0101, density_100-star_link_0200, density_100-star_link_0299). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_100-star_link_0003, density_100-star_link_0102, density_100-star_link_0201, density_100-star_link_0300). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_100-star_link_0004, density_100-star_link_0103, density_100-star_link_0202). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_100-star_link_0005, density_100-star_link_0104, density_100-star_link_0203). | (+94 additional diagnostics omitted)"
+    },
+    {
+      "key": "100-redundant",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_01' has excessive whitespace (area ratio 15.47 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_02' has excessive whitespace (area ratio 14.13 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_03' has excessive whitespace (area ratio 15.94 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_04' has excessive whitespace (area ratio 20.43 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_05' has excessive whitespace (area ratio 15.30 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_100-redundant_zone_06' has excessive whitespace (area ratio 14.03 > 8). | (+5 additional diagnostics omitted)"
+    },
+    {
+      "key": "200-linear",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_01' has excessive whitespace (area ratio 9.14 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_02' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_03' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_04' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_05' has excessive whitespace (area ratio 9.35 > 8). | LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-linear_zone_06' has excessive whitespace (area ratio 9.35 > 8). | (+5 additional diagnostics omitted)"
+    },
+    {
+      "key": "200-star",
+      "status": "FAIL",
+      "error": "LAYOUT_UNREASONABLE_WHITESPACE: Sibling layout in 'density_200-star_zone_01' has excessive whitespace (area ratio 71.46 > 8). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0001, density_200-star_link_0200, density_200-star_link_0399, density_200-star_link_0598). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0002, density_200-star_link_0201, density_200-star_link_0400, density_200-star_link_0599). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 4 semantic connections share the same straight-line visual route (density_200-star_link_0003, density_200-star_link_0202, density_200-star_link_0401, density_200-star_link_0600). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_200-star_link_0004, density_200-star_link_0203, density_200-star_link_0402). | LAYOUT_EDGE_OVERLAP_EXCESSIVE: 3 semantic connections share the same straight-line visual route (density_200-star_link_0005, density_200-star_link_0204, density_200-star_link_0403). | (+194 additional diagnostics omitted)"
+    },
+    {
+      "key": "200-redundant",
+      "status": "FAIL",
+      "error": "isolated Chromium process exceeded 55000 ms and was terminated",
+      "failureKind": "PROCESS_TIMEOUT"
+    }
+  ],
+  "memoryMetricFallback": "NOT_EXPOSED",
+  "canonicalCompileMetric": "NOT_EXPOSED: product exposes no compile-only timing marker",
+  "globalElkDurationMetric": "NOT_EXPOSED: activation trace exposes invocation count only"
+}

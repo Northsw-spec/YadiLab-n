@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const SHA = /^[0-9a-f]{64}$/;
 const SAFE_PATH = /^(?:[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)(?:\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*$/;
 const FORMAT = "infrastructure-cyber-lab.browser-build";
-const REQUIRED = ["index.html", "sw.js", "manifest.webmanifest", "app-shell.js", "assets/app.js", "THIRD_PARTY_NOTICES.md", "third-party-inventory.json"];
+const REQUIRED = ["index.html", "sw.js", "manifest.webmanifest", "app-shell.js", "assets/app.js", "assets/elk-worker-proxy.js", "assets/elk-worker.js", "THIRD_PARTY_NOTICES.md", "third-party-inventory.json"];
 function hash(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
 function fail(code, message) { return { code, message }; }
 function readJson(file) { return JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -76,6 +76,10 @@ export function verifyBrowserRelease(dir) {
   if (listed.has("assets/app.css") && !html.includes('href="./assets/app.css"')) errors.push(fail("BROWSER_RELEASE_CSS_NOT_LINKED", "Bundled stylesheet is not linked."));
   const app = fs.readFileSync(path.join(dir, "assets/app.js"));
   if (!app.length) errors.push(fail("BROWSER_RELEASE_JS_EMPTY", "JS bundle must not be empty."));
+  const proxy = fs.readFileSync(path.join(dir, "assets/elk-worker-proxy.js"), "utf8");
+  if (!proxy.includes('importScripts("./elk-worker.js")') || !proxy.includes("__yadilabLayout")) {
+    errors.push(fail("BROWSER_RELEASE_ELK_WORKER_PROXY_INVALID", "The packaged ELK worker proxy must be local and envelope-validating."));
+  }
   const notices = fs.readFileSync(path.join(dir, "THIRD_PARTY_NOTICES.md"), "utf8");
   let inventory;
   try { inventory = readJson(path.join(dir, "third-party-inventory.json")); }

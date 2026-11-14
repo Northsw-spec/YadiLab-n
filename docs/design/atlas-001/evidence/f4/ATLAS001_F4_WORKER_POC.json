@@ -1,0 +1,121 @@
+{
+  "budgetsMs": {
+    "first": 250,
+    "second": 20000
+  },
+  "checks": {
+    "first_aborted": true,
+    "first_event_loop_bounded": true,
+    "first_event_loop_observed": true,
+    "first_no_post_termination_messages": true,
+    "first_worker_terminated": true,
+    "only_second_result_accepted": true,
+    "second_complete_counts": true,
+    "second_completed": true,
+    "second_event_loop_bounded": true,
+    "second_event_loop_observed": true,
+    "second_identity_preserved": true,
+    "single_worker_concurrency": true,
+    "stale_identity_rejected": true,
+    "termination_probe_stable": true
+  },
+  "commit": "b09a7073f3da6cec8d95b8b6bb87ade8098b5bb0",
+  "format": "ATLAS001_F4_WORKER_POC",
+  "interpretation": {
+    "builderUnchangedOnAbort": "NOT_TESTED_PRODUCT_INTEGRATION",
+    "mainThreadResponsiveness": "PASS",
+    "staleResultGuard": "PASS",
+    "workerAbortProof": "PASS"
+  },
+  "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+  "productIntegration": "NOT_IMPLEMENTED",
+  "result": {
+    "acceptedResults": [
+      {
+        "edges": 49,
+        "nodes": 50,
+        "requestId": "f4a-next-50-49",
+        "sourceRevision": 2,
+        "sourceSha": "ff5de1c6b877d0bea03a3575a27a121803d9a42a6ab156bd1be143655bda51be"
+      }
+    ],
+    "first": {
+      "code": "F4A_LAYOUT_TIMEOUT_ABORTED",
+      "elapsedMs": 260,
+      "eventLoopMaxDelayMs": 7,
+      "eventLoopTicks": 16,
+      "lateResult": false,
+      "memoryAfter": {
+        "jsHeapSizeLimit": 4395630592,
+        "totalJSHeapSize": 14375320,
+        "usedJSHeapSize": 10865520
+      },
+      "memoryBefore": {
+        "jsHeapSizeLimit": 4395630592,
+        "totalJSHeapSize": 14375219,
+        "usedJSHeapSize": 10849311
+      },
+      "messagesAfterTerminate": 0,
+      "requestId": "f4a-abort-200-1600",
+      "sourceRevision": 1,
+      "sourceSha": "bcdf74dd6d2499e9fdfee8d22d6a12e41cf1f8a08ee3788841c4bc81ff60e059",
+      "status": "ABORTED",
+      "workerTerminated": true
+    },
+    "maxConcurrentWorkers": 1,
+    "second": {
+      "code": "F4A_LAYOUT_COMPLETE",
+      "edges": 49,
+      "elapsedMs": 580,
+      "eventLoopMaxDelayMs": 4,
+      "eventLoopTicks": 36,
+      "lateResult": false,
+      "memoryAfter": {
+        "jsHeapSizeLimit": 4395630592,
+        "totalJSHeapSize": 14375320,
+        "usedJSHeapSize": 10988040
+      },
+      "memoryBefore": {
+        "jsHeapSizeLimit": 4395630592,
+        "totalJSHeapSize": 14375320,
+        "usedJSHeapSize": 10865520
+      },
+      "messagesAfterTerminate": 0,
+      "nodes": 50,
+      "requestId": "f4a-next-50-49",
+      "sourceRevision": 2,
+      "sourceSha": "ff5de1c6b877d0bea03a3575a27a121803d9a42a6ab156bd1be143655bda51be",
+      "status": "PASS",
+      "workerTerminated": true
+    },
+    "staleProbe": {
+      "accepted": false,
+      "code": "F4A_STALE_RESULT_IGNORED",
+      "staleResultRecorded": true
+    },
+    "staleResults": [],
+    "terminationProof": {
+      "messagesAfterTerminate": 0,
+      "messagesAtTerminate": 88,
+      "stableAfterTerminate": true
+    },
+    "workerCount": 2
+  },
+  "sourceFixtures": {
+    "first": {
+      "connections": 1600,
+      "fileSha256": "bcdf74dd6d2499e9fdfee8d22d6a12e41cf1f8a08ee3788841c4bc81ff60e059",
+      "key": "200-redundant",
+      "manifestSha256": "bcdf74dd6d2499e9fdfee8d22d6a12e41cf1f8a08ee3788841c4bc81ff60e059",
+      "resources": 200
+    },
+    "second": {
+      "connections": 49,
+      "fileSha256": "ff5de1c6b877d0bea03a3575a27a121803d9a42a6ab156bd1be143655bda51be",
+      "key": "50-linear",
+      "manifestSha256": "ff5de1c6b877d0bea03a3575a27a121803d9a42a6ab156bd1be143655bda51be",
+      "resources": 50
+    }
+  },
+  "status": "PASS"
+}

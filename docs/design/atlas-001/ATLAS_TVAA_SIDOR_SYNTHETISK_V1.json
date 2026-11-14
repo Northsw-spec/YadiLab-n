@@ -1,0 +1,37 @@
+{
+  "fixtureId": "atlas-001-contract-two-page-v1",
+  "syntheticOnly": true,
+  "sourceIdentity": "synthetic-atlas-001-contract-v1",
+  "pages": [
+    { "pageId": "page-A", "title": "Syntetisk sida A", "resourceIds": ["core01", "core02", "firewall01", "isolated01"] },
+    { "pageId": "page-B", "title": "Syntetisk sida B", "resourceIds": ["client01", "client02", "server01", "server02"] }
+  ],
+  "resources": [
+    { "id": "core01", "ports": ["eth0", "eth1"] },
+    { "id": "core02", "ports": ["eth0", "eth1"] },
+    { "id": "firewall01", "ports": ["wan", "dmz", "lan"] },
+    { "id": "isolated01", "ports": ["eth0"] },
+    { "id": "client01", "ports": ["eth0", "eth1"] },
+    { "id": "client02", "ports": ["eth0"] },
+    { "id": "server01", "ports": ["eth0", "eth1"] },
+    { "id": "server02", "ports": ["eth0"] }
+  ],
+  "connections": [
+    { "id": "link-core", "from": { "resource": "core01", "port": "eth0" }, "to": { "resource": "core02", "port": "eth0" } },
+    { "id": "link-perimeter", "from": { "resource": "core02", "port": "eth1" }, "to": { "resource": "firewall01", "port": "wan" } },
+    { "id": "link-servers", "from": { "resource": "server01", "port": "eth0" }, "to": { "resource": "server02", "port": "eth0" } },
+    { "id": "link-clients", "from": { "resource": "client01", "port": "eth1" }, "to": { "resource": "client02", "port": "eth0" } },
+    { "id": "link-cross-parallel-1", "from": { "resource": "firewall01", "port": "dmz" }, "to": { "resource": "server01", "port": "eth1" } },
+    { "id": "link-cross-parallel-2", "from": { "resource": "firewall01", "port": "lan" }, "to": { "resource": "server01", "port": "eth0" } },
+    { "id": "link-cross-other", "from": { "resource": "core01", "port": "eth1" }, "to": { "resource": "client01", "port": "eth0" } }
+  ],
+  "expected": {
+    "totalResourceCount": 8,
+    "totalConnectionCount": 7,
+    "pageA": { "internalIds": ["link-core", "link-perimeter"], "boundaryIds": ["link-cross-other", "link-cross-parallel-1", "link-cross-parallel-2"], "externalIds": ["link-clients", "link-servers"], "isolatedResourceId": "isolated01" },
+    "pageB": { "internalIds": ["link-clients", "link-servers"], "boundaryIds": ["link-cross-other", "link-cross-parallel-1", "link-cross-parallel-2"], "externalIds": ["link-core", "link-perimeter"] },
+    "crossPageConnectionCount": 3,
+    "uniqueCanonicalConnectionCount": 7,
+    "boundaryViewReferenceCountAcrossBothPages": 6
+  }
+}

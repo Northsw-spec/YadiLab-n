@@ -23,7 +23,7 @@ def require(condition, detail):
 
 
 def open_dialog(page):
-    page.locator(".workspace-menu > summary", has_text="Import / Export").click()
+    page.locator(".workspace-menu-advanced > summary").click()
     page.locator('[data-inspect-graphml="PREVIEW_ONLY"]').click()
     page.locator('[data-graphml-panel="PREVIEW_ONLY"]').wait_for(timeout=15000)
 
@@ -51,7 +51,7 @@ def assert_base(page, base_id):
 def export_scenario(page):
     # The menu may still be open after closing the GraphML dialog.
     # Clicking an already-open details summary would CLOSE it and hide export.
-    menu = page.locator(".workspace-menu", has=page.locator("summary", has_text="Import / Export"))
+    menu = page.locator(".workspace-menu-advanced")
     require(menu.count() == 1, "expected exactly one Import / Export menu")
     if menu.get_attribute("open") is None:
         menu.locator("summary").click()

@@ -26,8 +26,7 @@ ADDED = "dev_extra_p4c4a"
 SECOND = "dev_second_unsupported"
 
 def compile_large(page):
-    menu = page.locator(".workspace-menu").filter(
-        has=page.locator("summary").filter(has_text="Builder"))
+    menu = page.locator(".workspace-menu-advanced")
     if menu.get_attribute("open") is None:
         menu.locator("summary").click()
     menu.get_by_role("button", name="Kompilera + layout").click()

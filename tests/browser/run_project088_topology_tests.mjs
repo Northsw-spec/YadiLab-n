@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectScenarioToCanvas } from "../../dist-browser-test/ui/src/canvas/projection.js";
-import { computeOrthogonalRoutes } from "../../dist-browser-test/ui/src/canvas/topology-edge-routing.js";
+import { computeOrthogonalRoutes, computeOrthogonalRoutesChecked, validateOrthogonalProjection } from "../../dist-browser-test/ui/src/canvas/topology-edge-routing.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const base = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/valid/scenario-normalized.json"), "utf8"));
@@ -124,6 +124,94 @@ verifyGraph("ring", ringIds, [["r1", "ring-a", "ring-b"], ["r2", "ring-b", "ring
 const parallel = verifyGraph("parallel", ["left", "right"], [["p1", "left", "right"], ["p2", "left", "right"], ["p3", "left", "right"]], { left: { x: 0, y: 0 }, right: { x: 500, y: 0 } });
 const parallelRoutes = computeOrthogonalRoutes(parallel.nodes.filter((node) => node.type === "resource"), parallel.edges);
 equal(new Set([...parallelRoutes.values()].map((points) => JSON.stringify(points))).size, 3, "parallel links receive distinct deterministic routes");
+
+// F2 regression: source/target handles must both anchor to their declared
+// interfaces even when an obstacle forces a detour.  Before the focused
+// routing fix, the `in:` prefix was sliced as if it were four characters;
+// target handles fell back to the card centre and produced diagonal SVG
+// segments for the first/last parallel lanes.
+const routedInterfaces = Array.from({ length: 3 }, (_, index) => ({
+  interfaceId: `p${index}`,
+  label: `p${index}`,
+  addresses: [],
+  stateLabel: "DECLARED",
+  sourceHandleId: `out:p${index}`,
+  targetHandleId: `in:p${index}`,
+}));
+const routedResource = (id, x, y, interfaces = routedInterfaces) => ({
+  id,
+  type: "resource",
+  position: { x, y },
+  width: 180,
+  height: 96,
+  layoutStatus: "resolved",
+  data: {
+    semanticId: id,
+    semanticKind: "resource",
+    label: id,
+    resourceType: "network.switch",
+    deviceFamily: "network",
+    deviceRoleLabel: "Switch",
+    interfaces,
+  },
+});
+const routedNodes = [
+  routedResource("route-source", 520, 400),
+  routedResource("route-target", 7000, 300),
+  routedResource("route-obstacle", 3000, 250, []),
+];
+const routedEdges = routedInterfaces.map((iface, index) => ({
+  id: `route-${index}`,
+  type: "semantic",
+  source: "route-source",
+  target: "route-target",
+  sourceHandle: iface.sourceHandleId,
+  targetHandle: iface.targetHandleId,
+  data: { semanticId: `route-${index}`, connectionKind: "network", properties: {}, visual: {} },
+}));
+const routed = computeOrthogonalRoutes(routedNodes, routedEdges);
+for (const edge of routedEdges) {
+  const index = Number(edge.sourceHandle.slice(-1));
+  const source = routedNodes[0];
+  const target = routedNodes[1];
+  const sourceY = source.position.y + source.height * (0.2 + (index + 1) * 0.6 / (routedInterfaces.length + 1));
+  const targetY = target.position.y + target.height * (0.2 + (index + 1) * 0.6 / (routedInterfaces.length + 1));
+  const points = [
+    { x: source.position.x + source.width, y: sourceY },
+    ...(routed.get(edge.id) ?? []),
+    { x: target.position.x, y: targetY },
+  ];
+  ok(points.slice(1).every((point, pointIndex) => {
+    const previous = points[pointIndex];
+    return point.x === previous.x || point.y === previous.y;
+  }), `${edge.id}: declared interface handles keep detour orthogonal`);
+}
+
+// F3 negative regression: when every bounded candidate is occupied, routing
+// must return an explicit unsafe result instead of selecting the shortest
+// candidate through a foreign resource.
+const blockedNodes = [
+  routedResource("blocked-source", 0, 0),
+  routedResource("blocked-target", 12000, 0),
+  routedResource("blocked-obstacle", 250, -100, []),
+].map((node) => node.id === "blocked-obstacle" ? { ...node, width: 10000, height: 1000 } : node);
+const blockedEdges = [{
+  id: "blocked-link",
+  type: "semantic",
+  source: "blocked-source",
+  target: "blocked-target",
+  sourceHandle: "out:p0",
+  targetHandle: "in:p0",
+  data: { semanticId: "blocked-link", connectionKind: "network", properties: {}, visual: {} },
+}];
+const blockedResult = computeOrthogonalRoutesChecked(blockedNodes, blockedEdges);
+ok(!blockedResult.routes.has("blocked-link"), "unsafe candidate set does not produce a route");
+equal(blockedResult.failures[0]?.code, "TOPOLOGY_ROUTE_UNSAFE", "unsafe candidate set returns explicit route failure");
+ok(blockedResult.failures[0]?.obstacleIds.includes("blocked-obstacle"), "route failure identifies the blocking resource");
+const blockedProjection = { scenarioId: "project088-blocked", sourceHash: "blocked", nodes: blockedNodes, edges: blockedEdges, diagnostics: [] };
+const blockedValidation = validateOrthogonalProjection(blockedProjection, blockedProjection, blockedResult);
+ok(!blockedValidation.safe, "final projection validation blocks an unsafe route");
+ok(blockedValidation.diagnostics.some((diagnostic) => diagnostic.code === "TOPOLOGY_ROUTE_UNSAFE"), "final projection validation preserves the explicit unsafe-route diagnostic");
 
 verifyGraph("disconnected", ["a", "b", "c", "d"], [["d1", "a", "b"], ["d2", "c", "d"]], { a: { x: 0, y: 0 }, b: { x: 300, y: 0 }, c: { x: 0, y: 300 }, d: { x: 300, y: 300 } });
 verifyGraph("mixed-zones", ["router-z", "fw-z", "server-z", "client-z"], [["m1", "router-z", "fw-z"], ["m2", "fw-z", "server-z"], ["m3", "server-z", "client-z"]], {

@@ -1,0 +1,239 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ATLAS-001 F4A worker proof</title>
+<body>
+<output id="status">READY</output>
+<script src="../../node_modules/elkjs/lib/elk-api.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const originalWorker = window.Worker;
+  const workerRecords = [];
+  let activeWorkers = 0;
+  let maxConcurrentWorkers = 0;
+  let currentIdentity = null;
+  const acceptedResults = [];
+  const staleResults = [];
+
+  function memorySnapshot() {
+    const memory = performance.memory;
+    return memory && Number.isFinite(memory.usedJSHeapSize)
+      ? {
+          usedJSHeapSize: memory.usedJSHeapSize,
+          totalJSHeapSize: memory.totalJSHeapSize,
+          jsHeapSizeLimit: memory.jsHeapSizeLimit,
+        }
+      : null;
+  }
+
+  class TrackingWorker extends originalWorker {
+    constructor(...args) {
+      super(...args);
+      this.__f4Terminated = false;
+      this.__f4Closed = false;
+      activeWorkers += 1;
+      maxConcurrentWorkers = Math.max(maxConcurrentWorkers, activeWorkers);
+      const record = { worker: this, terminated: false, messagesAfterTerminate: 0 };
+      workerRecords.push(record);
+      const originalMessage = this.onmessage;
+      this.addEventListener("message", (event) => {
+        if (record.terminated) record.messagesAfterTerminate += 1;
+        if (typeof originalMessage === "function") originalMessage.call(this, event);
+      });
+      this.__f4Record = record;
+    }
+
+    terminate() {
+      if (!this.__f4Terminated) {
+        this.__f4Terminated = true;
+        this.__f4Record.terminated = true;
+        activeWorkers = Math.max(0, activeWorkers - 1);
+      }
+      return super.terminate();
+    }
+  }
+
+  window.Worker = TrackingWorker;
+
+  function outputSummary(graph) {
+    const children = Array.isArray(graph?.children) ? graph.children : [];
+    const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+    return { nodes: children.length, edges: edges.length };
+  }
+
+  function validateCompletedLayout(graph, result) {
+    const expected = outputSummary(graph);
+    const actualChildren = Array.isArray(result?.children) ? result.children : [];
+    const actualEdges = Array.isArray(result?.edges) ? result.edges : [];
+    if (actualChildren.length !== expected.nodes || actualEdges.length !== expected.edges) {
+      return {
+        ok: false,
+        code: "F4A_LAYOUT_INCOMPLETE",
+        message: `Worker returned ${actualChildren.length}/${expected.nodes} nodes and ${actualEdges.length}/${expected.edges} edges.`,
+      };
+    }
+    return { ok: true };
+  }
+
+  function identityMatches(identity) {
+    return currentIdentity?.requestId === identity.requestId
+      && currentIdentity.sourceSha === identity.sourceSha
+      && currentIdentity.sourceRevision === identity.sourceRevision;
+  }
+
+  async function runTerminationProof() {
+    const source = "setInterval(() => postMessage('tick'), 0);";
+    const blobUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+    const worker = new originalWorker(blobUrl);
+    let messages = 0;
+    worker.onmessage = () => { messages += 1; };
+    // Allow the native worker to start and emit observable work before the
+    // termination point.  The proof is deliberately independent of ELK's
+    // algorithm: it demonstrates that Worker.terminate() stops a running
+    // worker rather than merely racing its Promise.
+    await sleep(400);
+    worker.terminate();
+    const messagesAtTerminate = messages;
+    await sleep(120);
+    URL.revokeObjectURL(blobUrl);
+    return {
+      messagesAtTerminate,
+      messagesAfterTerminate: messages - messagesAtTerminate,
+      stableAfterTerminate: messages === messagesAtTerminate,
+    };
+  }
+
+  async function runJob({ graph, requestId, sourceSha, sourceRevision, budgetMs }) {
+    if (currentIdentity !== null) {
+      throw new Error("F4A_LAYOUT_CONCURRENT_JOB");
+    }
+    currentIdentity = { requestId, sourceSha, sourceRevision };
+    const started = performance.now();
+    const memoryBefore = memorySnapshot();
+    const probe = { ticks: 0, maxDelayMs: 0 };
+    let previous = started;
+    const interval = setInterval(() => {
+      const now = performance.now();
+      probe.maxDelayMs = Math.max(probe.maxDelayMs, Math.max(0, now - previous - 16));
+      previous = now;
+      probe.ticks += 1;
+    }, 16);
+    const elk = new ELK({
+      workerUrl: new URL("../../node_modules/elkjs/lib/elk-worker.js", document.baseURI).href,
+    });
+    const layoutPromise = elk.layout(graph, { measureExecutionTime: true });
+    let timedOut = false;
+    let lateResult = false;
+    layoutPromise.then((result) => {
+      if (timedOut) {
+        lateResult = true;
+        staleResults.push({ requestId, sourceSha, sourceRevision, code: "F4A_LATE_RESULT_AFTER_ABORT" });
+        return;
+      }
+      const checked = validateCompletedLayout(graph, result);
+      if (!checked.ok) throw new Error(checked.code);
+      if (!identityMatches({ requestId, sourceSha, sourceRevision })) {
+        staleResults.push({ requestId, sourceSha, sourceRevision, code: "F4A_STALE_RESULT_IGNORED" });
+        return;
+      }
+      acceptedResults.push({ requestId, sourceSha, sourceRevision, ...outputSummary(graph) });
+    }).catch(() => {});
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), budgetMs));
+    let outcome;
+    try {
+      const result = await Promise.race([layoutPromise.then((value) => ({ value })), timeout]);
+      if (result.timeout) {
+        timedOut = true;
+        elk.terminateWorker();
+        outcome = {
+          status: "ABORTED",
+          code: "F4A_LAYOUT_TIMEOUT_ABORTED",
+          requestId,
+          sourceSha,
+          sourceRevision,
+          elapsedMs: Math.round(performance.now() - started),
+        };
+      } else {
+        const checked = validateCompletedLayout(graph, result.value);
+        if (!checked.ok) {
+          elk.terminateWorker();
+          outcome = { status: "FAIL", code: checked.code, requestId, sourceSha, sourceRevision };
+        } else {
+          outcome = {
+            status: "PASS",
+            code: "F4A_LAYOUT_COMPLETE",
+            requestId,
+            sourceSha,
+            sourceRevision,
+            elapsedMs: Math.round(performance.now() - started),
+            ...outputSummary(graph),
+          };
+          elk.terminateWorker();
+        }
+      }
+    } catch (error) {
+      elk.terminateWorker();
+      outcome = {
+        status: "FAIL",
+        code: "F4A_LAYOUT_WORKER_ERROR",
+        requestId,
+        sourceSha,
+        sourceRevision,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    } finally {
+      clearInterval(interval);
+      currentIdentity = null;
+    }
+    // Give the terminated worker a bounded observation window. A late result
+    // or post-termination message is a proof failure, not a best-effort pass.
+    await sleep(120);
+    return {
+      ...outcome,
+      lateResult,
+      eventLoopTicks: probe.ticks,
+      eventLoopMaxDelayMs: Math.round(probe.maxDelayMs),
+      workerTerminated: workerRecords.at(-1)?.terminated === true,
+      messagesAfterTerminate: workerRecords.at(-1)?.messagesAfterTerminate ?? 0,
+      memoryBefore,
+      memoryAfter: memorySnapshot(),
+    };
+  }
+
+  window.runF4WorkerSequence = async ({ first, second }) => {
+    workerRecords.length = 0;
+    acceptedResults.length = 0;
+    staleResults.length = 0;
+    maxConcurrentWorkers = 0;
+    const terminationProof = await runTerminationProof();
+    const firstResult = await runJob(first);
+    const secondResult = await runJob(second);
+    // Negative identity test: a result from the previous generation is
+    // evaluated while a newer request is current.  It must be rejected by
+    // the same identity predicate used by the real Worker callback.
+    currentIdentity = { requestId: "f4a-current-new", sourceSha: "new-source", sourceRevision: 3 };
+    const staleCandidate = { requestId: "f4a-old-result", sourceSha: "old-source", sourceRevision: 2 };
+    const staleAccepted = identityMatches(staleCandidate);
+    const staleProbe = {
+      accepted: staleAccepted,
+      staleResultRecorded: !staleAccepted,
+      code: staleAccepted ? "F4A_STALE_RESULT_ACCEPTED" : "F4A_STALE_RESULT_IGNORED",
+    };
+    currentIdentity = null;
+    return {
+      first: firstResult,
+      second: secondResult,
+      terminationProof,
+      staleProbe,
+      acceptedResults: [...acceptedResults],
+      staleResults: [...staleResults],
+      workerCount: workerRecords.length,
+      maxConcurrentWorkers,
+    };
+  };
+
+  document.querySelector("#status").textContent = "READY";
+})();
+</script>

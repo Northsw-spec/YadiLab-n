@@ -1,6 +1,7 @@
 import type { NormalizedScenario } from "../../../core-model/src/generated/contracts.js";
 import type { AssetRenderDescriptor } from "../../../asset-library/src/index.js";
 import type { DeviceVisualFamily, SemanticLinkDescriptor } from "./device-visuals.js";
+import type { ResourceIconClassification, SemanticIconKey } from "./icon-registry.js";
 
 export type CanvasNodeKind = "zone" | "resource";
 export type LayoutStatus = "resolved" | "unplaced";
@@ -23,6 +24,19 @@ export interface CanvasInterfaceHandle {
   readonly stateLabel: "DECLARED";
   readonly sourceHandleId: string;
   readonly targetHandleId: string;
+  /** View-only side assignment used by dense NORMAL presentations. */
+  readonly sourceSide?: "NORTH" | "SOUTH" | "EAST" | "WEST";
+  readonly targetSide?: "NORTH" | "SOUTH" | "EAST" | "WEST";
+}
+
+export interface CanvasVisualAttachmentHandle {
+  /** Stable view-only handle; it is never exported as a source interface. */
+  readonly handleId: string;
+  readonly connectionId: string;
+  readonly direction: "source" | "target";
+  readonly side: "NORTH" | "SOUTH" | "EAST" | "WEST";
+  /** ELK-computed handle center expressed as a percentage of the card edge. */
+  readonly topPercent?: number;
 }
 
 export interface CanvasZoneData {
@@ -30,6 +44,10 @@ export interface CanvasZoneData {
   readonly semanticKind: "zone";
   readonly label: string;
   readonly zoneKind: string;
+  /** Presentation-only navigation groups never enter canonical source state. */
+  readonly presentationOnly?: true;
+  readonly navigationGroupKind?: "declared-zone" | "derived-navigation";
+  readonly memberIds?: readonly string[];
 }
 
 export interface CanvasResourceData {
@@ -41,8 +59,21 @@ export interface CanvasResourceData {
   readonly product?: string;
   readonly deviceFamily: DeviceVisualFamily;
   readonly deviceRoleLabel: string;
+  readonly iconKey?: SemanticIconKey;
+  readonly iconClass?: ResourceIconClassification["className"];
+  readonly iconTitle?: string;
+  readonly iconAccessibleName?: string;
+  readonly semanticBadges?: readonly string[];
   readonly asset?: AssetRenderDescriptor;
   readonly interfaces: readonly CanvasInterfaceHandle[];
+  readonly visualAttachmentHandles?: readonly CanvasVisualAttachmentHandle[];
+  readonly hierarchyRole?: string;
+  readonly hierarchyVisual?: true;
+  readonly connectionState?: "CONNECTED" | "BOUNDARY_CONNECTED" | "SOURCE_ISOLATED" | "INCOMPLETE_VIEW";
+  readonly visibleConnectionCount?: number;
+  readonly boundaryConnectionCount?: number;
+  readonly omittedConnectionCount?: number;
+  readonly presentationGroupId?: string;
 }
 
 export type CanvasNodeData = CanvasZoneData | CanvasResourceData;
@@ -65,6 +96,9 @@ export interface CanvasEdgeData {
   /** Deterministic visual bend points; canonical endpoints/IDs remain separate. */
   readonly route?: readonly { readonly x: number; readonly y: number }[];
   readonly routeKind?: "orthogonal";
+  readonly routeOrigin?: "elk" | "legacy";
+  /** True when this edge belongs to the bounded PROJECT-090 hierarchy view. */
+  readonly hierarchyVisual?: true;
   /** True when this edge is a visual overview summary, never a physical link. */
   readonly summaryOnly?: boolean;
   /** Number of canonical declared links represented by a summary edge. */

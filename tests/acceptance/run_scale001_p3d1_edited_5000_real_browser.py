@@ -59,8 +59,7 @@ def run_case(browser,url):
                 edited["connections"]==before["connections"],
                 "Original 5000 nodes or exact original port-paired links changed")
 
-        builder_menu=page.locator('.workspace-menu').filter(
-            has=page.locator('summary').filter(has_text='Builder'))
+        builder_menu=page.locator('.workspace-menu-advanced')
         builder_menu.locator('summary').click()
         builder_menu.get_by_role('button',name='Kompilera + layout').click()
         expect(page.locator('[data-scale-p3d1-safe-compile="NO_UNBOUNDED_LAYOUT"]')).to_be_visible(
@@ -72,8 +71,7 @@ def run_case(browser,url):
         require(exported_source(page)==edited,
                 "Compilation mutated editable canonical source")
 
-        preview_menu=page.locator('.workspace-menu').filter(
-            has=page.locator('summary').filter(has_text='Run & Preview'))
+        preview_menu=page.locator('.workspace-menu-advanced')
         preview_menu.locator('summary').click()
         preview_menu.get_by_role('button',name='Förhandsvisa körläge').click()
         expect(page.locator('.diagnostics')).to_contain_text(

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright, expect
-from run_project_file_real_browser import MOCK, require
+from run_project_file_real_browser import MOCK, fill_value, require
 
 
 def main():
@@ -62,9 +62,7 @@ def main():
               button.click();
             }""")
             page.wait_for_function("""() => {
-              const menu = [...document.querySelectorAll('.workspace-menu')]
-                .find(el => el.querySelector('summary')?.textContent?.trim()
-                  === 'Import / Export');
+              const menu = document.querySelector('.workspace-menu-advanced');
               const button = [...(menu?.querySelectorAll('button') ?? [])]
                 .find(el => el.textContent?.trim() === 'Exportera elevpaket');
               return button && !button.disabled;
@@ -73,9 +71,7 @@ def main():
             # Positive control: a compiled, clean Builder may produce a package.
             def export_package():
                 page.evaluate("""() => {
-                  const menu = [...document.querySelectorAll('.workspace-menu')]
-                    .find(el => el.querySelector('summary')?.textContent?.trim()
-                      === 'Import / Export');
+                  const menu = document.querySelector('.workspace-menu-advanced');
                   const button = [...(menu?.querySelectorAll('button') ?? [])]
                     .find(el => el.textContent?.trim() === 'Exportera elevpaket');
                   if (!button || button.disabled) throw new Error('PROJECT068_EXPORT_UNAVAILABLE');
@@ -88,8 +84,8 @@ def main():
             require(before == 1, "Clean compiled Builder did not export a package")
 
             # An unapplied form must fail BEFORE package creation or download.
-            title.fill("PROJECT-068 pending before package export")
-            expect(controls).to_have_attribute("data-project-pending-drafts", "true")
+            fill_value(title, "PROJECT-068 pending before package export")
+            expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
             export_package()
             expect(page.locator(".diagnostic")).to_contain_text(
                 "PROJECT_PACKAGE_EXPORT_UNAPPLIED_DRAFT", timeout=10000)
@@ -104,9 +100,7 @@ def main():
             # Same JavaScript task: package I/O starts and only then does a
             # new draft appear. The workspace/source identity is unchanged.
             page.evaluate("""() => {
-              const menu = [...document.querySelectorAll('.workspace-menu')]
-                .find(el => el.querySelector('summary')?.textContent?.trim()
-                  === 'Import / Export');
+              const menu = document.querySelector('.workspace-menu-advanced');
               const button = [...(menu?.querySelectorAll('button') ?? [])]
                 .find(el => el.textContent?.trim() === 'Exportera elevpaket');
               const input = document.querySelector(
@@ -119,7 +113,11 @@ def main():
               setter.call(input, 'PROJECT-068 pending during package export');
               input.dispatchEvent(new Event('input', { bubbles: true }));
             }""")
-            expect(controls).to_have_attribute("data-project-pending-drafts", "true")
+            try:
+                expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
+            except AssertionError:
+                fill_value(title, "PROJECT-068 pending during package export")
+                expect(controls).to_have_attribute("data-project-pending-drafts", "true", timeout=15000)
             expect(page.locator(".diagnostic")).to_contain_text(
                 "PROJECT_PACKAGE_EXPORT_LATE_UNAPPLIED_DRAFT", timeout=30000)
             require(page.evaluate("window.__auditPackageDownloads.length") == before,

@@ -20,7 +20,7 @@ def setup(browser,url):
     page.locator('[data-network-import-primary="true"]').wait_for(timeout=25000)
     return page,page.locator(".app-frame").get_attribute("data-runtime-scenario-id"),errors,external
 def menu(page):
-    m=page.locator(".workspace-menu",has=page.locator("summary",has_text="Import / Export"))
+    m=page.locator(".workspace-menu-advanced")
     require(m.count()==1,"Import/Export menu unavailable")
     if m.get_attribute("open") is None:m.locator("summary").click()
     return m

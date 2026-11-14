@@ -22,45 +22,67 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
 
 
 def run_observation(page, save=True):
     panel = page.locator('[data-observation-engine="wave1"]')
     open_details(page, '[data-observation-engine="wave1"]')
-    field(panel, "Mål").select_option("client1")
-    field(panel, "Modellerat kommando").select_option("windows.ipconfig_all")
+    choose(field(panel, "Mål"), "client1")
+    choose(field(panel, "Modellerat kommando"), "windows.ipconfig_all")
     panel.get_by_role("button", name="Kör modellerad observation").click()
     transcript = panel.locator('[data-observation-transcript="ready"]')
     expect(transcript).to_contain_text("DNS Servers: 10.78.102.99", timeout=15000)
     if save:
         transcript.get_by_role("button", name="Spara evidens i anteckningar").click()
-    return transcript.inner_text()
+    return transcript.text_content() or ""
 
 
 def run_probe(page, probe_id, expected_truth, save=True):
     panel = page.locator('[data-active-probe-engine="wave2"]')
     open_details(page, '[data-active-probe-engine="wave2"]')
-    field(panel, "Källvärd").select_option("client1")
-    field(panel, "Aktiv probe").select_option(probe_id)
+    choose(field(panel, "Källvärd"), "client1")
+    choose(field(panel, "Aktiv probe"), probe_id)
     if probe_id == "windows.ping":
-        field(panel, "Destination").select_option("server1")
+        choose(field(panel, "Destination"), "server1")
     else:
-        field(panel, "DNS-namn", "input").fill("app.lab.test")
+        fill_value(field(panel, "DNS-namn", "input"), "app.lab.test")
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
     if save:
         transcript.get_by_role("button", name="Spara evidens i anteckningar").click()
-    return transcript.inner_text()
+    return transcript.text_content() or ""
 
 
 def add_hypothesis(page):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(
+    fill_value(field(panel, "Learner note", "textarea"),
         "IP-vägen fungerar men klientens resolveradress saknar en deklarerad DNS-server."
     )
     panel.get_by_role("button", name="Add note to proof chain").click()
@@ -69,11 +91,11 @@ def add_hypothesis(page):
 def apply_typed_remediation(page, action_id, value):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Typed remediation action").select_option(action_id)
+    choose(field(panel, "Typed remediation action"), action_id)
     if action_id == "change_dns_servers":
-        field(panel, "DNS servers (comma-separated IPv4)", "input").fill(value)
+        fill_value(field(panel, "DNS servers (comma-separated IPv4)", "input"), value)
     elif action_id == "set_windows_network_profile":
-        field(panel, "Windows network profile").select_option(value)
+        choose(field(panel, "Windows network profile"), value)
     else:
         raise AssertionError(f"Unsupported acceptance action: {action_id}")
     panel.get_by_role("button", name="Preview remediation").click()
@@ -129,8 +151,8 @@ def main():
             page.goto(args.url, wait_until="domcontentloaded", timeout=30000)
             expect(page.locator('[data-project-file-controls="ready"]')).to_be_visible(timeout=30000)
 
-            page.locator('[data-guided-lab-catalog="wave1"]').select_option("guided_win_dns")
-            page.locator(".workspace-menu").filter(has_text="Lab & Scenario").locator("summary").click()
+            choose(page.locator('[data-guided-lab-catalog="wave1"]'), "guided_win_dns")
+            page.locator(".workspace-menu-advanced").locator("summary").click()
             page.get_by_role("button", name="Starta guidad labb").click()
             page.wait_for_function(
                 """() => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id')
@@ -184,7 +206,9 @@ def main():
             require(positive_status == "VERIFIED_IMPROVEMENT",
                     f"Correct DNS remediation did not verify improvement: {positive_status}")
             open_details(page, '[data-guided-troubleshooting="v0.77"]')
-            expect(page.locator('[data-guided-phase="VERIFICATION_COMPLETE"]')).to_be_visible(timeout=15000)
+            phase_marker = page.locator('[data-guided-phase="VERIFICATION_COMPLETE"]')
+            expect(phase_marker).to_have_count(1, timeout=15000)
+            require((phase_marker.text_content() or "").strip() == "VERIFICATION_COMPLETE", "Guided completion phase marker was not updated")
 
             # Reset must restore the original resolver, notebook and UNKNOWN result.
             reset(page)

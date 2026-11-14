@@ -1,0 +1,65 @@
+{
+  "controls": [
+    {
+      "connections": [],
+      "expected_pages": 500,
+      "file": "atlas001-g5-control-a-500-pages.docx",
+      "id": "A",
+      "rendered_pages": 500,
+      "resources": [],
+      "sha256": "452791038a0003dd3346b3d55c0c2344e0430f596cf5627b7888e81ef8ae0a5c",
+      "tables": 0
+    },
+    {
+      "connections": [
+        {
+          "from_id": "g5-router-001",
+          "from_port": "eth1",
+          "to_id": "g5-switch-001",
+          "to_port": "eth1"
+        }
+      ],
+      "declarations": [
+        {
+          "kind": "resources",
+          "page": 101,
+          "resource_ids": [
+            "g5-router-001",
+            "g5-switch-001"
+          ]
+        },
+        {
+          "connections": [
+            {
+              "from_id": "g5-router-001",
+              "from_port": "eth1",
+              "to_id": "g5-switch-001",
+              "to_port": "eth1"
+            }
+          ],
+          "kind": "connections",
+          "page": 251
+        },
+        {
+          "kind": "boundary-note",
+          "page": 401
+        }
+      ],
+      "expected_pages": 500,
+      "file": "atlas001-g5-control-b-500-pages.docx",
+      "id": "B",
+      "rendered_pages": 500,
+      "resources": [
+        "g5-router-001",
+        "g5-switch-001"
+      ],
+      "sha256": "97ab564459454a965541a6267e58c6ba2210484eb356087ef57d501de240c959",
+      "tables": 2
+    }
+  ],
+  "format": "docx",
+  "generator": "generate_g5_fixtures.py",
+  "rendererProfile": "atlas001-g5.0.github-ubuntu-24.04-renderer.v1",
+  "page_count_method": "LibreOffice soffice -> PDF -> pdfinfo Pages",
+  "profile": "atlas-001.g5.0.synthetic-controls.v1"
+}

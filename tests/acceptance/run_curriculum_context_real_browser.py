@@ -48,7 +48,10 @@ def main():
                     "Welcome scenario displayed unrelated guided-lab instructions")
 
             with page.expect_file_chooser(timeout=5000) as chooser:
-                page.get_by_role("button", name="Import JSON / Excel / CSV → Network Topology").click()
+                # PROJECT-093 keeps the import workflow in the visible
+                # topology-first toolbar; the former compatibility rail is
+                # intentionally gone.
+                page.get_by_role("button", name="Importera", exact=True).click()
             chooser.value.set_files(str(csv_path))
             page.get_by_role("button", name="Create topology in Builder (edit only)").click()
             expect(page.locator('.mission-strip')).to_contain_text("Imported Network Topology", timeout=15000)
@@ -56,7 +59,9 @@ def main():
                     "Imported topology retained unrelated guided-lab instructions")
 
             # Positive control: opening the selected guided lab still shows its guidance.
-            page.get_by_text("Builder", exact=True).click()
+            advanced = page.locator(".workspace-menu-advanced")
+            if advanced.get_attribute("open") is None:
+                advanced.locator("summary").click()
             page.once("dialog", lambda dialog: dialog.accept())
             page.get_by_role("button", name="Öppna labb i byggläget").click()
             page.wait_for_function(

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "project094.v1",
+  "sourceKind": "synthetic-ci-fixture",
+  "repo": "Northsw-spec/YadiLab-n",
+  "baselineHead": "7fc25e0852804c7ca12ca4883c6ad04751c240ef",
+  "candidateHead": "414e9fe8ccf36678e2f19a60698502ad1fcca938",
+  "scope": "Access25",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "canonical": {
+    "resources": 40,
+    "links": 39,
+    "physicalSvgPaths": 39
+  },
+  "baseline": {
+    "totalCableLength": 49206.00018507434,
+    "p95DetourRatio": 1.537736060237084,
+    "medianDetourRatio": 1.000000043487311,
+    "totalBends": 78,
+    "cableCrossings": 0,
+    "nodePenetrations": 0,
+    "nodeOverlaps": 0,
+    "bboxArea": 1655231.8904202373,
+    "medianLayoutMs": 0,
+    "minReadNameCssPx": 13.76
+  },
+  "candidates": [
+    {
+      "id": "A-flat-right",
+      "profile": {
+        "direction": "RIGHT",
+        "options": {
+          "elk.algorithm": "layered",
+          "org.eclipse.elk.edgeRouting": "ORTHOGONAL",
+          "org.eclipse.elk.layered.mergeEdges": "false",
+          "org.eclipse.elk.hierarchyHandling": "INCLUDE_CHILDREN",
+          "elk.direction": "RIGHT",
+          "org.eclipse.elk.layered.highDegreeNodes.treatment": "false",
+          "elk.spacing.nodeNode": "40",
+          "elk.layered.spacing.nodeNodeBetweenLayers": "80"
+        }
+      },
+      "metrics": {
+        "totalCableLength": 119441.99999999999,
+        "p95DetourRatio": 1.3275529865125242,
+        "medianDetourRatio": 1,
+        "totalBends": 152,
+        "cableCrossings": 0,
+        "nodePenetrations": 0,
+        "nodeOverlaps": 0,
+        "bboxArea": 5092192,
+        "medianLayoutMs": 555.6999999992549,
+        "minReadNameCssPx": 14.4
+      },
+      "hardPass": true,
+      "hardFailReasons": []
+    },
+    {
+      "id": "B-flat-down-high-degree",
+      "profile": {
+        "direction": "DOWN",
+        "options": {
+          "elk.algorithm": "layered",
+          "org.eclipse.elk.edgeRouting": "ORTHOGONAL",
+          "org.eclipse.elk.layered.mergeEdges": "false",
+          "org.eclipse.elk.hierarchyHandling": "INCLUDE_CHILDREN",
+          "elk.direction": "DOWN",
+          "org.eclipse.elk.layered.highDegreeNodes.treatment": "true",
+          "org.eclipse.elk.layered.highDegreeNodes.threshold": "16",
+          "elk.spacing.nodeNode": "40",
+          "elk.layered.spacing.nodeNodeBetweenLayers": "80"
+        }
+      },
+      "metrics": {
+        "totalCableLength": 139748.4,
+        "p95DetourRatio": 2.263157894736842,
+        "medianDetourRatio": 1.1544294433142224,
+        "totalBends": 170,
+        "cableCrossings": 297,
+        "nodePenetrations": 0,
+        "nodeOverlaps": 0,
+        "bboxArea": 6028921.600000001,
+        "medianLayoutMs": 558.2999999970198,
+        "minReadNameCssPx": 14.4
+      },
+      "hardPass": false,
+      "hardFailReasons": [
+        "CABLE_CROSSING"
+      ]
+    },
+    {
+      "id": "C-role-aware-fanout",
+      "profile": {
+        "direction": "RIGHT",
+        "options": {
+          "elk.algorithm": "layered",
+          "org.eclipse.elk.edgeRouting": "ORTHOGONAL",
+          "org.eclipse.elk.layered.mergeEdges": "false",
+          "org.eclipse.elk.hierarchyHandling": "INCLUDE_CHILDREN",
+          "elk.direction": "RIGHT",
+          "org.eclipse.elk.layered.highDegreeNodes.treatment": "true",
+          "org.eclipse.elk.layered.highDegreeNodes.threshold": "12",
+          "elk.spacing.nodeNode": "0",
+          "elk.layered.spacing.nodeNodeBetweenLayers": "0",
+          "elk.layered.spacing.edgeNodeBetweenLayers": "0",
+          "elk.layered.spacing.edgeEdgeBetweenLayers": "0",
+          "elk.spacing.edgeNode": "0",
+          "elk.spacing.edgeEdge": "0",
+          "org.eclipse.elk.layered.nodePlacement.strategy": "BRANDES_KOEPF"
+        }
+      },
+      "metrics": {
+        "totalCableLength": 65316.666666666664,
+        "p95DetourRatio": 1.312833274084607,
+        "medianDetourRatio": 1.0463215258855585,
+        "totalBends": 262,
+        "cableCrossings": 0,
+        "nodePenetrations": 0,
+        "nodeOverlaps": 0,
+        "bboxArea": 3362040,
+        "medianLayoutMs": 560.5,
+        "minReadNameCssPx": 14.4
+      },
+      "hardPass": true,
+      "hardFailReasons": []
+    }
+  ],
+  "selectedCandidate": "C-role-aware-fanout",
+  "gates": {
+    "canonical": "PASS",
+    "routing": "PASS",
+    "readability": "PASS",
+    "camera": "PASS",
+    "performance": "PASS",
+    "ci": "NOT_RUN",
+    "visualApproved": "PENDING_USER"
+  }
+}

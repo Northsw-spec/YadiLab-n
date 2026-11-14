@@ -26,13 +26,35 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
 
 
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 def start_selected_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
     button = page.locator('[data-guided-lab-start="direct"]')
     expect(button).to_be_visible()
     expect(button).to_contain_text("Starta valt labb")
@@ -65,8 +87,8 @@ def click_next_tool(page, tool):
 
 def run_observation(page, target_id, command_id, expected_text):
     panel = open_details(page, '[data-observation-engine="wave1"]')
-    field(panel, "Mål").select_option(target_id)
-    field(panel, "Modellerat kommando").select_option(command_id)
+    choose(field(panel, "Mål"), target_id)
+    choose(field(panel, "Modellerat kommando"), command_id)
     panel.get_by_role("button", name="Kör modellerad observation").click()
     transcript = panel.locator('[data-observation-transcript="ready"]')
     expect(transcript).to_contain_text(expected_text, timeout=15000)
@@ -75,9 +97,9 @@ def run_observation(page, target_id, command_id, expected_text):
 
 def run_probe(page, probe_id, expected_truth):
     panel = open_details(page, '[data-active-probe-engine="wave2"]')
-    field(panel, "Källvärd").select_option("client1")
-    field(panel, "Aktiv probe").select_option(probe_id)
-    field(panel, "Destination").select_option("server1")
+    choose(field(panel, "Källvärd"), "client1")
+    choose(field(panel, "Aktiv probe"), probe_id)
+    choose(field(panel, "Destination"), "server1")
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
@@ -86,7 +108,7 @@ def run_probe(page, probe_id, expected_truth):
 
 def add_hypothesis(page):
     panel = open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(
+    fill_value(field(panel, "Learner note", "textarea"),
         "Routing evidence points to the client default gateway; I will test that hypothesis."
     )
     panel.get_by_role("button", name="Add note to proof chain").click()
@@ -94,9 +116,9 @@ def add_hypothesis(page):
 
 def apply_gateway_remediation(page):
     panel = open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Target").select_option("client1")
-    field(panel, "Typed remediation action").select_option("change_default_gateway")
-    field(panel, "Gateway IPv4 address", "input").fill("10.78.1.1")
+    choose(field(panel, "Target"), "client1")
+    choose(field(panel, "Typed remediation action"), "change_default_gateway")
+    fill_value(field(panel, "Gateway IPv4 address", "input"), "10.78.1.1")
     panel.get_by_role("button", name="Preview remediation").click()
     expect(panel).to_contain_text("0 → 1", timeout=10000)
     panel.get_by_role("button", name="Commit remediation").click()
@@ -105,7 +127,9 @@ def apply_gateway_remediation(page):
 
 def workflow_phase(page, phase):
     guided = open_details(page, '[data-guided-troubleshooting="v0.77"]')
-    expect(guided.locator(f'[data-guided-phase="{phase}"]')).to_be_visible(timeout=15000)
+    phase_marker = guided.locator(f'[data-guided-phase="{phase}"]')
+    expect(phase_marker).to_have_count(1, timeout=15000)
+    require((phase_marker.text_content() or "").strip() == phase, f"Unexpected workflow phase marker for {phase}")
 
 
 def main():
@@ -144,7 +168,7 @@ def main():
             require(page.locator('[data-curriculum-wave]').count() == 0, "Welcome page showed guided curriculum")
 
             # P1: select + direct Starta valt labb, without opening Lab & Scenario.
-            page.locator('[data-guided-lab-catalog="wave1"]').select_option("guided_win_gateway")
+            choose(page.locator('[data-guided-lab-catalog="wave1"]'), "guided_win_gateway")
             direct_start = page.locator('[data-guided-lab-start="direct"]')
             expect(direct_start).to_be_visible()
             expect(direct_start).to_contain_text("Windows · fel standard-gateway")

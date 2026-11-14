@@ -47,8 +47,7 @@ def exercise(browser, url, key, evidence_dir):
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         panel = open_import(page, payload, f"PROJECT-089-{key}.xlsx")
-        text = panel.inner_text()
-        require("Devices: 47 · Explicit links: 46" in text, f"{key}: canonical counts missing")
+        expect(panel).to_contain_text("Devices: 47 · Explicit links: 46", timeout=120000)
         expect(panel.locator('[data-network-import-detected]')).to_be_visible()
         confirmation = panel.locator('[data-network-import-confirmation="true"]')
         expect(confirmation).to_be_visible()

@@ -143,6 +143,13 @@ export function normalizeNetworkInventoryDocument(
   options: Readonly<{ linkSourceChoice?: NetworkLinkSourceDecision }> = {},
 ): NetworkInventoryNormalization {
   const workbookCompatibility = resolveWorkbookCompatibility(document);
+  // Workbook compatibility is the single source of truth for producer sheet
+  // names. For a recognized six-sheet workbook, map through canonical table
+  // IDs while retaining each ImportCell's original worksheet locator. This
+  // accepts only the verified profile and does not broaden shorthand support.
+  const compatibilityDocument = workbookCompatibility.profile === "standard" || workbookCompatibility.profile === "legacy-six"
+    ? workbookCompatibility.document
+    : document;
   if (workbookCompatibility.profile === "legacy-src-22") {
     // Preserve the original SRC worksheet names through the review and
     // provenance path. workbook-mapping.ts performs the explicit six-sheet
@@ -153,23 +160,23 @@ export function normalizeNetworkInventoryDocument(
   const validChoice = choice === undefined || choice === "LINKS_SHEET" || choice === "INLINE_CONNECTED_TO";
   // Do not silently prefer the first of two competing network inventory
   // tables. This also covers canonical Metadata+Nodes mixed with Devices.
-  const inventories = document.tables.filter((t) =>
+  const inventories = compatibilityDocument.tables.filter((t) =>
     INVENTORY_TABLE_IDS.has(t.tableId.toLowerCase()));
   if (inventories.length > 1) return { document, unmappedColumnCount: 0, diagnostics: [{
     code: "NETWORK_IMPORT_DEVICE_TABLE_AMBIGUOUS", severity: "error",
     message: "Multiple competing device inventory tables were supplied. No source table was selected or combined.",
   }] };
   // The already canonical Nodes/Metadata/Links workbook schema remains unchanged.
-  if (document.tables.some((t) => t.tableId === "Metadata") &&
-      document.tables.some((t) => t.tableId === "Nodes")) {
-    if (choice !== undefined) return { document, unmappedColumnCount: 0, diagnostics: [{
+  if (compatibilityDocument.tables.some((t) => t.tableId === "Metadata") &&
+      compatibilityDocument.tables.some((t) => t.tableId === "Nodes")) {
+    if (choice !== undefined) return { document: compatibilityDocument, unmappedColumnCount: 0, diagnostics: [{
       code: "NETWORK_IMPORT_LINK_SOURCE_CHOICE_INVALID", severity: "error",
       message: "A link-source decision requires conflicting Devices inline links and a separate Links table.",
     }] };
-    return { document, diagnostics: [], unmappedColumnCount: 0 };
+    return { document: compatibilityDocument, diagnostics: workbookCompatibility.diagnostics, unmappedColumnCount: 0 };
   }
   const inventory = inventories[0];
-  if (!inventory) return { document, unmappedColumnCount: 0, diagnostics: [{
+  if (!inventory) return { document: compatibilityDocument, unmappedColumnCount: 0, diagnostics: [{
     code: "NETWORK_IMPORT_INVENTORY_MISSING", severity: "error",
     message: "Expected one supported Devices or Nodes table, or a CSV/TSV device inventory.",
   }] };
@@ -178,7 +185,7 @@ export function normalizeNetworkInventoryDocument(
   // it runs *after* shorthand normalization, which used to erase all other
   // source tabs. Reject them here with original table and physical row before
   // the normalized document is allowed to become an editable Builder source.
-  for (const table of document.tables) {
+  for (const table of compatibilityDocument.tables) {
     if (table === inventory || table.tableId.toLowerCase() === "links") continue;
     for (const row of table.records) {
       if (Object.values(row.fields).some(cell => populatedSourceCell(cell?.value))) {
@@ -384,7 +391,7 @@ export function normalizeNetworkInventoryDocument(
     code: "NETWORK_IMPORT_COLUMNS_UNMAPPED", severity: "warning",
     message: "Unsupported populated Devices columns were found. Import is BLOCKED until all original declarations can be faithfully represented or removed; no assets, links or Engine truth were inferred from them.",
   });
-  const explicitTables = document.tables.filter((t) => t.tableId.toLowerCase() === "links");
+  const explicitTables = compatibilityDocument.tables.filter((t) => t.tableId.toLowerCase() === "links");
   const explicitLinks = explicitTables[0];
   if (explicitTables.length > 1) diagnostics.push({
     code: "NETWORK_IMPORT_LINK_SHEET_AMBIGUOUS", severity: "error",

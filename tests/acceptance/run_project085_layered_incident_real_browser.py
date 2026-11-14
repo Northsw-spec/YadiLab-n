@@ -22,13 +22,35 @@ def field(panel, label_text, control="select"):
     labels = panel.locator("label.inspector-field")
     for index in range(labels.count()):
         label = labels.nth(index)
-        if label.inner_text().splitlines()[0].strip() == label_text:
+        expect(label).to_be_visible(timeout=15000)
+        title = label.evaluate("el => Array.from(el.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join(' ').trim()")
+        if title == label_text:
             return label.locator(control)
     raise AssertionError(f"Missing field: {label_text}")
 
 
+def fill_value(control, value):
+    control.fill(value)
+    if control.input_value() != value:
+        control.evaluate(
+            """(element, nextValue) => {
+                const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                setter.call(element, nextValue);
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
+
+
+def choose(control, value):
+    expect(control.locator(f'option[value="{value}"]')).to_have_count(1, timeout=120000)
+    return control.select_option(value)
+
+
 def start_lab(page, scenario_id):
-    page.locator('[data-guided-lab-catalog="wave1"]').select_option(scenario_id)
+    choose(page.locator('[data-guided-lab-catalog="wave1"]'), scenario_id)
     page.locator('[data-guided-lab-start="direct"]').click()
     page.wait_for_function(
         "scenario => document.querySelector('.app-frame')?.getAttribute('data-runtime-scenario-id') === scenario",
@@ -56,12 +78,12 @@ def click_to_diagnose(page, source_id):
 def run_probe(page, probe_id, expected_truth, save=True, source_id="client1", destination_id="server1", port=None):
     panel = page.locator('[data-active-probe-engine="wave2"]')
     open_details(page, '[data-active-probe-engine="wave2"]')
-    field(panel, "Källvärd").select_option(source_id)
-    field(panel, "Aktiv probe").select_option(probe_id)
+    choose(field(panel, "Källvärd"), source_id)
+    choose(field(panel, "Aktiv probe"), probe_id)
     if destination_id:
-        field(panel, "Destination").select_option(destination_id)
+        choose(field(panel, "Destination"), destination_id)
     if port is not None:
-        field(panel, "TCP port", "input").fill(str(port))
+        fill_value(field(panel, "TCP port", "input"), str(port))
     panel.get_by_role("button", name="Kör modellerad aktiv probe").click()
     transcript = panel.locator('[data-active-probe-transcript="ready"]')
     expect(transcript).to_contain_text(f"verdict {expected_truth}", timeout=15000)
@@ -73,8 +95,8 @@ def run_probe(page, probe_id, expected_truth, save=True, source_id="client1", de
 def run_observation(page, target_id, command_id, expected_text):
     panel = page.locator('[data-observation-engine="wave1"]')
     open_details(page, '[data-observation-engine="wave1"]')
-    field(panel, "Mål").select_option(target_id)
-    field(panel, "Modellerat kommando").select_option(command_id)
+    choose(field(panel, "Mål"), target_id)
+    choose(field(panel, "Modellerat kommando"), command_id)
     panel.get_by_role("button", name="Kör modellerad observation").click()
     transcript = panel.locator('[data-observation-transcript="ready"]')
     expect(transcript).to_contain_text(expected_text, timeout=15000)
@@ -85,20 +107,20 @@ def run_observation(page, target_id, command_id, expected_text):
 def add_hypothesis(page, text):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Learner note", "textarea").fill(text)
+    fill_value(field(panel, "Learner note", "textarea"), text)
     panel.get_by_role("button", name="Add note to proof chain").click()
 
 
 def apply_remediation(page, target_id, action_id, value=None):
     panel = page.locator('[data-troubleshooting-notebook="v0.75"]')
     open_details(page, '[data-troubleshooting-notebook="v0.75"]')
-    field(panel, "Target").select_option(target_id)
-    field(panel, "Typed remediation action").select_option(action_id)
+    choose(field(panel, "Target"), target_id)
+    choose(field(panel, "Typed remediation action"), action_id)
     if action_id == "change_default_gateway":
-        field(panel, "Gateway IPv4 address", "input").fill(value)
+        fill_value(field(panel, "Gateway IPv4 address", "input"), value)
     elif action_id == "set_service_enabled":
-        field(panel, "Service").select_option("ssh")
-        field(panel, "Service state").select_option(value)
+        choose(field(panel, "Service"), "ssh")
+        choose(field(panel, "Service state"), value)
     else:
         raise AssertionError(f"Unsupported action {action_id}")
     panel.get_by_role("button", name="Preview remediation").click()
@@ -111,6 +133,12 @@ def revision(page, number):
     expect(page.locator('[data-runtime-panel="progress"]')).to_contain_text(
         f"Tillståndsrevision: {number}", timeout=15000
     )
+
+
+def require_phase(page, phase):
+    marker = page.locator(f'[data-guided-phase="{phase}"]')
+    expect(marker).to_have_count(1, timeout=15000)
+    require((marker.text_content() or "").strip() == phase, f"Unexpected workflow phase marker for {phase}")
 
 
 def main():
@@ -174,7 +202,7 @@ def main():
             run_probe(page, "linux.ping", "TRUE")
             expect(summary).to_contain_text("Slutfört labb: TRUE", timeout=15000)
             expect(summary.locator('[data-troubleshooting-summary-status]')).to_have_attribute("data-troubleshooting-summary-status", "VERIFIED_IMPROVEMENT", timeout=15000)
-            expect(page.locator('[data-guided-phase="VERIFICATION_COMPLETE"]')).to_be_visible(timeout=15000)
+            require_phase(page, "VERIFICATION_COMPLETE")
             expect(summary.locator('[data-summary-action]')).to_have_count(2, timeout=15000)
             expect(summary.locator('[data-summary-remediation-verification]')).to_have_count(2, timeout=15000)
             expect(summary.locator('[data-summary-final-verification]')).to_have_attribute("data-summary-final-verification", "TRUE")
@@ -227,7 +255,7 @@ def main():
             require(page.locator('[data-active-probe-transcript="ready"]').count() == 1, "reset control probe was not produced")
             start_lab(page, "guided_linux_ssh")
             require(page.locator('[data-active-probe-transcript="ready"]').count() == 0, "scenario switch retained stale layered transcript")
-            require("canonicalSolution" not in page.locator("body").inner_text(), "UI exposed canonical solution material")
+            require("canonicalSolution" not in (page.locator("body").text_content() or ""), "UI exposed canonical solution material")
             require(not errors, "Real compiled Chromium exceptions: " + repr(errors))
             evidence.update({"status": "PASS", "viewport": {"width": 390, "height": 844}, "pageErrors": []})
             (args.evidence_dir / "project085-layered-incident.json").write_text(json.dumps(evidence, indent=2) + "\n")

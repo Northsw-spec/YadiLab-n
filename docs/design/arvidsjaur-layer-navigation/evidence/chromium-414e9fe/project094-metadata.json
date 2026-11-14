@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "project094.metadata.v1",
+  "repo": "Northsw-spec/YadiLab-n",
+  "candidateHead": "414e9fe8ccf36678e2f19a60698502ad1fcca938",
+  "baselineHead": "7fc25e0852804c7ca12ca4883c6ad04751c240ef",
+  "compiledChromium": "/tmp/yadilab-pw-browsers/chromium-1187/chrome-linux/chrome",
+  "fixture": "PROJECT-086 synthetic XLSX: 10000 devices, 10000 links; Access25 40/39/38 clients",
+  "visualApproval": "PENDING_USER"
+}

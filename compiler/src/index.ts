@@ -132,6 +132,7 @@ function normalizeScenario(
       .sort((a, b) => a.id.localeCompare(b.id, "en") || a.version.localeCompare(b.version, "en")),
     ...(source.enterpriseOrigin !== undefined ? { enterpriseOrigin: deepCloneJson(source.enterpriseOrigin) } : {}),
     ...(source.networkImportProvenance !== undefined ? { networkImportProvenance: deepCloneJson(source.networkImportProvenance) } : {}),
+    ...(source.officeReviewProvenance !== undefined ? { officeReviewProvenance: deepCloneJson(source.officeReviewProvenance) } : {}),
     ...(source.faultOrigin !== undefined ? { faultOrigin: deepCloneJson(source.faultOrigin) } : {}),
     zones: source.zones.map((zone) => ({
       id: zone.id,

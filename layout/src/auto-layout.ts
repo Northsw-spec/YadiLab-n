@@ -1,7 +1,7 @@
 import type { LayoutDocument, NormalizedScenario } from "../../core-model/src/generated/contracts.js";
 import { buildLayoutGraph } from "./projection.js";
-import type { AutoLayoutOptions, AutoLayoutResult, LayoutBackendNode } from "./types.js";
-import { validateBackendResult } from "./validation.js";
+import type { AutoLayoutOptions, AutoLayoutResult, LayoutBackendNode, LayoutRequestContext } from "./types.js";
+import { validateBackendEdges, validateBackendPorts, validateBackendResult } from "./validation.js";
 import { validateVisualLayout } from "./visual-validation.js";
 import type { LayoutBackend } from "./types.js";
 
@@ -9,15 +9,30 @@ export async function runAutoLayout(
   scenario: NormalizedScenario,
   backend: LayoutBackend,
   options: AutoLayoutOptions = {},
+  context?: LayoutRequestContext,
 ): Promise<AutoLayoutResult> {
   const graph = buildLayoutGraph(scenario);
   let raw;
   try {
-    raw = await backend.layout(graph);
+    raw = await backend.layout(graph, context);
   } catch (cause) {
-    return { ok: false, diagnostics: [{ severity: "error", code: "LAYOUT_BACKEND_FAILED", message: cause instanceof Error ? cause.message : String(cause) }] };
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const typedCode = cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string"
+      ? (cause as { code: string }).code
+      : undefined;
+    // The ELK normalizer deliberately throws coded errors without relying on
+    // a custom Error subclass. Preserve that machine-readable prefix instead
+    // of masking a malformed node/port/edge as a generic backend failure.
+    const embeddedCode = /^([A-Z][A-Z0-9_]+)(?::|$)/.exec(message)?.[1];
+    const code = typedCode ?? embeddedCode ?? "LAYOUT_BACKEND_FAILED";
+    return { ok: false, diagnostics: [{ severity: "error", code, message }] };
   }
-  const diagnostics = [...validateBackendResult(graph, raw.nodes)];
+  const diagnostics = [
+    ...(raw.diagnostics ?? []),
+    ...validateBackendResult(graph, raw.nodes),
+    ...(raw.ports ? validateBackendPorts(graph, raw.ports) : []),
+    ...(raw.edges ? validateBackendEdges(graph, raw.edges) : []),
+  ];
   if (diagnostics.some((d) => d.severity === "error")) return { ok: false, diagnostics };
 
   const overrides = new Map((options.manualOverrides ?? []).map((x) => [x.id, x] as const));
@@ -55,7 +70,27 @@ export async function runAutoLayout(
         ...(overrides.has(node.id) ? { manualOverride: true } : {}),
       })),
   };
-  diagnostics.push(...validateVisualLayout(scenario, document));
+  const visualDiagnostics = validateVisualLayout(scenario, document);
+  const acceptedVisualDiagnostics = visualDiagnostics.map((diagnostic) => {
+    if (options.deferIntermediateWhitespace && diagnostic.code === "LAYOUT_UNREASONABLE_WHITESPACE") {
+      return {
+        ...diagnostic,
+        severity: "warning" as const,
+        code: "LAYOUT_INTERMEDIATE_WHITESPACE_DEFERRED",
+        message: `Intermediate ELK geometry was deferred to the final NORMAL projection: ${diagnostic.message}`,
+      };
+    }
+    if (options.deferIntermediateEdgeOverlap && diagnostic.code === "LAYOUT_EDGE_OVERLAP_EXCESSIVE") {
+      return {
+        ...diagnostic,
+        severity: "warning" as const,
+        code: "LAYOUT_INTERMEDIATE_EDGE_OVERLAP_DEFERRED",
+        message: `Intermediate ELK edge coincidence was deferred to the final NORMAL projection: ${diagnostic.message}`,
+      };
+    }
+    return diagnostic;
+  });
+  diagnostics.push(...acceptedVisualDiagnostics);
   if (diagnostics.some((d) => d.severity === "error")) return { ok: false, diagnostics };
   return { ok: true, document, diagnostics };
 }

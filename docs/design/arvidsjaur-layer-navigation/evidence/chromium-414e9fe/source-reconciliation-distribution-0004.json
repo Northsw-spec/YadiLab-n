@@ -1,0 +1,296 @@
+{
+  "scope": "distribution-0004",
+  "expectedResourceCount": 10,
+  "expectedPhysicalLinkCount": 9,
+  "expectedPresentationGroupCount": 3,
+  "expectedLinkIds": [
+    "link-00006",
+    "link-00059",
+    "link-00060",
+    "link-00061",
+    "link-00062",
+    "link-00063",
+    "link-00064",
+    "link-00065",
+    "link-00066"
+  ],
+  "renderedLinkIds": [
+    "link-00006",
+    "link-00059",
+    "link-00060",
+    "link-00061",
+    "link-00062",
+    "link-00063",
+    "link-00064",
+    "link-00065",
+    "link-00066"
+  ],
+  "endpointMismatches": [],
+  "geometry": {
+    "rows": [
+      {
+        "id": "link-00006",
+        "source": "distribution-0004",
+        "target": "core-001",
+        "sourceHandle": "__visual_port__:link-00006:source",
+        "targetHandle": "__visual_port__:link-00006:target",
+        "length": 71.21063591657276,
+        "turns": 0,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7366949885520855,
+        "targetEndpointDistance": 1.7368731974281846,
+        "points": [
+          {
+            "x": 720.7761847341505,
+            "y": -502.30596493876794
+          },
+          {
+            "x": 791.9868206507233,
+            "y": -502.30596493876794
+          }
+        ]
+      },
+      {
+        "id": "link-00059",
+        "source": "access-0025",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00059:source",
+        "targetHandle": "__visual_port__:link-00059:target",
+        "length": 367.7944819064541,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.736746964243071,
+        "targetEndpointDistance": 1.7368822583799057,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -190.25335485928815
+          },
+          {
+            "x": 622.6447508335114,
+            "y": -190.25335485928815
+          },
+          {
+            "x": 622.6447508335114,
+            "y": -486.83726188426095
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -486.83726188426095
+          }
+        ]
+      },
+      {
+        "id": "link-00060",
+        "source": "access-0026",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00060:source",
+        "targetHandle": "__visual_port__:link-00060:target",
+        "length": 325.31648706537754,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469636369295,
+        "targetEndpointDistance": 1.736882258188655,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -237.1480625390691
+          },
+          {
+            "x": 618.30264544487,
+            "y": -237.1480625390691
+          },
+          {
+            "x": 618.30264544487,
+            "y": -491.2539747229653
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -491.2539747229653
+          }
+        ]
+      },
+      {
+        "id": "link-00061",
+        "source": "access-0027",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00061:source",
+        "targetHandle": "__visual_port__:link-00061:target",
+        "length": 282.8452671194497,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469638411241,
+        "targetEndpointDistance": 1.7368822580098067,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -284.04280073639575
+          },
+          {
+            "x": 613.9605400562286,
+            "y": -284.04280073639575
+          },
+          {
+            "x": 613.9605400562286,
+            "y": -495.67749297436416
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -495.67749297436416
+          }
+        ]
+      },
+      {
+        "id": "link-00062",
+        "source": "access-0028",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00062:source",
+        "targetHandle": "__visual_port__:link-00062:target",
+        "length": 240.3739861384305,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469646308928,
+        "targetEndpointDistance": 1.736882257391687,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -330.93756945126813
+          },
+          {
+            "x": 609.6184346675873,
+            "y": -330.93756945126813
+          },
+          {
+            "x": 609.6184346675873,
+            "y": -500.1009807082173
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -500.1009807082173
+          }
+        ]
+      },
+      {
+        "id": "link-00063",
+        "source": "access-0029",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00063:source",
+        "targetHandle": "__visual_port__:link-00063:target",
+        "length": 197.89602181489965,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469638922612,
+        "targetEndpointDistance": 1.7368822576904548,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -377.83227713104907
+          },
+          {
+            "x": 605.2763292789459,
+            "y": -377.83227713104907
+          },
+          {
+            "x": 605.2763292789459,
+            "y": -504.5177240644674
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -504.5177240644674
+          }
+        ]
+      },
+      {
+        "id": "link-00064",
+        "source": "access-0030",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00064:source",
+        "targetHandle": "__visual_port__:link-00064:target",
+        "length": 155.42480186897183,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469641483,
+        "targetEndpointDistance": 1.7368822575497058,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -424.7270153283757
+          },
+          {
+            "x": 600.9342238903046,
+            "y": -424.7270153283757
+          },
+          {
+            "x": 600.9342238903046,
+            "y": -508.94124231586625
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -508.94124231586625
+          }
+        ]
+      },
+      {
+        "id": "link-00065",
+        "source": "access-0031",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00065:source",
+        "targetHandle": "__visual_port__:link-00065:target",
+        "length": 112.953581923044,
+        "turns": 2,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469639454929,
+        "targetEndpointDistance": 1.7368822574216636,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -471.6217535257024
+          },
+          {
+            "x": 596.5921185016632,
+            "y": -471.6217535257024
+          },
+          {
+            "x": 596.5921185016632,
+            "y": -513.3647605672651
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -513.3647605672651
+          }
+        ]
+      },
+      {
+        "id": "link-00066",
+        "source": "access-0032",
+        "target": "distribution-0004",
+        "sourceHandle": "__visual_port__:link-00066:source",
+        "targetHandle": "__visual_port__:link-00066:target",
+        "length": 71.9455931985409,
+        "turns": 1,
+        "penetrationCount": 0,
+        "sourceEndpointDistance": 1.7367469647876292,
+        "targetEndpointDistance": 1.7368822573064941,
+        "points": [
+          {
+            "x": 574.0130836331641,
+            "y": -518.5165222405748
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -518.5165222405748
+          },
+          {
+            "x": 645.2236585146454,
+            "y": -517.7815039235152
+          }
+        ]
+      }
+    ],
+    "crossings": 0,
+    "crossingPairs": [],
+    "overlaps": [],
+    "cardCount": 10
+  },
+  "layoutQuality": null
+}
