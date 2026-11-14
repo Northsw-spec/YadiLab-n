@@ -108,8 +108,8 @@ boundary remains a separate architecture decision.
 | 200/1600 redundant | **UNKNOWN** | The isolated Chromium process exceeded the explicit 55-second bound and was terminated. No final geometry or Builder-preservation result is claimed; no product cancellation exists. |
 
 The two `FULL_UI_PASS` cases are the only profiles for which final React Flow
-geometry was rendered and measured. The five `SAFE_BLOCKED` cases were stopped
-by the existing raw safety gate before a graph could be presented. The six
-`SAFE_BLOCKED` cases are not treated as UI passes. The final
-`UNKNOWN` is deliberately not relabelled as controlled success: the bound is
-owned by the test harness, not by the product.
+geometry was rendered and measured. The six `SAFE_BLOCKED` cases were stopped
+by the existing raw safety gate before a graph could be presented and are not
+treated as UI passes. The final `UNKNOWN` is deliberately not relabelled as
+controlled success: the bound is owned by the test harness, not by the
+product.

@@ -1,0 +1,1784 @@
+{
+  "format": "ATLAS001_F4_PHASE_MEASUREMENTS",
+  "commit": "b09a7073f3da6cec8d95b8b6bb87ade8098b5bb0",
+  "host": {
+    "platform": "linux",
+    "release": "6.18.57",
+    "node": "v24.22.1",
+    "cpuCount": 3
+  },
+  "inlineLayoutCases": [
+    "50-linear",
+    "100-linear",
+    "200-grid"
+  ],
+  "denseLayoutBoundary": "No inline ELK timings are reported for 100/800 or 200/1600; those calls are intentionally not made because the current product backend is non-cancellable. See F3 Chromium evidence and F4A Worker POC.",
+  "results": [
+    {
+      "key": "50-linear",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 50,
+      "connections": 49,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 78.346,
+          "memoryBefore": {
+            "rssBytes": 67215360,
+            "heapUsedBytes": 11922224,
+            "externalBytes": 7137590
+          },
+          "memoryAfter": {
+            "rssBytes": 80093184,
+            "heapUsedBytes": 13067608,
+            "externalBytes": 5562297
+          },
+          "memoryDelta": {
+            "rssBytes": 12877824,
+            "heapUsedBytes": 1145384,
+            "externalBytes": -1575293
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 2.682,
+          "memoryBefore": {
+            "rssBytes": 84942848,
+            "heapUsedBytes": 15944544,
+            "externalBytes": 5916596
+          },
+          "memoryAfter": {
+            "rssBytes": 85073920,
+            "heapUsedBytes": 16003416,
+            "externalBytes": 5916596
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 58872,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 4.749,
+          "memoryBefore": {
+            "rssBytes": 85073920,
+            "heapUsedBytes": 16005000,
+            "externalBytes": 5916596
+          },
+          "memoryAfter": {
+            "rssBytes": 85336064,
+            "heapUsedBytes": 16697616,
+            "externalBytes": 5916596
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 692616,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 50,
+            "connections": 49,
+            "zones": 5
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 20.093,
+          "memoryBefore": {
+            "rssBytes": 85336064,
+            "heapUsedBytes": 16699528,
+            "externalBytes": 5916596
+          },
+          "memoryAfter": {
+            "rssBytes": 87564288,
+            "heapUsedBytes": 19524144,
+            "externalBytes": 6148759
+          },
+          "memoryDelta": {
+            "rssBytes": 2228224,
+            "heapUsedBytes": 2824616,
+            "externalBytes": 232163
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 49,
+            "resources": 50,
+            "connections": 49
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 1.812,
+          "memoryBefore": {
+            "rssBytes": 87564288,
+            "heapUsedBytes": 19525984,
+            "externalBytes": 6148759
+          },
+          "memoryAfter": {
+            "rssBytes": 87695360,
+            "heapUsedBytes": 19694616,
+            "externalBytes": 6148759
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 168632,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 5,
+            "edgeCount": 49
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "MEASURED",
+          "elapsedMs": 464.747,
+          "memoryBefore": {
+            "rssBytes": 87695360,
+            "heapUsedBytes": 19696712,
+            "externalBytes": 6148759
+          },
+          "memoryAfter": {
+            "rssBytes": 130686976,
+            "heapUsedBytes": 28553976,
+            "externalBytes": 6023749
+          },
+          "memoryDelta": {
+            "rssBytes": 42991616,
+            "heapUsedBytes": 8857264,
+            "externalBytes": -125010
+          },
+          "value": {
+            "nodeCount": 55,
+            "portCount": 196,
+            "edgeCount": 49
+          }
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "MEASURED",
+          "elapsedMs": 4.862,
+          "memoryBefore": {
+            "rssBytes": 130686976,
+            "heapUsedBytes": 28575816,
+            "externalBytes": 6023749
+          },
+          "memoryAfter": {
+            "rssBytes": 130686976,
+            "heapUsedBytes": 29129080,
+            "externalBytes": 6023749
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 553264,
+            "externalBytes": 0
+          },
+          "value": {
+            "diagnosticCount": 0,
+            "errorCount": 0
+          }
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "MEASURED",
+          "elapsedMs": 5.687,
+          "memoryBefore": {
+            "rssBytes": 130686976,
+            "heapUsedBytes": 29130784,
+            "externalBytes": 6023749
+          },
+          "memoryAfter": {
+            "rssBytes": 130949120,
+            "heapUsedBytes": 29779960,
+            "externalBytes": 6023749
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 649176,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 55,
+            "edgeCount": 49,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "MEASURED",
+          "elapsedMs": 17.988,
+          "memoryBefore": {
+            "rssBytes": 130949120,
+            "heapUsedBytes": 29781704,
+            "externalBytes": 6023749
+          },
+          "memoryAfter": {
+            "rssBytes": 131080192,
+            "heapUsedBytes": 34598400,
+            "externalBytes": 6023749
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 4816696,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 55,
+            "edgeCount": 49,
+            "diagnosticCount": 0,
+            "errorCount": 0,
+            "warningCount": 0,
+            "routeCount": 49
+          }
+        }
+      ]
+    },
+    {
+      "key": "50-star",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 50,
+      "connections": 150,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 72.276,
+          "memoryBefore": {
+            "rssBytes": 131080192,
+            "heapUsedBytes": 34604976,
+            "externalBytes": 6037346
+          },
+          "memoryAfter": {
+            "rssBytes": 141959168,
+            "heapUsedBytes": 42956528,
+            "externalBytes": 6639948
+          },
+          "memoryDelta": {
+            "rssBytes": 10878976,
+            "heapUsedBytes": 8351552,
+            "externalBytes": 602602
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.266,
+          "memoryBefore": {
+            "rssBytes": 148512768,
+            "heapUsedBytes": 34795992,
+            "externalBytes": 6782538
+          },
+          "memoryAfter": {
+            "rssBytes": 148512768,
+            "heapUsedBytes": 34807360,
+            "externalBytes": 6782538
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11368,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 3.598,
+          "memoryBefore": {
+            "rssBytes": 148512768,
+            "heapUsedBytes": 34808712,
+            "externalBytes": 6782538
+          },
+          "memoryAfter": {
+            "rssBytes": 148643840,
+            "heapUsedBytes": 36232152,
+            "externalBytes": 6782538
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 1423440,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 50,
+            "connections": 150,
+            "zones": 5
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 7.127,
+          "memoryBefore": {
+            "rssBytes": 148643840,
+            "heapUsedBytes": 36233520,
+            "externalBytes": 6782538
+          },
+          "memoryAfter": {
+            "rssBytes": 145494016,
+            "heapUsedBytes": 39795352,
+            "externalBytes": 6832542
+          },
+          "memoryDelta": {
+            "rssBytes": -3149824,
+            "heapUsedBytes": 3561832,
+            "externalBytes": 50004
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 49,
+            "resources": 50,
+            "connections": 150
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 0.611,
+          "memoryBefore": {
+            "rssBytes": 145494016,
+            "heapUsedBytes": 39796720,
+            "externalBytes": 6832542
+          },
+          "memoryAfter": {
+            "rssBytes": 145494016,
+            "heapUsedBytes": 40064448,
+            "externalBytes": 6832542
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 267728,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 5,
+            "edgeCount": 150
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "50-redundant",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 50,
+      "connections": 400,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 185.046,
+          "memoryBefore": {
+            "rssBytes": 145494016,
+            "heapUsedBytes": 40068384,
+            "externalBytes": 6925720
+          },
+          "memoryAfter": {
+            "rssBytes": 167383040,
+            "heapUsedBytes": 66200232,
+            "externalBytes": 8074660
+          },
+          "memoryDelta": {
+            "rssBytes": 21889024,
+            "heapUsedBytes": 26131848,
+            "externalBytes": 1148940
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.121,
+          "memoryBefore": {
+            "rssBytes": 188616704,
+            "heapUsedBytes": 59380808,
+            "externalBytes": 8406850
+          },
+          "memoryAfter": {
+            "rssBytes": 188616704,
+            "heapUsedBytes": 59392080,
+            "externalBytes": 8406850
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 8.633,
+          "memoryBefore": {
+            "rssBytes": 188747776,
+            "heapUsedBytes": 59394320,
+            "externalBytes": 8406850
+          },
+          "memoryAfter": {
+            "rssBytes": 189009920,
+            "heapUsedBytes": 62314512,
+            "externalBytes": 8406850
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 2920192,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 50,
+            "connections": 400,
+            "zones": 5
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 16.47,
+          "memoryBefore": {
+            "rssBytes": 189009920,
+            "heapUsedBytes": 62315920,
+            "externalBytes": 8406850
+          },
+          "memoryAfter": {
+            "rssBytes": 189272064,
+            "heapUsedBytes": 38420704,
+            "externalBytes": 8238372
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": -23895216,
+            "externalBytes": -168478
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 49,
+            "resources": 50,
+            "connections": 400
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 1.424,
+          "memoryBefore": {
+            "rssBytes": 189272064,
+            "heapUsedBytes": 38422392,
+            "externalBytes": 8238372
+          },
+          "memoryAfter": {
+            "rssBytes": 189272064,
+            "heapUsedBytes": 38971480,
+            "externalBytes": 8238372
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 549088,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 5,
+            "edgeCount": 400
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "100-linear",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 100,
+      "connections": 99,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 45.748,
+          "memoryBefore": {
+            "rssBytes": 189272064,
+            "heapUsedBytes": 38974376,
+            "externalBytes": 8250671
+          },
+          "memoryAfter": {
+            "rssBytes": 189665280,
+            "heapUsedBytes": 42791752,
+            "externalBytes": 6409558
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": 3817376,
+            "externalBytes": -1841113
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.068,
+          "memoryBefore": {
+            "rssBytes": 189665280,
+            "heapUsedBytes": 61365800,
+            "externalBytes": 7051920
+          },
+          "memoryAfter": {
+            "rssBytes": 189665280,
+            "heapUsedBytes": 61377072,
+            "externalBytes": 7051920
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 2.818,
+          "memoryBefore": {
+            "rssBytes": 189665280,
+            "heapUsedBytes": 61378456,
+            "externalBytes": 7051920
+          },
+          "memoryAfter": {
+            "rssBytes": 189796352,
+            "heapUsedBytes": 62389456,
+            "externalBytes": 7051920
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 1011000,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 100,
+            "connections": 99,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 8.29,
+          "memoryBefore": {
+            "rssBytes": 189796352,
+            "heapUsedBytes": 62390856,
+            "externalBytes": 7051920
+          },
+          "memoryAfter": {
+            "rssBytes": 190189568,
+            "heapUsedBytes": 35312336,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": -27078520,
+            "externalBytes": -476233
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 99,
+            "resources": 100,
+            "connections": 99
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 0.387,
+          "memoryBefore": {
+            "rssBytes": 190189568,
+            "heapUsedBytes": 35313736,
+            "externalBytes": 6575687
+          },
+          "memoryAfter": {
+            "rssBytes": 190189568,
+            "heapUsedBytes": 35574400,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 260664,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 99
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "MEASURED",
+          "elapsedMs": 200.768,
+          "memoryBefore": {
+            "rssBytes": 190189568,
+            "heapUsedBytes": 35576000,
+            "externalBytes": 6575687
+          },
+          "memoryAfter": {
+            "rssBytes": 198840320,
+            "heapUsedBytes": 41852536,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 8650752,
+            "heapUsedBytes": 6276536,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 110,
+            "portCount": 396,
+            "edgeCount": 99
+          }
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "MEASURED",
+          "elapsedMs": 2.039,
+          "memoryBefore": {
+            "rssBytes": 198971392,
+            "heapUsedBytes": 41887712,
+            "externalBytes": 6575687
+          },
+          "memoryAfter": {
+            "rssBytes": 199233536,
+            "heapUsedBytes": 42798880,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 911168,
+            "externalBytes": 0
+          },
+          "value": {
+            "diagnosticCount": 0,
+            "errorCount": 0
+          }
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "MEASURED",
+          "elapsedMs": 2.5,
+          "memoryBefore": {
+            "rssBytes": 199233536,
+            "heapUsedBytes": 42800408,
+            "externalBytes": 6575687
+          },
+          "memoryAfter": {
+            "rssBytes": 199626752,
+            "heapUsedBytes": 43745896,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": 945488,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 110,
+            "edgeCount": 99,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "MEASURED",
+          "elapsedMs": 66.679,
+          "memoryBefore": {
+            "rssBytes": 199626752,
+            "heapUsedBytes": 43747288,
+            "externalBytes": 6575687
+          },
+          "memoryAfter": {
+            "rssBytes": 202903552,
+            "heapUsedBytes": 49575640,
+            "externalBytes": 6575687
+          },
+          "memoryDelta": {
+            "rssBytes": 3276800,
+            "heapUsedBytes": 5828352,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 110,
+            "edgeCount": 99,
+            "diagnosticCount": 7,
+            "errorCount": 0,
+            "warningCount": 7,
+            "routeCount": 99
+          }
+        }
+      ]
+    },
+    {
+      "key": "100-star",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 100,
+      "connections": 300,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 56.452,
+          "memoryBefore": {
+            "rssBytes": 202903552,
+            "heapUsedBytes": 49581680,
+            "externalBytes": 6599400
+          },
+          "memoryAfter": {
+            "rssBytes": 207228928,
+            "heapUsedBytes": 65591688,
+            "externalBytes": 7670703
+          },
+          "memoryDelta": {
+            "rssBytes": 4325376,
+            "heapUsedBytes": 16010008,
+            "externalBytes": 1071303
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.27,
+          "memoryBefore": {
+            "rssBytes": 211685376,
+            "heapUsedBytes": 79341608,
+            "externalBytes": 8022208
+          },
+          "memoryAfter": {
+            "rssBytes": 211685376,
+            "heapUsedBytes": 79352880,
+            "externalBytes": 8022208
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 6.915,
+          "memoryBefore": {
+            "rssBytes": 211685376,
+            "heapUsedBytes": 79354264,
+            "externalBytes": 8022208
+          },
+          "memoryAfter": {
+            "rssBytes": 214831104,
+            "heapUsedBytes": 82541008,
+            "externalBytes": 8022208
+          },
+          "memoryDelta": {
+            "rssBytes": 3145728,
+            "heapUsedBytes": 3186744,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 100,
+            "connections": 300,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 30.051,
+          "memoryBefore": {
+            "rssBytes": 214831104,
+            "heapUsedBytes": 82542408,
+            "externalBytes": 8022208
+          },
+          "memoryAfter": {
+            "rssBytes": 220205056,
+            "heapUsedBytes": 88094240,
+            "externalBytes": 8122637
+          },
+          "memoryDelta": {
+            "rssBytes": 5373952,
+            "heapUsedBytes": 5551832,
+            "externalBytes": 100429
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 99,
+            "resources": 100,
+            "connections": 300
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 3.904,
+          "memoryBefore": {
+            "rssBytes": 220205056,
+            "heapUsedBytes": 88095640,
+            "externalBytes": 8122637
+          },
+          "memoryAfter": {
+            "rssBytes": 220598272,
+            "heapUsedBytes": 88560744,
+            "externalBytes": 8122637
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": 465104,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 300
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "100-redundant",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 100,
+      "connections": 800,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 378.104,
+          "memoryBefore": {
+            "rssBytes": 220598272,
+            "heapUsedBytes": 88563936,
+            "externalBytes": 8227407
+          },
+          "memoryAfter": {
+            "rssBytes": 283119616,
+            "heapUsedBytes": 89562896,
+            "externalBytes": 8744620
+          },
+          "memoryDelta": {
+            "rssBytes": 62521344,
+            "heapUsedBytes": 998960,
+            "externalBytes": 517213
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.083,
+          "memoryBefore": {
+            "rssBytes": 289935360,
+            "heapUsedBytes": 93448376,
+            "externalBytes": 9818713
+          },
+          "memoryAfter": {
+            "rssBytes": 289935360,
+            "heapUsedBytes": 93459648,
+            "externalBytes": 9818713
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 11.659,
+          "memoryBefore": {
+            "rssBytes": 289935360,
+            "heapUsedBytes": 93461032,
+            "externalBytes": 9818713
+          },
+          "memoryAfter": {
+            "rssBytes": 290197504,
+            "heapUsedBytes": 99198064,
+            "externalBytes": 9818713
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 5737032,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 100,
+            "connections": 800,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 22.941,
+          "memoryBefore": {
+            "rssBytes": 290197504,
+            "heapUsedBytes": 99199464,
+            "externalBytes": 9818713
+          },
+          "memoryAfter": {
+            "rssBytes": 290590720,
+            "heapUsedBytes": 110911192,
+            "externalBytes": 10061762
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": 11711728,
+            "externalBytes": 243049
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 99,
+            "resources": 100,
+            "connections": 800
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 1.727,
+          "memoryBefore": {
+            "rssBytes": 290590720,
+            "heapUsedBytes": 110912592,
+            "externalBytes": 10061762
+          },
+          "memoryAfter": {
+            "rssBytes": 290852864,
+            "heapUsedBytes": 111888840,
+            "externalBytes": 10061762
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 976248,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 800
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "200-linear",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 200,
+      "connections": 199,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 45.624,
+          "memoryBefore": {
+            "rssBytes": 290852864,
+            "heapUsedBytes": 111892040,
+            "externalBytes": 10148371
+          },
+          "memoryAfter": {
+            "rssBytes": 296050688,
+            "heapUsedBytes": 90972008,
+            "externalBytes": 10501597
+          },
+          "memoryDelta": {
+            "rssBytes": 5197824,
+            "heapUsedBytes": -20920032,
+            "externalBytes": 353226
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.19,
+          "memoryBefore": {
+            "rssBytes": 297361408,
+            "heapUsedBytes": 127712144,
+            "externalBytes": 11695327
+          },
+          "memoryAfter": {
+            "rssBytes": 297361408,
+            "heapUsedBytes": 127723416,
+            "externalBytes": 11695327
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 2.61,
+          "memoryBefore": {
+            "rssBytes": 297361408,
+            "heapUsedBytes": 127724800,
+            "externalBytes": 11695327
+          },
+          "memoryAfter": {
+            "rssBytes": 297361408,
+            "heapUsedBytes": 129666528,
+            "externalBytes": 11695327
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 1941728,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 200,
+            "connections": 199,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 14.359,
+          "memoryBefore": {
+            "rssBytes": 297361408,
+            "heapUsedBytes": 129667928,
+            "externalBytes": 11695327
+          },
+          "memoryAfter": {
+            "rssBytes": 298672128,
+            "heapUsedBytes": 69927752,
+            "externalBytes": 10451515
+          },
+          "memoryDelta": {
+            "rssBytes": 1310720,
+            "heapUsedBytes": -59740176,
+            "externalBytes": -1243812
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 199,
+            "resources": 200,
+            "connections": 199
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 1.361,
+          "memoryBefore": {
+            "rssBytes": 298672128,
+            "heapUsedBytes": 69929152,
+            "externalBytes": 10451515
+          },
+          "memoryAfter": {
+            "rssBytes": 298803200,
+            "heapUsedBytes": 70439168,
+            "externalBytes": 10451515
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 510016,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 199
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "200-star",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 200,
+      "connections": 600,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 108.184,
+          "memoryBefore": {
+            "rssBytes": 298803200,
+            "heapUsedBytes": 70442208,
+            "externalBytes": 10539177
+          },
+          "memoryAfter": {
+            "rssBytes": 302997504,
+            "heapUsedBytes": 104245688,
+            "externalBytes": 11656491
+          },
+          "memoryDelta": {
+            "rssBytes": 4194304,
+            "heapUsedBytes": 33803480,
+            "externalBytes": 1117314
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.084,
+          "memoryBefore": {
+            "rssBytes": 307060736,
+            "heapUsedBytes": 126842432,
+            "externalBytes": 12729231
+          },
+          "memoryAfter": {
+            "rssBytes": 307060736,
+            "heapUsedBytes": 126853704,
+            "externalBytes": 12729231
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 6.892,
+          "memoryBefore": {
+            "rssBytes": 307060736,
+            "heapUsedBytes": 126855088,
+            "externalBytes": 12729231
+          },
+          "memoryAfter": {
+            "rssBytes": 307322880,
+            "heapUsedBytes": 134892360,
+            "externalBytes": 12729231
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 8037272,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 200,
+            "connections": 600,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 18.975,
+          "memoryBefore": {
+            "rssBytes": 307322880,
+            "heapUsedBytes": 134893760,
+            "externalBytes": 12729231
+          },
+          "memoryAfter": {
+            "rssBytes": 307847168,
+            "heapUsedBytes": 78490120,
+            "externalBytes": 11382185
+          },
+          "memoryDelta": {
+            "rssBytes": 524288,
+            "heapUsedBytes": -56403640,
+            "externalBytes": -1347046
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 199,
+            "resources": 200,
+            "connections": 600
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 3.523,
+          "memoryBefore": {
+            "rssBytes": 307847168,
+            "heapUsedBytes": 78491520,
+            "externalBytes": 11382185
+          },
+          "memoryAfter": {
+            "rssBytes": 308109312,
+            "heapUsedBytes": 79387696,
+            "externalBytes": 11382185
+          },
+          "memoryDelta": {
+            "rssBytes": 262144,
+            "heapUsedBytes": 896176,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 600
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "200-redundant",
+      "manifest": "tests/fixtures/import/atlas001-normal-density-manifest.json",
+      "resources": 200,
+      "connections": 1600,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 309.549,
+          "memoryBefore": {
+            "rssBytes": 308109312,
+            "heapUsedBytes": 79390736,
+            "externalBytes": 11586223
+          },
+          "memoryAfter": {
+            "rssBytes": 330653696,
+            "heapUsedBytes": 160370480,
+            "externalBytes": 14562661
+          },
+          "memoryDelta": {
+            "rssBytes": 22544384,
+            "heapUsedBytes": 80979744,
+            "externalBytes": 2976438
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.241,
+          "memoryBefore": {
+            "rssBytes": 355688448,
+            "heapUsedBytes": 160281480,
+            "externalBytes": 16383502
+          },
+          "memoryAfter": {
+            "rssBytes": 355688448,
+            "heapUsedBytes": 160292904,
+            "externalBytes": 16383502
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11424,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 22.412,
+          "memoryBefore": {
+            "rssBytes": 355688448,
+            "heapUsedBytes": 160294288,
+            "externalBytes": 16383502
+          },
+          "memoryAfter": {
+            "rssBytes": 356212736,
+            "heapUsedBytes": 171432800,
+            "externalBytes": 16383502
+          },
+          "memoryDelta": {
+            "rssBytes": 524288,
+            "heapUsedBytes": 11138512,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 200,
+            "connections": 1600,
+            "zones": 10
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 48.924,
+          "memoryBefore": {
+            "rssBytes": 356212736,
+            "heapUsedBytes": 171434200,
+            "externalBytes": 16383502
+          },
+          "memoryAfter": {
+            "rssBytes": 357392384,
+            "heapUsedBytes": 126682416,
+            "externalBytes": 16351964
+          },
+          "memoryDelta": {
+            "rssBytes": 1179648,
+            "heapUsedBytes": -44751784,
+            "externalBytes": -31538
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 199,
+            "resources": 200,
+            "connections": 1600
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 6.785,
+          "memoryBefore": {
+            "rssBytes": 357392384,
+            "heapUsedBytes": 126683816,
+            "externalBytes": 16351964
+          },
+          "memoryAfter": {
+            "rssBytes": 357785600,
+            "heapUsedBytes": 128603288,
+            "externalBytes": 16351964
+          },
+          "memoryDelta": {
+            "rssBytes": 393216,
+            "heapUsedBytes": 1919472,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 10,
+            "edgeCount": 1600
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "DENSE_CASE_SAFE_BOUNDARY: current bundled ELK backend is non-cancellable; use the F4A Worker proof for timeout/abort instead."
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because ELK layout was not invoked for this dense case."
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "NOT_RUN_SAFE_BOUNDARY",
+          "reason": "NOT_RUN because no complete layout document exists for this dense case."
+        }
+      ]
+    },
+    {
+      "key": "200-grid",
+      "manifest": "tests/fixtures/import/atlas001-capacity-manifest.json",
+      "resources": 200,
+      "connections": 199,
+      "phases": [
+        {
+          "phase": "xlsxImportParse",
+          "status": "MEASURED",
+          "elapsedMs": 98.21,
+          "memoryBefore": {
+            "rssBytes": 357785600,
+            "heapUsedBytes": 128606232,
+            "externalBytes": 16378121
+          },
+          "memoryAfter": {
+            "rssBytes": 355139584,
+            "heapUsedBytes": 87076328,
+            "externalBytes": 7327547
+          },
+          "memoryDelta": {
+            "rssBytes": -2646016,
+            "heapUsedBytes": -41529904,
+            "externalBytes": -9050574
+          },
+          "value": {
+            "tableCount": 6,
+            "diagnosticCount": 6
+          }
+        },
+        {
+          "phase": "normalizeNetworkInventoryDocument",
+          "status": "MEASURED",
+          "elapsedMs": 0.085,
+          "memoryBefore": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 72016512,
+            "externalBytes": 7768407
+          },
+          "memoryAfter": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 72027784,
+            "externalBytes": 7768407
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 11272,
+            "externalBytes": 0
+          },
+          "value": {
+            "unmappedColumnCount": 0,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "mapNetworkWorkbookToScenario",
+          "status": "MEASURED",
+          "elapsedMs": 5.233,
+          "memoryBefore": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 72029168,
+            "externalBytes": 7768407
+          },
+          "memoryAfter": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 74751800,
+            "externalBytes": 7768407
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 2722632,
+            "externalBytes": 0
+          },
+          "value": {
+            "ok": true,
+            "resources": 200,
+            "connections": 199,
+            "zones": 1
+          }
+        },
+        {
+          "phase": "canonicalCompile",
+          "status": "MEASURED",
+          "elapsedMs": 20.166,
+          "memoryBefore": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 74753200,
+            "externalBytes": 7768407
+          },
+          "memoryAfter": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 80635448,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 5882248,
+            "externalBytes": 102093
+          },
+          "value": {
+            "ok": true,
+            "diagnosticCount": 188,
+            "resources": 200,
+            "connections": 199
+          }
+        },
+        {
+          "phase": "elkGraphConstruction",
+          "status": "MEASURED",
+          "elapsedMs": 1.046,
+          "memoryBefore": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 80636848,
+            "externalBytes": 7870500
+          },
+          "memoryAfter": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 81298728,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 661880,
+            "externalBytes": 0
+          },
+          "value": {
+            "childCount": 1,
+            "edgeCount": 199
+          }
+        },
+        {
+          "phase": "elkLayout",
+          "status": "MEASURED",
+          "elapsedMs": 376.684,
+          "memoryBefore": {
+            "rssBytes": 355270656,
+            "heapUsedBytes": 81300328,
+            "externalBytes": 7870500
+          },
+          "memoryAfter": {
+            "rssBytes": 359464960,
+            "heapUsedBytes": 86536144,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 4194304,
+            "heapUsedBytes": 5235816,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 201,
+            "portCount": 1600,
+            "edgeCount": 199
+          }
+        },
+        {
+          "phase": "layoutValidation",
+          "status": "MEASURED",
+          "elapsedMs": 7.089,
+          "memoryBefore": {
+            "rssBytes": 359464960,
+            "heapUsedBytes": 86598416,
+            "externalBytes": 7870500
+          },
+          "memoryAfter": {
+            "rssBytes": 359596032,
+            "heapUsedBytes": 90728640,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 4130224,
+            "externalBytes": 0
+          },
+          "value": {
+            "diagnosticCount": 0,
+            "errorCount": 0
+          }
+        },
+        {
+          "phase": "canvasProjection",
+          "status": "MEASURED",
+          "elapsedMs": 6.842,
+          "memoryBefore": {
+            "rssBytes": 359596032,
+            "heapUsedBytes": 90730112,
+            "externalBytes": 7870500
+          },
+          "memoryAfter": {
+            "rssBytes": 359596032,
+            "heapUsedBytes": 92710352,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 0,
+            "heapUsedBytes": 1980240,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 201,
+            "edgeCount": 199,
+            "diagnosticCount": 0
+          }
+        },
+        {
+          "phase": "normalCompactionAndOrthogonalRouting",
+          "status": "MEASURED",
+          "elapsedMs": 81.556,
+          "memoryBefore": {
+            "rssBytes": 359596032,
+            "heapUsedBytes": 92711744,
+            "externalBytes": 7870500
+          },
+          "memoryAfter": {
+            "rssBytes": 359727104,
+            "heapUsedBytes": 103043304,
+            "externalBytes": 7870500
+          },
+          "memoryDelta": {
+            "rssBytes": 131072,
+            "heapUsedBytes": 10331560,
+            "externalBytes": 0
+          },
+          "value": {
+            "nodeCount": 201,
+            "edgeCount": 199,
+            "diagnosticCount": 25,
+            "errorCount": 0,
+            "warningCount": 25,
+            "routeCount": 199
+          }
+        }
+      ]
+    }
+  ]
+}
