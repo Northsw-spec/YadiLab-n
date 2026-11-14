@@ -228,6 +228,12 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_worker_product_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-worker-product"
+          # ATLAS-001 F4B-C: independent 100/800 timeout recovery, project
+          # switch and Builder-edit races, plus Save/Open after abort. The
+          # test explicitly reports mock versus durable file-system evidence.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_c_product_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-c-product"
       - name: ATLAS-001 G5.0 evidence hardening
         shell: bash
         run: |

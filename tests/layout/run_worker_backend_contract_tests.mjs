@@ -11,7 +11,7 @@ const graph = {
 };
 const identity = (requestId) => ({ requestId, sourceSha: "sha-test", sourceRevision: 2, projectGeneration: 4, builderIdentity: "builder-test", compileIdentity: "compile-test" });
 
-const makeFakeWorkerFactory = ({ delayMs = 0, wrongResponseIdentity = false } = {}) => {
+const makeFakeWorkerFactory = ({ delayMs = 0, wrongResponseIdentity = false, runtimeError = false, malformedResult = false } = {}) => {
   const state = { created: 0, active: 0, maxActive: 0, terminated: 0 };
   const factory = (url) => {
     void url;
@@ -20,6 +20,7 @@ const makeFakeWorkerFactory = ({ delayMs = 0, wrongResponseIdentity = false } = 
     state.maxActive = Math.max(state.maxActive, state.active);
     let terminated = false;
     let onmessage = null;
+    let onerror = null;
     const worker = {
       postMessage(message) {
         const respond = () => {
@@ -32,20 +33,26 @@ const makeFakeWorkerFactory = ({ delayMs = 0, wrongResponseIdentity = false } = 
             return;
           }
           if (message.cmd !== "layout") return;
+          if (runtimeError) {
+            onerror?.({ message: "simulated Worker crash" });
+            return;
+          }
           const children = (message.graph.children ?? []).map((node, index) => ({
             ...node,
             x: index * 260,
             y: 0,
             ports: (node.ports ?? []).map((port) => ({ ...port, x: node.id === "a" ? node.width - 8 : 0, y: 36 })),
           }));
-          const output = {
-            ...message.graph,
-            children,
-            edges: (message.graph.edges ?? []).map((edge) => ({
-              ...edge,
-              sections: [{ id: `${edge.id}_s0`, startPoint: { x: 180, y: 40 }, endPoint: { x: 260, y: 40 } }],
-            })),
-          };
+          const output = malformedResult
+            ? { ...message.graph, children: [{ id: "bad", x: Number.NaN, y: 0, width: 1, height: 1, ports: [] }], edges: [] }
+            : {
+                ...message.graph,
+                children,
+                edges: (message.graph.edges ?? []).map((edge) => ({
+                  ...edge,
+                  sections: [{ id: `${edge.id}_s0`, startPoint: { x: 180, y: 40 }, endPoint: { x: 260, y: 40 } }],
+                })),
+              };
           onmessage?.({ data: { id: message.id, data: output, ["__yadilabLayout"]: envelope } });
         };
         const delay = typeof delayMs === "function" ? delayMs(state.created) : delayMs;
@@ -59,7 +66,7 @@ const makeFakeWorkerFactory = ({ delayMs = 0, wrongResponseIdentity = false } = 
       },
       get onmessage() { return onmessage; },
       set onmessage(value) { onmessage = value; },
-      set onerror(_value) {},
+      set onerror(value) { onerror = value; },
       set onmessageerror(_value) {},
     };
     return worker;
@@ -103,4 +110,18 @@ const staleBackend = new CancellableElkLayoutBackend({ timeoutMs: 1_000, workerF
 await expectCode(staleBackend.layout(graph, identity("stale")), "LAYOUT_WORKER_ENVELOPE_INVALID");
 assert.equal(staleFake.state.terminated, 1, "identity failure terminates the worker");
 
-console.log("PASS cancellable ELK worker backend contract: timeout, abort, fresh worker, single concurrency and stale envelope rejection");
+const unavailableBackend = new CancellableElkLayoutBackend({ workerFactory: () => { throw new Error("script denied"); } });
+await expectCode(unavailableBackend.layout(graph, identity("unavailable")), "LAYOUT_WORKER_UNAVAILABLE");
+assert.equal(unavailableBackend.lastMetrics?.outcome, "ERROR", "Worker construction failure is fail-closed");
+
+const runtimeFake = makeFakeWorkerFactory({ runtimeError: true });
+const runtimeBackend = new CancellableElkLayoutBackend({ timeoutMs: 1_000, workerFactory: runtimeFake.factory });
+await expectCode(runtimeBackend.layout(graph, identity("runtime-error")), "LAYOUT_WORKER_RUNTIME_ERROR");
+assert.equal(runtimeFake.state.terminated, 1, "runtime failure terminates the worker");
+
+const malformedFake = makeFakeWorkerFactory({ malformedResult: true });
+const malformedBackend = new CancellableElkLayoutBackend({ timeoutMs: 1_000, workerFactory: malformedFake.factory });
+await expectCode(malformedBackend.layout(graph, identity("malformed-result")), "TOPOLOGY_LAYOUT_ELK_INVALID_NODE");
+assert.equal(malformedFake.state.terminated, 1, "malformed result terminates the worker");
+
+console.log("PASS cancellable ELK worker backend contract: timeout, abort, fresh worker, single concurrency, stale envelope and fail-closed Worker errors");
