@@ -76,9 +76,15 @@ function dedupe(points: readonly CanvasPosition[]): CanvasRoutePoint[] {
 
 function handleY(rect: Rect, node: CanvasNode, handleId: string | undefined): number {
   const interfaces = node.data.semanticKind === "resource" ? node.data.interfaces : [];
-  const index = handleId?.startsWith("out:") || handleId?.startsWith("in:")
-    ? interfaces.findIndex((iface) => iface.interfaceId === handleId.slice(4))
-    : -1;
+  // `out:` is four characters while `in:` is three.  Treating both prefixes
+  // as four characters silently mapped every target handle to the card centre
+  // and could turn an otherwise orthogonal route into a diagonal segment.
+  const interfaceId = handleId?.startsWith("out:")
+    ? handleId.slice(4)
+    : handleId?.startsWith("in:")
+      ? handleId.slice(3)
+      : undefined;
+  const index = interfaceId === undefined ? -1 : interfaces.findIndex((iface) => iface.interfaceId === interfaceId);
   if (index < 0 || !interfaces.length) return rect.y + rect.height / 2;
   // Mirrors handlesFor(): handles occupy the central 60% of the card. The
   // calculation is deterministic and is only a routing hint; the renderer
@@ -115,8 +121,12 @@ function routeForEdge(
   const laneXRight = maxX + ROUTE_MARGIN + Math.abs(offset);
   const middleX = (sourcePoint.x + targetPoint.x) / 2 + offset;
   const middleY = (sourcePoint.y + targetPoint.y) / 2 + offset;
+  const parallelLaneY = sourcePoint.y + offset;
   const candidates: CanvasPosition[][] = [
-    [sourcePoint, { x: targetPoint.x, y: sourcePoint.y + offset }, targetPoint],
+    // Keep the parallel-lane offset orthogonal.  The previous two-point
+    // candidate moved both coordinates at once, which produced a diagonal
+    // first/last segment whenever a blocked route fell back to this option.
+    [sourcePoint, { x: sourcePoint.x, y: parallelLaneY }, { x: targetPoint.x, y: parallelLaneY }, targetPoint],
     [sourcePoint, { x: middleX, y: sourcePoint.y }, { x: middleX, y: targetPoint.y }, targetPoint],
     [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
     [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],

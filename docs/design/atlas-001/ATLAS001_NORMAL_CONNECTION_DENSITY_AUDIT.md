@@ -145,3 +145,95 @@ Evidence still required before changing the production policy includes:
 The final GitHub HEAD, required checks and PR state must be retrieved fresh in
 the handoff report; this document intentionally contains no hardcoded current
 SHA or stale CI result.
+
+## F2 root-cause investigation and minimal repair
+
+F2 was run against the unchanged production code at the start of the phase.
+The only difference between the archived F0/F1 measurement commit and that
+HEAD was the later wording-only audit refresh, so the nine-case Chromium
+matrix remains a valid baseline reproducer.  The baseline result is still
+`F2_PARTIAL`: the two linear controls and the grid control do not explain the
+dense failures by resource or connection count alone.
+
+### 200/199 linear versus 200/199 grid
+
+The two cases have the same resource and connection counts but different
+source-declared topology:
+
+| Case | Declared zones | Raw ELK geometry | Raw occupied-area ratio | Result before NORMAL view packing |
+|---|---:|---|---:|---|
+| 200/199 grid | 1 | one compact child field (about 5,796 × 2,370 px) | 3.98 | accepted |
+| 200/199 linear | 10 | ten 20-resource chains; each child field about 4,284 × 755 px | 9.14–9.35 | rejected (`LAYOUT_UNREASONABLE_WHITESPACE`) |
+
+ELK is configured globally as a RIGHT-directed layered graph.  The linear
+case therefore produces genuinely elongated intermediate child layouts; the
+one-zone simulation is even worse (about 86.9 ratio), so the source-declared
+zones are not the sole explanation.  At the same time, NORMAL immediately
+passes the raw document through `compactNormalTopologyProjection`, which
+packs each zone into a bounded three-column view and reroutes its edges.  The
+raw visual gate is consequently evaluating an intermediate layout that is not
+the geometry the operator sees.  This proves a combined cause: **A** (the raw
+ELK geometry is unreasonable for the linear graph) and **B** (the gate runs
+before the NORMAL projection and can reject a final view that has no node or
+header overlap).  The declared zones and links are legitimate source
+structure (**C**); removing or merging them would be an unsafe workaround.
+
+### Star and redundant controls
+
+The star controls are not only a validator false positive.  The hub-zone raw
+ratios were 11.70 (50/150), 39.53 (100/300) and 71.46 (200/600), and the hub
+output ports were packed to sub-pixel spacing (about 0.69 px between adjacent
+ports in the 50/150 case).  The raw validator's centre-pair grouping is coarse,
+but the underlying source-side port crowding is real.  The NORMAL compactor
+does produce zero resource overlaps, zero zone-header overlaps, zero
+non-orthogonal segments and zero foreign-resource crossings for the three star
+sizes in an isolated projection check; activation still stops before that
+view because the raw gate rejects the intermediate document.
+
+Redundant links are a separate safety boundary.  The 50/400 raw zone ratios
+were 11.20–15.62, 100/800 exceeded the 20-second activation bound, and
+200/1,600 exceeded the 30-second isolated Chromium process bound.  The final
+50/400 projection has no resource/header overlap and, after the routing fix
+below, no diagonal segments, but 27 route segments still intersect a foreign
+resource in the isolated geometry check.  It is therefore not safe to bypass
+the raw gate for redundant profiles.  The timeout cases remain **UNKNOWN** for
+final geometry and Builder-preservation because the current product exposes no
+bounded compile/layout/render phase markers.
+
+### Minimal verified repair
+
+One narrow production defect was independently reproducible in the shared
+NORMAL/hierarchy route helper.  `handleY()` sliced `in:<interface>` as though
+the prefix had four characters; every target handle consequently fell back to
+the card centre.  In addition, the parallel-lane fallback moved x and y in one
+candidate at once.  Under a blocked-detour choice this advertised an
+`orthogonal` route containing a diagonal SVG segment.  F2 changes only
+`ui/src/canvas/topology-edge-routing.ts`:
+
+* parse `out:` and `in:` prefixes with their actual lengths;
+* express the offset parallel lane as four axis-aligned points.
+
+`tests/browser/run_project088_topology_tests.mjs` now contains a focused
+three-link, obstacle-forced regression that checks the declared source and
+target interface anchors and every route segment.  No threshold, activation
+policy, importer, canonical ID/port/connection, Atlas, G5.1/G5.2 or
+Connected Explorer code was changed.  The repair does not claim to unblock the
+raw ELK failures; it removes a genuine route-corruption defect while leaving
+unsafe topologies fail-closed.
+
+### Post-repair isolated projection checks
+
+These are deterministic Node-side checks of the actual NORMAL projection,
+not a substitute for the compiled-Chromium baseline above:
+
+| Case | Routes | Resource overlaps | Header overlaps | Non-orthogonal segments | Foreign-resource crossings |
+|---|---:|---:|---:|---:|---:|
+| 200/199 linear | 199 | 0 | 0 | 0 | 0 |
+| 50/150 star | 150 | 0 | 0 | 0 | 0 |
+| 100/300 star | 300 | 0 | 0 | 0 | 0 |
+| 200/600 star | 600 | 0 | 0 | 0 | 0 |
+| 50/400 redundant | 400 | 0 | 0 | 0 | 27 |
+
+The remaining raw-gate mismatch and the redundant-route crossings require a
+separate architecture decision and a bounded final-view validator; no
+connection budget is selected in F2 (`NORMAL_CONNECTION_BUDGET=PENDING_DECISION`).

@@ -125,6 +125,68 @@ const parallel = verifyGraph("parallel", ["left", "right"], [["p1", "left", "rig
 const parallelRoutes = computeOrthogonalRoutes(parallel.nodes.filter((node) => node.type === "resource"), parallel.edges);
 equal(new Set([...parallelRoutes.values()].map((points) => JSON.stringify(points))).size, 3, "parallel links receive distinct deterministic routes");
 
+// F2 regression: source/target handles must both anchor to their declared
+// interfaces even when an obstacle forces a detour.  Before the focused
+// routing fix, the `in:` prefix was sliced as if it were four characters;
+// target handles fell back to the card centre and produced diagonal SVG
+// segments for the first/last parallel lanes.
+const routedInterfaces = Array.from({ length: 3 }, (_, index) => ({
+  interfaceId: `p${index}`,
+  label: `p${index}`,
+  addresses: [],
+  stateLabel: "DECLARED",
+  sourceHandleId: `out:p${index}`,
+  targetHandleId: `in:p${index}`,
+}));
+const routedResource = (id, x, y, interfaces = routedInterfaces) => ({
+  id,
+  type: "resource",
+  position: { x, y },
+  width: 180,
+  height: 96,
+  layoutStatus: "resolved",
+  data: {
+    semanticId: id,
+    semanticKind: "resource",
+    label: id,
+    resourceType: "network.switch",
+    deviceFamily: "network",
+    deviceRoleLabel: "Switch",
+    interfaces,
+  },
+});
+const routedNodes = [
+  routedResource("route-source", 520, 400),
+  routedResource("route-target", 7000, 300),
+  routedResource("route-obstacle", 3000, 250, []),
+];
+const routedEdges = routedInterfaces.map((iface, index) => ({
+  id: `route-${index}`,
+  type: "semantic",
+  source: "route-source",
+  target: "route-target",
+  sourceHandle: iface.sourceHandleId,
+  targetHandle: iface.targetHandleId,
+  data: { semanticId: `route-${index}`, connectionKind: "network", properties: {}, visual: {} },
+}));
+const routed = computeOrthogonalRoutes(routedNodes, routedEdges);
+for (const edge of routedEdges) {
+  const index = Number(edge.sourceHandle.slice(-1));
+  const source = routedNodes[0];
+  const target = routedNodes[1];
+  const sourceY = source.position.y + source.height * (0.2 + (index + 1) * 0.6 / (routedInterfaces.length + 1));
+  const targetY = target.position.y + target.height * (0.2 + (index + 1) * 0.6 / (routedInterfaces.length + 1));
+  const points = [
+    { x: source.position.x + source.width, y: sourceY },
+    ...(routed.get(edge.id) ?? []),
+    { x: target.position.x, y: targetY },
+  ];
+  ok(points.slice(1).every((point, pointIndex) => {
+    const previous = points[pointIndex];
+    return point.x === previous.x || point.y === previous.y;
+  }), `${edge.id}: declared interface handles keep detour orthogonal`);
+}
+
 verifyGraph("disconnected", ["a", "b", "c", "d"], [["d1", "a", "b"], ["d2", "c", "d"]], { a: { x: 0, y: 0 }, b: { x: 300, y: 0 }, c: { x: 0, y: 300 }, d: { x: 300, y: 300 } });
 verifyGraph("mixed-zones", ["router-z", "fw-z", "server-z", "client-z"], [["m1", "router-z", "fw-z"], ["m2", "fw-z", "server-z"], ["m3", "server-z", "client-z"]], {
   "router-z": { x: 0, y: 0 }, "fw-z": { x: 320, y: 0 }, "server-z": { x: 640, y: 160 }, "client-z": { x: 960, y: 160 },
