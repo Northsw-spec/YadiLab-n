@@ -78,14 +78,14 @@ evidence is intentionally not committed as source code).
 
 | Case | Preview ms | Activation ms | Render ms | Result | Evidence |
 |---|---:|---:|---:|---|---|
-| 50/49 linear | 407.8 | 1,074.3 | 252.6 | **PASS** | 50 nodes, 49 SVG edges, 5 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 36,441,912 bytes; 16/16 probe ticks, max delay 0 ms |
-| 50/150 star | 457.1 | 941.6 | — | **FAIL / ACTIVATION_BLOCKED** | `LAYOUT_UNREASONABLE_WHITESPACE` ratio 11.70; repeated spoke routes trigger `LAYOUT_EDGE_OVERLAP_EXCESSIVE`; Builder unchanged |
-| 50/400 redundant | 398.7 | 3,993.8 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 11.20–15.62 across zones; Builder unchanged |
-| 100/99 linear | 412.2 | 1,829.3 | 293.4 | **PASS** | 100 nodes, 99 SVG edges, 10 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 53,408,026 bytes; 16/16 probe ticks, max delay 0 ms |
-| 100/300 star | 426.8 | 2,267.0 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 39.53 plus repeated spoke route overlap; Builder unchanged |
-| 100/800 redundant | 485.9 | 20,426.1 | — | **FAIL / TIMEOUT** | activation click exceeded the 20,000 ms case bound; layout completion and Builder preservation are **UNKNOWN** (a separate bounded repeat reached the existing layout guard instead) |
-| 200/199 linear | 397.4 | 806.3 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 9.14–9.35; Builder unchanged |
-| 200/600 star | 434.0 | 8,715.9 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 71.46 plus repeated spoke route overlap; Builder unchanged |
+| 50/49 linear | 405.4 | 921.9 | 271.7 | **PASS** | 50 nodes, 49 SVG edges, 5 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 32,259,205 bytes; 16/16 probe ticks, max delay 0 ms |
+| 50/150 star | 409.7 | 886.0 | — | **FAIL / ACTIVATION_BLOCKED** | `LAYOUT_UNREASONABLE_WHITESPACE` ratio 11.70; repeated spoke routes trigger `LAYOUT_EDGE_OVERLAP_EXCESSIVE`; Builder unchanged |
+| 50/400 redundant | 422.9 | 3,894.5 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 11.20–15.62 across zones; Builder unchanged |
+| 100/99 linear | 399.4 | 1,594.6 | 634.9 | **PASS** | 100 nodes, 99 SVG edges, 10 zones, zero node/header overlaps, zero endpoint/port errors, zero non-orthogonal routes, zero page/console errors; memory 54,920,161 bytes; 16/16 probe ticks, max delay 0 ms |
+| 100/300 star | 405.3 | 2,333.9 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 39.53 plus repeated spoke route overlap; Builder unchanged |
+| 100/800 redundant | 491.7 | 20,890.3 | — | **FAIL / TIMEOUT** | activation click exceeded the 20,000 ms case bound; layout completion and Builder preservation are **UNKNOWN** (a separate bounded repeat reached the existing layout guard instead) |
+| 200/199 linear | 424.2 | 843.1 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratios 9.14–9.35; Builder unchanged |
+| 200/600 star | 412.4 | 11,719.4 | — | **FAIL / ACTIVATION_BLOCKED** | whitespace ratio 71.46 plus repeated spoke route overlap; Builder unchanged |
 | 200/1,600 redundant | — | — | — | **FAIL / PROCESS_TIMEOUT** | isolated Chromium process exceeded 30,000 ms and was terminated; layout completion and Builder preservation are **UNKNOWN** |
 
 For the five activation-blocked cases the existing layout-quality guard stopped
