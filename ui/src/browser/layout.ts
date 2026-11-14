@@ -12,7 +12,7 @@ export async function autoLayoutBuilder(
   workspace: BuilderWorkspace,
   backend: LayoutBackend,
   context?: LayoutRequestContext,
-  options: Pick<AutoLayoutOptions, "deferIntermediateWhitespace"> = {},
+  options: Pick<AutoLayoutOptions, "deferIntermediateWhitespace" | "deferIntermediateEdgeOverlap"> = {},
 ): Promise<BrowserCommandResult<BuilderWorkspace>> {
   if (workspace.compile.status !== "valid") {
     return {

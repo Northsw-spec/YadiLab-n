@@ -378,16 +378,31 @@ function handlesFor(data) {
   const interfaces = Array.isArray(data?.interfaces) ? data.interfaces : [];
   const visualAttachments = Array.isArray(data?.visualAttachmentHandles) ? data.visualAttachmentHandles : [];
   const activeInterfaces = new Set(Array.isArray(data?.activeInterfaceIds) ? data.activeInterfaceIds : []);
+  const sidePosition = (side) => side === "NORTH" ? Position.Top : side === "SOUTH" ? Position.Bottom : side === "WEST" ? Position.Left : Position.Right;
+  const sideKey = (side, fallback) => side === "NORTH" || side === "SOUTH" || side === "EAST" || side === "WEST" ? side : fallback;
+  const sideGroups = (getSide, fallback) => new Map(["NORTH", "SOUTH", "EAST", "WEST"].map((side) => [side, interfaces.filter((iface) => sideKey(getSide(iface), fallback) === side)]));
+  const sourceGroups = sideGroups((iface) => iface.sourceSide, "EAST");
+  const targetGroups = sideGroups((iface) => iface.targetSide, "WEST");
+  const indexedSide = (groups, iface, getSide, fallback) => {
+    const side = sideKey(getSide(iface), fallback);
+    const members = groups.get(side) ?? [];
+    return { side, index: Math.max(0, members.findIndex((item) => item.interfaceId === iface.interfaceId)), count: Math.max(1, members.length) };
+  };
+  const handleStyle = ({ side, index, count }) => {
+    const percent = `${20 + ((index + 1) * 60) / (count + 1)}%`;
+    return side === "NORTH" || side === "SOUTH" ? { left: percent } : { top: percent };
+  };
   const result = [
     e(Handle, { key: "generic-in", id: "generic-in", type: "target", position: Position.Left, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-in", "data-react-flow-handle-type": "target" }),
     e(Handle, { key: "generic-out", id: "generic-out", type: "source", position: Position.Right, className: "semantic-handle generic-handle", title: "Semantic attachment", "data-react-flow-handle-id": "generic-out", "data-react-flow-handle-type": "source" }),
   ];
-  interfaces.forEach((iface, index) => {
-    const top = `${20 + ((index + 1) * 60) / (interfaces.length + 1)}%`;
+  interfaces.forEach((iface) => {
+    const targetPlacement = indexedSide(targetGroups, iface, (value) => value.targetSide, "WEST");
+    const sourcePlacement = indexedSide(sourceGroups, iface, (value) => value.sourceSide, "EAST");
     const active = activeInterfaces.has(iface.interfaceId);
     const title = `${iface.label} · ${iface.stateLabel}${iface.addresses.length ? ` · ${iface.addresses.join(", ")}` : ""}`;
-    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: Position.Left, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.targetHandleId, "data-react-flow-handle-type": "target" }));
-    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: Position.Right, style: { top }, className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.sourceHandleId, "data-react-flow-handle-type": "source" }));
+    result.push(e(Handle, { key: iface.targetHandleId, id: iface.targetHandleId, type: "target", position: sidePosition(targetPlacement.side), style: handleStyle(targetPlacement), className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-side": targetPlacement.side, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.targetHandleId, "data-react-flow-handle-type": "target" }));
+    result.push(e(Handle, { key: iface.sourceHandleId, id: iface.sourceHandleId, type: "source", position: sidePosition(sourcePlacement.side), style: handleStyle(sourcePlacement), className: `semantic-handle interface-handle${active ? " active" : ""}`, title, "data-interface-id": iface.interfaceId, "data-interface-side": sourcePlacement.side, "data-interface-state": iface.stateLabel.toLowerCase(), "data-react-flow-handle-id": iface.sourceHandleId, "data-react-flow-handle-type": "source" }));
   });
   visualAttachments.forEach((attachment, index) => {
     const top = `${Number.isFinite(attachment.topPercent) ? attachment.topPercent : 20 + ((index + 1) * 60) / (visualAttachments.length + 1)}%`;
@@ -5662,6 +5677,10 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         throw new Error("NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED");
       }
       setLayoutBusy(true);
+      // Test/evidence hook only: retain the last bounded Worker metrics after
+      // the import dialog closes so compiled Chromium can report the actual
+      // ELK phase without guessing from wall-clock activation time.
+      globalThis.__yadilabNetworkImportLayoutMetrics = null;
       const layoutContext = {
         requestId: `normal-import-${activationEpoch}-${preview.sourceSha256}`,
         sourceSha: preview.sourceSha256,
@@ -5676,8 +5695,10 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       // this workspace can replace the active Builder.
       const layout = await autoLayoutBuilder(next, layoutBackendRef.current, layoutContext, {
         deferIntermediateWhitespace: true,
+        deferIntermediateEdgeOverlap: true,
       });
       setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+      globalThis.__yadilabNetworkImportLayoutMetrics = layoutBackendRef.current?.lastMetrics ?? null;
       if (!isCurrent()) {
         setFailure("NETWORK_IMPORT_LAYOUT_STALE");
         return;
@@ -5735,6 +5756,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
     } catch (error) {
       if (requestId.current !== activationEpoch) return;
       setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
+      globalThis.__yadilabNetworkImportLayoutMetrics = layoutBackendRef.current?.lastMetrics ?? null;
       setFailure(error instanceof Error ? error.message : String(error));
       setDiagnostics([{ code: "NETWORK_IMPORT_ACTIVATION_BLOCKED", severity: "error", message: error instanceof Error ? error.message : String(error) }]);
     } finally { setLayoutBusy(false); if (requestId.current === activationEpoch) setBusy(false); }

@@ -11,6 +11,9 @@ interface Rect extends CanvasPosition {
 
 const ROUTE_MARGIN = 28;
 const PARALLEL_GAP = 14;
+const PORT_SPAN_RATIO = 0.6;
+/** Presentation-only minimum between measured interface-handle centers. */
+export const NORMAL_MIN_PORT_SEPARATION_PX = 10;
 
 function absoluteRects(nodes: readonly CanvasNode[]): ReadonlyMap<string, Rect> {
   const byId = new Map(nodes.map((node) => [node.id, node] as const));
@@ -73,6 +76,22 @@ function pathObstacleIds(path: readonly CanvasPosition[], obstacles: readonly Re
   return [...ids].sort((left, right) => left.localeCompare(right, "en"));
 }
 
+function pathHasBacktracking(path: readonly CanvasPosition[]): boolean {
+  for (let index = 2; index < path.length; index += 1) {
+    const previous = path[index - 2]!;
+    const middle = path[index - 1]!;
+    const current = path[index]!;
+    const horizontal = previous.y === middle.y && middle.y === current.y;
+    const vertical = previous.x === middle.x && middle.x === current.x;
+    if (horizontal || vertical) {
+      const first = horizontal ? middle.x - previous.x : middle.y - previous.y;
+      const second = horizontal ? current.x - middle.x : current.y - middle.y;
+      if (first !== 0 && second !== 0 && Math.sign(first) !== Math.sign(second)) return true;
+    }
+  }
+  return false;
+}
+
 function pathLength(path: readonly CanvasPosition[]): number {
   let total = 0;
   for (let index = 1; index < path.length; index += 1) {
@@ -88,7 +107,13 @@ function dedupe(points: readonly CanvasPosition[]): CanvasRoutePoint[] {
     .map((point) => ({ x: point.x, y: point.y }));
 }
 
-function handleY(rect: Rect, node: CanvasNode, handleId: string | undefined): number {
+type RouteSide = "NORTH" | "SOUTH" | "EAST" | "WEST";
+
+interface HandlePoint extends CanvasPosition {
+  readonly side: RouteSide;
+}
+
+function handlePoint(rect: Rect, node: CanvasNode, handleId: string | undefined, role: "source" | "target"): HandlePoint {
   const interfaces = node.data.semanticKind === "resource" ? node.data.interfaces : [];
   // `out:` is four characters while `in:` is three.  Treating both prefixes
   // as four characters silently mapped every target handle to the card centre
@@ -99,11 +124,25 @@ function handleY(rect: Rect, node: CanvasNode, handleId: string | undefined): nu
       ? handleId.slice(3)
       : undefined;
   const index = interfaceId === undefined ? -1 : interfaces.findIndex((iface) => iface.interfaceId === interfaceId);
-  if (index < 0 || !interfaces.length) return rect.y + rect.height / 2;
-  // Mirrors handlesFor(): handles occupy the central 60% of the card. The
-  // calculation is deterministic and is only a routing hint; the renderer
-  // re-anchors to the measured handle coordinates after React Flow mounts.
-  return rect.y + rect.height * (0.2 + (index + 1) * 0.6 / (interfaces.length + 1));
+  const source = role === "source";
+  const iface = index >= 0 ? interfaces[index] : undefined;
+  const fallbackSide: RouteSide = source ? "EAST" : "WEST";
+  const side = iface ? (source ? iface.sourceSide : iface.targetSide) ?? fallbackSide : fallbackSide;
+  const onSide = interfaces.filter((candidate) => (source ? candidate.sourceSide : candidate.targetSide) === side || (!(source ? candidate.sourceSide : candidate.targetSide) && side === fallbackSide));
+  const sideIndex = iface ? Math.max(0, onSide.findIndex((candidate) => candidate.interfaceId === iface.interfaceId)) : -1;
+  const count = Math.max(1, onSide.length);
+  const percent = sideIndex < 0 ? 0.5 : 0.2 + (sideIndex + 1) * PORT_SPAN_RATIO / (count + 1);
+  if (side === "NORTH" || side === "SOUTH") {
+    return { x: rect.x + rect.width * percent, y: side === "NORTH" ? rect.y : rect.y + rect.height, side };
+  }
+  return { x: side === "WEST" ? rect.x : rect.x + rect.width, y: rect.y + rect.height * percent, side };
+}
+
+function outward(point: HandlePoint, distance: number): CanvasPosition {
+  if (point.side === "NORTH") return { x: point.x, y: point.y - distance };
+  if (point.side === "SOUTH") return { x: point.x, y: point.y + distance };
+  if (point.side === "WEST") return { x: point.x - distance, y: point.y };
+  return { x: point.x + distance, y: point.y };
 }
 
 interface RouteForEdgeResult {
@@ -135,11 +174,11 @@ function routeForEdge(
   parallelCount: number,
   existingSegments: readonly RouteSegment[],
 ): RouteForEdgeResult {
-  const sourceOffsetY = handleY(source, sourceNode, edge.sourceHandle);
-  const targetOffsetY = handleY(target, targetNode, edge.targetHandle);
-  const sourcePoint = { x: source.x + source.width, y: sourceOffsetY };
-  const targetPoint = { x: target.x, y: targetOffsetY };
+  const sourcePoint = handlePoint(source, sourceNode, edge.sourceHandle, "source");
+  const targetPoint = handlePoint(target, targetNode, edge.targetHandle, "target");
   const offset = parallelCount > 1 ? (parallelIndex - (parallelCount - 1) / 2) * PARALLEL_GAP : 0;
+  const sourceExit = outward(sourcePoint, ROUTE_MARGIN);
+  const targetEntry = outward(targetPoint, ROUTE_MARGIN);
   // Zones are visual containers, not physical resources. Treating their
   // enclosing rectangles as obstacles would make every valid inter-zone
   // route appear blocked and force a straight fallback through resources.
@@ -155,19 +194,22 @@ function routeForEdge(
   const middleX = (sourcePoint.x + targetPoint.x) / 2 + offset;
   const middleY = (sourcePoint.y + targetPoint.y) / 2 + offset;
   const parallelLaneY = sourcePoint.y + offset;
+  const parallelLaneX = sourcePoint.x + offset;
   const candidates: CanvasPosition[][] = [
-    // Keep the parallel-lane offset orthogonal.  The previous two-point
-    // candidate moved both coordinates at once, which produced a diagonal
-    // first/last segment whenever a blocked route fell back to this option.
     [sourcePoint, { x: sourcePoint.x, y: parallelLaneY }, { x: targetPoint.x, y: parallelLaneY }, targetPoint],
-    [sourcePoint, { x: middleX, y: sourcePoint.y }, { x: middleX, y: targetPoint.y }, targetPoint],
-    [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
-    [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],
-    [sourcePoint, { x: laneXLeft, y: sourcePoint.y }, { x: laneXLeft, y: targetPoint.y }, targetPoint],
-    [sourcePoint, { x: laneXRight, y: sourcePoint.y }, { x: laneXRight, y: targetPoint.y }, targetPoint],
-    [sourcePoint, { x: middleX, y: sourcePoint.y }, { x: middleX, y: middleY }, { x: targetPoint.x, y: middleY }, targetPoint],
+    [sourcePoint, { x: parallelLaneX, y: sourcePoint.y }, { x: parallelLaneX, y: targetPoint.y }, targetPoint],
+    [sourcePoint, { x: targetPoint.x, y: sourcePoint.y }, targetPoint],
+    [sourcePoint, { x: sourcePoint.x, y: targetPoint.y }, targetPoint],
+    [sourcePoint, sourceExit, { x: targetEntry.x, y: sourceExit.y }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: targetEntry.y }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: sourceExit.x, y: laneYTop }, { x: targetEntry.x, y: laneYTop }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: sourceExit.x, y: laneYBottom }, { x: targetEntry.x, y: laneYBottom }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: laneXLeft, y: sourceExit.y }, { x: laneXLeft, y: targetEntry.y }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: laneXRight, y: sourceExit.y }, { x: laneXRight, y: targetEntry.y }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: middleY }, { x: targetEntry.x, y: middleY }, targetEntry, targetPoint],
+    [sourcePoint, sourceExit, { x: sourceExit.x, y: parallelLaneY }, { x: targetEntry.x, y: parallelLaneY }, targetEntry, targetPoint],
   ];
-  const valid = candidates.filter((candidate) => !pathIntersects(candidate, obstacleRects));
+  const valid = candidates.filter((candidate) => !pathHasBacktracking(candidate) && !pathIntersects(candidate, obstacleRects));
   if (!valid.length) {
     const blockedObstacleIds = [...new Set(candidates.flatMap((candidate) => pathObstacleIds(candidate, obstacleRects)))].sort((left, right) => left.localeCompare(right, "en"));
     return {
@@ -176,7 +218,7 @@ function routeForEdge(
   }
   const conflictCount = (path: readonly CanvasPosition[]): number => {
     const segments = path.slice(1).map((point, index) => ({ edgeId: edge.id, a: path[index]!, b: point }));
-    return segments.reduce((total, segment) => total + existingSegments.filter((existing) => properCableCrossing(segment, existing)).length, 0);
+    return segments.reduce((total, segment) => total + existingSegments.filter((existing) => cableConflict(segment, existing)).length, 0);
   };
   const selected = valid.slice().sort((a, b) => conflictCount(a) - conflictCount(b) || pathLength(a) - pathLength(b))[0] ?? [sourcePoint, targetPoint];
   // Keep only bend points; React Flow supplies the live endpoint coordinates.
@@ -285,6 +327,26 @@ function properCableCrossing(left: RouteSegment, right: RouteSegment): boolean {
     && y < Math.max(vertical.a.y, vertical.b.y);
 }
 
+function collinearCableOverlap(left: RouteSegment, right: RouteSegment): boolean {
+  const leftHorizontal = left.a.y === left.b.y;
+  const rightHorizontal = right.a.y === right.b.y;
+  if (leftHorizontal !== rightHorizontal) return false;
+  if (leftHorizontal) {
+    if (left.a.y !== right.a.y) return false;
+    const overlap = Math.min(Math.max(left.a.x, left.b.x), Math.max(right.a.x, right.b.x))
+      - Math.max(Math.min(left.a.x, left.b.x), Math.min(right.a.x, right.b.x));
+    return overlap > 1;
+  }
+  if (left.a.x !== right.a.x) return false;
+  const overlap = Math.min(Math.max(left.a.y, left.b.y), Math.max(right.a.y, right.b.y))
+    - Math.max(Math.min(left.a.y, left.b.y), Math.min(right.a.y, right.b.y));
+  return overlap > 1;
+}
+
+function cableConflict(left: RouteSegment, right: RouteSegment): boolean {
+  return properCableCrossing(left, right) || collinearCableOverlap(left, right);
+}
+
 
 function setDifference(actual: readonly string[], expected: readonly string[]): readonly string[] {
   const expectedSet = new Set(expected);
@@ -337,6 +399,30 @@ export function validateOrthogonalProjection(
     }
   }
   const resources = projection.nodes.filter((node) => node.type === "resource").map((node) => rects.get(node.id)).filter((rect): rect is Rect => Boolean(rect));
+  for (const node of projection.nodes.filter((candidate) => candidate.type === "resource")) {
+    const rect = rects.get(node.id);
+    if (!rect || node.data.semanticKind !== "resource" || node.data.interfaces.length < 2) continue;
+    for (const [role, fallback] of [["source", "EAST"], ["target", "WEST"]] as const) {
+      const groups = new Map<string, number>();
+      for (const iface of node.data.interfaces) {
+        const side = (role === "source" ? iface.sourceSide : iface.targetSide) ?? fallback;
+        groups.set(side, (groups.get(side) ?? 0) + 1);
+      }
+      for (const [side, count] of groups) {
+        if (count < 2) continue;
+        const span = side === "NORTH" || side === "SOUTH" ? rect.width : rect.height;
+        const separation = span * PORT_SPAN_RATIO / (count + 1);
+        if (separation + 1e-6 < NORMAL_MIN_PORT_SEPARATION_PX) {
+          diagnostics.push({
+            severity: "error",
+            code: "TOPOLOGY_FINAL_PORT_SEPARATION_UNSAFE",
+            objectId: node.id,
+            message: `Resource '${node.id}' ${role} side ${side} has ${separation.toFixed(2)}px between adjacent declared interface handles; at least ${NORMAL_MIN_PORT_SEPARATION_PX}px is required.`,
+          });
+        }
+      }
+    }
+  }
   for (let leftIndex = 0; leftIndex < resources.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < resources.length; rightIndex += 1) {
       if (strictRectOverlap(resources[leftIndex]!, resources[rightIndex]!)) diagnostics.push({ severity: "error", code: "TOPOLOGY_FINAL_RESOURCE_OVERLAP", objectId: resources[rightIndex]!.id, message: `Final NORMAL resources '${resources[leftIndex]!.id}' and '${resources[rightIndex]!.id}' overlap.` });
@@ -361,6 +447,7 @@ export function validateOrthogonalProjection(
   const nodeById = new Map(projection.nodes.map((node) => [node.id, node] as const));
   let foreignResourceCrossings = 0;
   const routeSegments: RouteSegment[] = [];
+  const densePresentation = projection.nodes.some((node) => node.type === "resource" && node.data.semanticKind === "resource" && node.data.interfaces.some((iface) => iface.sourceSide !== undefined || iface.targetSide !== undefined));
   for (const edge of projection.edges) {
     if (edge.data.summaryOnly) continue;
     const source = rects.get(edge.source);
@@ -377,8 +464,8 @@ export function validateOrthogonalProjection(
     }
     const route = routeResult.routes.get(edge.id);
     if (!route) continue;
-    const sourcePoint = { x: source.x + source.width, y: handleY(source, sourceNode, edge.sourceHandle) };
-    const targetPoint = { x: target.x, y: handleY(target, targetNode, edge.targetHandle) };
+    const sourcePoint = handlePoint(source, sourceNode, edge.sourceHandle, "source");
+    const targetPoint = handlePoint(target, targetNode, edge.targetHandle, "target");
     const points = [sourcePoint, ...route, targetPoint];
     if (points.some((point) => !finite(point.x) || !finite(point.y))) {
       diagnostics.push({ severity: "error", code: "TOPOLOGY_FINAL_NONFINITE_ROUTE", objectId: edge.id, message: `Connection '${edge.id}' has a non-finite final route.` });
@@ -397,12 +484,21 @@ export function validateOrthogonalProjection(
       diagnostics.push({ severity: "error", code: "TOPOLOGY_FINAL_FOREIGN_RESOURCE_CROSSING", objectId: edge.id, message: `Connection '${edge.id}' crosses foreign resources: ${blocked.join(", ")}.` });
     }
   }
+  const reportedCableConflicts = new Set<string>();
   for (let leftIndex = 0; leftIndex < routeSegments.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < routeSegments.length; rightIndex += 1) {
       const left = routeSegments[leftIndex]!;
       const right = routeSegments[rightIndex]!;
       if (left.edgeId === right.edgeId) continue;
-      if (properCableCrossing(left, right)) diagnostics.push({ severity: "warning", code: "TOPOLOGY_FINAL_CABLE_CROSSING", objectId: `${left.edgeId}:${right.edgeId}`, message: `Final NORMAL cables '${left.edgeId}' and '${right.edgeId}' cross; the existing raw ELK gate remains authoritative until a complete cable-level optimizer is approved.` });
+      const pairId = [left.edgeId, right.edgeId].sort((a, b) => a.localeCompare(b, "en")).join(":");
+      if (reportedCableConflicts.has(pairId)) continue;
+      if (properCableCrossing(left, right)) {
+        reportedCableConflicts.add(pairId);
+        diagnostics.push({ severity: densePresentation ? "error" : "warning", code: "TOPOLOGY_FINAL_CABLE_CROSSING", objectId: pairId, message: `Final NORMAL cables '${left.edgeId}' and '${right.edgeId}' cross.` });
+      } else if (collinearCableOverlap(left, right)) {
+        reportedCableConflicts.add(pairId);
+        diagnostics.push({ severity: densePresentation ? "error" : "warning", code: "TOPOLOGY_FINAL_CABLE_OVERLAP", objectId: pairId, message: `Final NORMAL cables '${left.edgeId}' and '${right.edgeId}' overlap for more than one pixel.` });
+      }
     }
   }
   const routedEdgeIds = new Set(routeResult.routes.keys());

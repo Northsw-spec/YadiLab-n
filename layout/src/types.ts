@@ -126,6 +126,13 @@ export interface AutoLayoutOptions {
    * structural, semantic, port, edge and geometry errors remain fatal.
    */
   readonly deferIntermediateWhitespace?: boolean;
+  /**
+   * NORMAL may also validate a second, port-aware projection after ELK.
+   * This defers only the raw straight-line coincidence diagnostic. The
+   * final projection still has to prove that every canonical edge has a
+   * distinct, orthogonal, non-overlapping route before activation.
+   */
+  readonly deferIntermediateEdgeOverlap?: boolean;
 }
 
 export interface LayoutDiagnostic {

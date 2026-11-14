@@ -24,6 +24,9 @@ export interface CanvasInterfaceHandle {
   readonly stateLabel: "DECLARED";
   readonly sourceHandleId: string;
   readonly targetHandleId: string;
+  /** View-only side assignment used by dense NORMAL presentations. */
+  readonly sourceSide?: "NORTH" | "SOUTH" | "EAST" | "WEST";
+  readonly targetSide?: "NORTH" | "SOUTH" | "EAST" | "WEST";
 }
 
 export interface CanvasVisualAttachmentHandle {
