@@ -220,11 +220,14 @@ def run_builder_edit(page, evidence_dir: Path) -> dict:
     panel.locator('[data-network-import-layout-cancel="true"]').click(timeout=10_000)
     expect(panel).to_have_attribute("data-network-import-layout-worker-outcome", "ABORTED", timeout=15_000)
     close_panel(page, panel)
-    require(exported_source(page) == baseline, "Builder canonical source changed during cancelled layout")
     expect(title).to_have_value("F4B-C edit during Worker layout")
     expect(controls).to_have_attribute("data-project-pending-drafts", "true")
     screenshot = "atlas001-f4b-c-builder-edit-cancel.png"
     page.screenshot(path=str(evidence_dir / screenshot), full_page=True)
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator('[data-builder-inspector="mission"]').get_by_role("button", name="Förkasta inspektörsutkast").click()
+    expect(controls).to_have_attribute("data-project-pending-drafts", "false", timeout=15_000)
+    require(exported_source(page) == baseline, "Builder canonical source changed during cancelled layout")
     return {
         "status": "PASS",
         "builderCanonicalSourceUnchanged": True,
