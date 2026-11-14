@@ -5678,7 +5678,8 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       }
       if (!layout.ok) {
         setDiagnostics(layout.diagnostics);
-        setFailure("Layout failed; the active workspace was not replaced.");
+        const codes = layout.diagnostics.map((diagnostic) => diagnostic.code).filter(Boolean);
+        setFailure(`Layout failed (${codes.join(", ") || "UNKNOWN"}); the active workspace was not replaced.`);
         return;
       }
       next = layout.workspace;
