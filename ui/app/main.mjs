@@ -321,6 +321,7 @@ import { buildNetworkOverviewProjection } from "../src/canvas/network-overview.t
 import { buildHierarchicalTopologyIndex, buildHierarchicalTopologyView } from "../src/canvas/hierarchical-topology.ts";
 import { createTopologyRequestKey, layoutHierarchicalTopologyView, topologyViewportBucket, TOPOLOGY_LAYOUT_CONFIG_VERSION } from "../src/canvas/topology-elk-adapter.ts";
 import { compactNormalTopologyProjection } from "../src/canvas/normal-topology.ts";
+import { inspectConnectedExplorerGeometry } from "./connected-explorer-guard.mjs";
 import { projectScenarioSubsetToCanvas } from "../src/canvas/projection.ts";
 import { atlasPageForResource, buildAtlasIndex, projectAtlasPage } from "../src/canvas/atlas-topology.ts";
 import { createTopologyViewportLifecycle } from "../src/canvas/topology-viewport-lifecycle.ts";
@@ -1217,8 +1218,31 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
     (workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.ATLAS) ? null :
     workspace.mode === "builder" ? buildBuilderViewModel(workspace) : buildRuntimeViewModel(workspace),
     [workspace, topologyViewMode, validThousandFocus, fiveThousandWorkspace, tenThousandGuard]);
+  // Fail closed on stacked, off-parent or header-overlapping geometry. Atlas
+  // can safely show a bounded page; documents with complete Connected Explorer
+  // coordinates retain their existing mode and positions unchanged.
+  const connectedExplorerGeometry = useMemo(() =>
+    topologyViewMode === TOPOLOGY_VIEW_MODES.CONNECTED_EXPLORER && vm?.canvas
+      ? inspectConnectedExplorerGeometry(vm.canvas, ZONE_HEADER_RESERVED_HEIGHT)
+      : null,
+    [topologyViewMode, vm?.canvas]);
+  const connectedExplorerUnsafe = connectedExplorerGeometry?.safe === false;
+  useEffect(() => {
+    if (!connectedExplorerUnsafe) return;
+    if (canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET) {
+      setTopologyViewMode(TOPOLOGY_VIEW_MODES.NORMAL);
+      return;
+    }
+    const first = validAtlasIndex?.pages[0];
+    if (!first) return; // Keep canvas empty, never fall back to stacked cards.
+    setTopologyViewMode(TOPOLOGY_VIEW_MODES.ATLAS);
+    setAtlasPageId(first.id);
+    setAtlasPageHistory([{ pageId: first.id, label: first.label }]);
+    setTopologyViewHistory([{ kind: "atlas", pageId: first.id, label: `Atlas · ${first.label}` }]);
+  }, [connectedExplorerUnsafe, canonicalNetwork.resources.length, validAtlasIndex, sourceIdentity]);
   const hasManualLayoutOverrides = workspace.layout?.nodes?.some((node) => node.manualOverride === true) === true;
-  const normalTopologyCanvas = workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
+  const normalTopologyCanvas = connectedExplorerUnsafe ? null :
+    workspace.mode === "builder" && topologyViewMode === TOPOLOGY_VIEW_MODES.NORMAL &&
     canonicalNetwork.resources.length <= NORMAL_TOPOLOGY_RESOURCE_BUDGET &&
     vm?.canvas && !hasManualLayoutOverrides
     ? compactNormalTopologyProjection(vm.canvas)
@@ -2620,6 +2644,7 @@ function Topology({ workspace, getWorkspace, projectGeneration, getScenarioTrans
       className: "topology-panel",
       "aria-label": "Topology",
       "data-topology-camera-mode": topologyCameraMode,
+      "data-connected-explorer-geometry": connectedExplorerGeometry ? (connectedExplorerGeometry.safe ? "SAFE" : connectedExplorerGeometry.reason) : "NOT_APPLICABLE",
       "data-topology-readable-mode": topologyCameraMode === "read" ? "true" : "false",
       "data-topology-pan-button": "middle",
       "data-topology-viewport-phase": topologyViewportState.phase,

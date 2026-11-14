@@ -420,6 +420,14 @@ def run_case(browser, url: str, evidence_dir: Path, manifest: dict[str, Any], ca
                     require(panel.locator('[data-network-import-activate="true"]').is_enabled(), f'{item["key"]}: normal activation disabled')
                 panel.locator('[data-network-import-activate="true"]').click()
                 expect(panel).to_have_count(0, timeout=300000)
+                # Regression: these sources lack a full, non-overlapping
+                # Explorer layout. The bounded Atlas must take over rather
+                # than rendering (0,0) node piles over the zone heading.
+                if item["key"] in ("300-branch-lowercase", "500-branch"):
+                    atlas_button = page.locator('[data-topology-mode="atlas"][aria-pressed="true"]')
+                    expect(atlas_button).to_be_visible(timeout=60000)
+                    page.get_by_role("button", name="CONNECTED EXPLORER").click()
+                    expect(atlas_button).to_be_visible(timeout=60000)
                 source = exported_source(page)
                 source_truth(source, item)
                 if decision == "NORMAL":

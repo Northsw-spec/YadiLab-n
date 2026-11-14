@@ -47,6 +47,7 @@ jobs:
           # ATLAS-001 capacity: independent source truth, canonical sheet
           # compatibility and the exact NORMAL/BOUNDED/BLOCKED policy matrix.
           npm run test:atlas001-capacity-source
+          node tests/browser/run_connected_explorer_geometry_tests.mjs
           npm run test:import-helper
           # PROJECT-086: canonical focus paging/counts and topology-aware 10k fallback.
           npm run test:topology-navigation
