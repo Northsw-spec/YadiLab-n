@@ -222,6 +222,12 @@ jobs:
           "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_import_visualization_capacity_real_browser.py \
             --url http://127.0.0.1:18981/ \
             --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-capacity"
+          # ATLAS-001 F4B: product NORMAL 200/1600 timeout + operator cancel,
+          # Builder preservation, event-loop responsiveness and fresh 50/49
+          # re-import through the real compiled Chromium application.
+          "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f4b_worker_product_real_browser.py \
+            --url http://127.0.0.1:18981/ \
+            --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f4b-worker-product"
       - name: ATLAS-001 G5.0 evidence hardening
         shell: bash
         run: |

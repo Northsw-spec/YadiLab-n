@@ -5376,6 +5376,7 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
   const selectedOriginal = useRef(null);
   const layoutBackendRef = useRef(null);
   if (!layoutBackendRef.current) layoutBackendRef.current = new CancellableElkLayoutBackend();
+  useEffect(() => () => { layoutBackendRef.current?.cancel("LAYOUT_ABORTED"); }, []);
   const cancelLayout = (reason = "LAYOUT_ABORTED") => {
     const cancelled = layoutBackendRef.current?.cancel(reason);
     if (!cancelled) return false;
