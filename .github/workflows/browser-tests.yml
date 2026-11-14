@@ -268,6 +268,22 @@ jobs:
             "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f5a_normal_final_view_real_browser.py \
               --url http://127.0.0.1:18983/ \
               --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f5a-normal-final-view"
+      - name: ATLAS-001 F5B port-density safety matrix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18984 --bind 127.0.0.1 --directory ui/dist >"$RUNNER_TEMP/yadilab-f5b-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:18984/build-marker.json >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:18984/build-marker.json >/dev/null
+          ATLAS001_CASE_TIMEOUT_MS=45000 \
+            "$RUNNER_TEMP/yadilab-playwright/bin/python" tests/acceptance/run_atlas001_f5b_port_density_real_browser.py \
+              --url http://127.0.0.1:18984/ \
+              --evidence-dir "$RUNNER_TEMP/yadilab-evidence/atlas001-f5b-port-density"
       - name: ATLAS-001 F4B-D compiled Linux x86_64 distribution
         shell: bash
         env:
