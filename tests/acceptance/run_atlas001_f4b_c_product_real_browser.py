@@ -184,6 +184,9 @@ def run_project_switch(page, evidence_dir: Path) -> dict:
     new_source = exported_source(page)
     require(new_source != old_source, "New project did not replace the old Builder source")
     require(page.locator(".app-frame").get_attribute("data-runtime-scenario-id") != old_id, "old project identity survived New")
+    # New projects are intentionally unpersisted; the next explicit import
+    # must acknowledge the existing manual Save/Open discard guard.
+    page.once("dialog", lambda dialog: dialog.accept())
     recovered = reimport_small(page, small)
     screenshot = "atlas001-f4b-c-project-switch-recovery.png"
     page.screenshot(path=str(evidence_dir / screenshot), full_page=True)
