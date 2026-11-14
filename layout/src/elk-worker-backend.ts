@@ -17,6 +17,14 @@ export interface LayoutRequestIdentity {
 export interface LayoutWorkerMetrics {
   readonly requestId: string;
   readonly graphBytes: number;
+  /** Time spent converting the canonical layout graph to the ELK wire shape. */
+  readonly graphSerializationMs?: number;
+  /** Time from backend invocation until the ELK Worker has been created. */
+  readonly workerStartMs?: number;
+  /** Worker request/response round-trip; clone and ELK execution are not separable here. */
+  readonly workerRoundTripMs?: number;
+  /** Time spent normalizing the returned ELK graph into the backend contract. */
+  readonly backendValidationMs?: number;
   readonly startedAt: number;
   readonly completedAt?: number;
   readonly elapsedMs?: number;
@@ -185,31 +193,35 @@ export class CancellableElkLayoutBackend implements LayoutBackend {
   async layout(graph: LayoutGraph, suppliedIdentity?: Partial<LayoutRequestIdentity>): Promise<LayoutBackendResult> {
     if (activeNormalJob && !activeNormalJob.settled) throw abortError("LAYOUT_WORKER_BUSY", "A NORMAL layout Worker is already active.");
     const identity = identityOrDefault(suppliedIdentity);
+    const startedAt = now();
     const elkGraph = toElkGraph(graph);
     const graphBytes = JSON.stringify(elkGraph).length;
-    const startedAt = now();
-    this.#lastMetrics = { requestId: identity.requestId, graphBytes, startedAt, outcome: "RUNNING" };
+    const graphSerializationMs = now() - startedAt;
+    this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, startedAt, outcome: "RUNNING" };
     let elk: InstanceType<typeof ELK>;
     try {
       elk = new ELK({ workerUrl: this.#workerUrl, workerFactory: validatedWorkerFactory(this.#workerFactory, identity) });
     } catch (cause) {
-      this.#lastMetrics = { requestId: identity.requestId, graphBytes, startedAt, completedAt: now(), elapsedMs: now() - startedAt, outcome: "ERROR" };
+      const completedAt = now();
+      this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, workerStartMs: completedAt - startedAt, startedAt, completedAt, elapsedMs: completedAt - startedAt, outcome: "ERROR" };
       throw abortError("LAYOUT_WORKER_UNAVAILABLE", cause instanceof Error ? cause.message : String(cause));
     }
+    const workerStartMs = now() - startedAt;
+    const workerLayoutStartedAt = now();
     let active: ActiveJob;
     const result = new Promise<LayoutBackendResult>((resolve, reject) => {
       active = { requestId: identity.requestId, elk, startedAt, settled: false, reject };
       activeNormalJob = active;
       active.onAbort = (reason) => {
         const completedAt = now();
-        this.#lastMetrics = { requestId: identity.requestId, graphBytes, startedAt, completedAt, elapsedMs: completedAt - startedAt, terminationRequestedAt: completedAt, terminationElapsedMs: 0, outcome: reason === "LAYOUT_TIMEOUT_ABORTED" ? "TIMEOUT" : "ABORTED" };
+        this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, workerStartMs, startedAt, completedAt, elapsedMs: completedAt - startedAt, terminationRequestedAt: completedAt, terminationElapsedMs: 0, outcome: reason === "LAYOUT_TIMEOUT_ABORTED" ? "TIMEOUT" : "ABORTED" };
       };
       const finish = (outcome: LayoutWorkerMetrics["outcome"], callback: () => void) => {
         if (active.settled) return;
         active.settled = true;
         if (active.timer !== undefined) clearTimeout(active.timer);
         const completedAt = now();
-        this.#lastMetrics = { requestId: identity.requestId, graphBytes, startedAt, completedAt, elapsedMs: completedAt - startedAt, outcome };
+        this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, workerStartMs, startedAt, completedAt, elapsedMs: completedAt - startedAt, outcome };
         try { elk.terminateWorker(); } finally {
           if (activeNormalJob === active) activeNormalJob = null;
           callback();
@@ -220,15 +232,22 @@ export class CancellableElkLayoutBackend implements LayoutBackend {
         finish("TIMEOUT", () => reject(abortError("LAYOUT_TIMEOUT_ABORTED", "ELK layout exceeded the operational timeout and its Worker was terminated.")));
       }, this.#timeoutMs);
       void elk.layout(elkGraph as never)
-        .then((output) => finish("PASS", () => {
-          try {
-            const normalized = normalizeElkOutput(output as unknown as ElkNodeLike, graph);
-            resolve(normalized);
-          } catch (cause) {
-            this.#lastMetrics = { requestId: identity.requestId, graphBytes, startedAt, completedAt: now(), elapsedMs: now() - startedAt, outcome: "ERROR" };
-            reject(cause);
-          }
-        }))
+        .then((output) => {
+          const workerRoundTripMs = now() - workerLayoutStartedAt;
+          finish("PASS", () => {
+            const validationStartedAt = now();
+            try {
+              const normalized = normalizeElkOutput(output as unknown as ElkNodeLike, graph);
+              const completedAt = now();
+              this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, workerStartMs, workerRoundTripMs, backendValidationMs: completedAt - validationStartedAt, startedAt, completedAt, elapsedMs: completedAt - startedAt, outcome: "PASS" };
+              resolve(normalized);
+            } catch (cause) {
+              const completedAt = now();
+              this.#lastMetrics = { requestId: identity.requestId, graphBytes, graphSerializationMs, workerStartMs, workerRoundTripMs, backendValidationMs: completedAt - validationStartedAt, startedAt, completedAt, elapsedMs: completedAt - startedAt, outcome: "ERROR" };
+              reject(cause);
+            }
+          });
+        })
         .catch((cause) => finish("ERROR", () => {
           const detail = cause instanceof Error ? cause.message : String(cause?.message ?? cause);
           const error = new Error(`TOPOLOGY_LAYOUT_ELK_WORKER_FAILED:${detail}`) as Error & { code?: string };

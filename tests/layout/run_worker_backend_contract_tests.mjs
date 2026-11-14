@@ -77,11 +77,15 @@ const timeoutBackend = new CancellableElkLayoutBackend({ timeoutMs: 20, workerFa
 await expectCode(timeoutBackend.layout(graph, identity("timeout")), "LAYOUT_TIMEOUT_ABORTED");
 assert.equal(timeoutFake.state.terminated, 1, "timeout terminates the actual worker");
 assert.equal(timeoutBackend.lastMetrics?.outcome, "TIMEOUT", "timeout is diagnosed separately from layout failure");
+assert.ok((timeoutBackend.lastMetrics?.graphSerializationMs ?? -1) >= 0, "graph serialization timing is recorded on timeout");
+assert.ok((timeoutBackend.lastMetrics?.workerStartMs ?? -1) >= 0, "worker start timing is recorded on timeout");
 
 const passAfterTimeout = await timeoutBackend.layout(graph, identity("after-timeout"));
 assert.equal(passAfterTimeout.nodes.length, 2, "a fresh worker can run after termination");
 assert.equal(passAfterTimeout.ports?.length, 2);
 assert.equal(passAfterTimeout.edges?.length, 1);
+assert.ok((timeoutBackend.lastMetrics?.workerRoundTripMs ?? -1) >= 0, "worker round-trip timing is recorded on success");
+assert.ok((timeoutBackend.lastMetrics?.backendValidationMs ?? -1) >= 0, "backend validation timing is recorded on success");
 assert.equal(timeoutFake.state.created, 2);
 assert.equal(timeoutFake.state.maxActive, 1, "at most one worker is active");
 
