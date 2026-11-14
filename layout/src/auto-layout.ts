@@ -16,10 +16,16 @@ export async function runAutoLayout(
   try {
     raw = await backend.layout(graph, context);
   } catch (cause) {
-    const code = cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string"
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const typedCode = cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string"
       ? (cause as { code: string }).code
-      : "LAYOUT_BACKEND_FAILED";
-    return { ok: false, diagnostics: [{ severity: "error", code, message: cause instanceof Error ? cause.message : String(cause) }] };
+      : undefined;
+    // The ELK normalizer deliberately throws coded errors without relying on
+    // a custom Error subclass. Preserve that machine-readable prefix instead
+    // of masking a malformed node/port/edge as a generic backend failure.
+    const embeddedCode = /^([A-Z][A-Z0-9_]+)(?::|$)/.exec(message)?.[1];
+    const code = typedCode ?? embeddedCode ?? "LAYOUT_BACKEND_FAILED";
+    return { ok: false, diagnostics: [{ severity: "error", code, message }] };
   }
   const diagnostics = [
     ...(raw.diagnostics ?? []),
