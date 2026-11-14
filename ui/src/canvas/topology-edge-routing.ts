@@ -195,19 +195,23 @@ function routeForEdge(
   const middleY = (sourcePoint.y + targetPoint.y) / 2 + offset;
   const parallelLaneY = sourcePoint.y + offset;
   const parallelLaneX = sourcePoint.x + offset;
+  const densePresentation = [sourceNode, targetNode].some((node) =>
+    node.data.semanticKind === "resource" && node.data.interfaces.some((iface) =>
+      iface.sourceSide !== undefined || iface.targetSide !== undefined));
   const candidates: CanvasPosition[][] = [
+    // Existing hierarchy/NORMAL views may have a neighbouring resource
+    // directly outside the outward-facing handle. The legacy bounded lanes
+    // leave along the card boundary and remain valid for non-dense views.
+    ...(densePresentation ? [] : [
+      [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
+      [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],
+      [sourcePoint, { x: laneXLeft, y: sourcePoint.y }, { x: laneXLeft, y: targetPoint.y }, targetPoint],
+      [sourcePoint, { x: laneXRight, y: sourcePoint.y }, { x: laneXRight, y: targetPoint.y }, targetPoint],
+    ]),
     [sourcePoint, { x: sourcePoint.x, y: parallelLaneY }, { x: targetPoint.x, y: parallelLaneY }, targetPoint],
     [sourcePoint, { x: parallelLaneX, y: sourcePoint.y }, { x: parallelLaneX, y: targetPoint.y }, targetPoint],
     [sourcePoint, { x: targetPoint.x, y: sourcePoint.y }, targetPoint],
     [sourcePoint, { x: sourcePoint.x, y: targetPoint.y }, targetPoint],
-    // A handle can face a neighbouring resource even when the safe lane is
-    // on the opposite side of the card. Leave along the card boundary first
-    // so the candidate does not cross that neighbour merely to reach the
-    // bounded top/bottom or left/right lane.
-    [sourcePoint, { x: sourcePoint.x, y: laneYTop }, { x: targetPoint.x, y: laneYTop }, targetPoint],
-    [sourcePoint, { x: sourcePoint.x, y: laneYBottom }, { x: targetPoint.x, y: laneYBottom }, targetPoint],
-    [sourcePoint, { x: laneXLeft, y: sourcePoint.y }, { x: laneXLeft, y: targetPoint.y }, targetPoint],
-    [sourcePoint, { x: laneXRight, y: sourcePoint.y }, { x: laneXRight, y: targetPoint.y }, targetPoint],
     [sourcePoint, sourceExit, { x: targetEntry.x, y: sourceExit.y }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: targetEntry.y }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: sourceExit.x, y: laneYTop }, { x: targetEntry.x, y: laneYTop }, targetEntry, targetPoint],
@@ -217,7 +221,8 @@ function routeForEdge(
     [sourcePoint, sourceExit, { x: middleX, y: sourceExit.y }, { x: middleX, y: middleY }, { x: targetEntry.x, y: middleY }, targetEntry, targetPoint],
     [sourcePoint, sourceExit, { x: sourceExit.x, y: parallelLaneY }, { x: targetEntry.x, y: parallelLaneY }, targetEntry, targetPoint],
   ];
-  const valid = candidates.filter((candidate) => !pathHasBacktracking(candidate) && !pathIntersects(candidate, obstacleRects));
+  const valid = candidates.filter((candidate) =>
+    (!densePresentation || !pathHasBacktracking(candidate)) && !pathIntersects(candidate, obstacleRects));
   if (!valid.length) {
     const blockedObstacleIds = [...new Set(candidates.flatMap((candidate) => pathObstacleIds(candidate, obstacleRects)))].sort((left, right) => left.localeCompare(right, "en"));
     return {
