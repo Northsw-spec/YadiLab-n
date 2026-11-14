@@ -1,9 +1,10 @@
-# ATLAS-001 F4B-D — native Parrot Save/Open acceptance
+# ATLAS-001 F4B-D — native Linux Save/Open acceptance
 
 This procedure is the required durable-file gate when the automated Chromium
-runner cannot operate the native Linux picker. It must be run on the target
-Parrot OS x86_64 machine against the compiled Linux distribution. The Ubuntu
-CI result is not a Parrot result.
+runner cannot operate the native Linux picker. It may be run on an approved
+Debian or Ubuntu x86_64 machine against the compiled Linux distribution.
+The report must name the actual distribution used; Debian is an approved
+substitute for Parrot under the repository's permanent operating-system policy.
 
 ## Preconditions
 
@@ -18,14 +19,15 @@ CI result is not a Parrot result.
 
    The launcher must be an ELF 64-bit x86-64 binary and the directory must
    contain `web/assets/elk-worker.js` and `web/assets/elk-worker-proxy.js`.
-2. Run the target gate on Parrot, as a non-root user:
+2. Run the target gate as a non-root user:
 
    ```sh
    bash scripts/run_parrot_acceptance.sh
    ```
 
-   Continue only if the target OS, distribution checksum and Chromium gates
-   are explicitly `PASS`.
+   The legacy script name is retained for compatibility. Continue only if the
+   reported OS, distribution checksum and Chromium gates are explicitly
+   `PASS`; record whether the host is Debian or Ubuntu.
 
 ## Durable Save/Open sequence
 

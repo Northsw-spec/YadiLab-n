@@ -5670,7 +5670,13 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
         builderIdentity: `${workspaceIdentity.sourceRevision ?? "runtime"}:${workspaceIdentity.source?.scenarioId ?? workspaceIdentity.scenario?.scenarioId ?? "unknown"}:${projectGeneration}`,
         compileIdentity: `${next.compile.model.sourceHash ?? preview.sourceSha256}:${next.sourceRevision}`,
       };
-      const layout = await autoLayoutBuilder(next, layoutBackendRef.current, layoutContext);
+      // ELK geometry is an intermediate representation for NORMAL. Defer
+      // only its sibling-whitespace warning; the compacted projection below
+      // is still required to pass the complete final-view validator before
+      // this workspace can replace the active Builder.
+      const layout = await autoLayoutBuilder(next, layoutBackendRef.current, layoutContext, {
+        deferIntermediateWhitespace: true,
+      });
       setLayoutMetrics(layoutBackendRef.current?.lastMetrics ?? null);
       if (!isCurrent()) {
         setFailure("NETWORK_IMPORT_LAYOUT_STALE");
@@ -5686,6 +5692,20 @@ function NetworkTopologyImportPanel({ onClose, onActivate, compilerOptions, setD
       if (sourceTopologySignature(next.source) !== sourceTopologySignature(preview.source)) {
         setDiagnostics([{ code: "NETWORK_IMPORT_LAYOUT_CANONICAL_TOPOLOGY_CHANGED", severity: "error", message: "The layout result changed canonical resource IDs, interfaces or explicit connections; activation was blocked." }]);
         setFailure("Layout result changed canonical topology; the active workspace was not replaced.");
+        return;
+      }
+      const finalCanvas = buildBuilderViewModel(next).canvas;
+      const finalProjection = finalCanvas ? compactNormalTopologyProjection(finalCanvas) : null;
+      const finalErrors = finalProjection?.diagnostics.filter((diagnostic) => diagnostic.severity === "error") ?? [
+        { code: "TOPOLOGY_FINAL_VIEW_MISSING", severity: "error", message: "NORMAL layout did not produce a final Canvas projection." },
+      ];
+      if (!finalProjection || finalErrors.length) {
+        setDiagnostics([
+          ...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })),
+          ...layout.diagnostics,
+          ...finalErrors,
+        ]);
+        setFailure(`Final NORMAL validation failed (${finalErrors.map((diagnostic) => diagnostic.code).join(", ")}); the active workspace was not replaced.`);
         return;
       }
       setDiagnostics([...preview.diagnostics.map((d) => ({ code: d.code, severity: d.severity, message: d.message })), ...layout.diagnostics]);

@@ -70,7 +70,18 @@ export async function runAutoLayout(
         ...(overrides.has(node.id) ? { manualOverride: true } : {}),
       })),
   };
-  diagnostics.push(...validateVisualLayout(scenario, document));
+  const visualDiagnostics = validateVisualLayout(scenario, document);
+  const acceptedVisualDiagnostics = options.deferIntermediateWhitespace
+    ? visualDiagnostics.map((diagnostic) => diagnostic.code === "LAYOUT_UNREASONABLE_WHITESPACE"
+      ? {
+        ...diagnostic,
+        severity: "warning" as const,
+        code: "LAYOUT_INTERMEDIATE_WHITESPACE_DEFERRED",
+        message: `Intermediate ELK geometry was deferred to the final NORMAL projection: ${diagnostic.message}`,
+      }
+      : diagnostic)
+    : visualDiagnostics;
+  diagnostics.push(...acceptedVisualDiagnostics);
   if (diagnostics.some((d) => d.severity === "error")) return { ok: false, diagnostics };
   return { ok: true, document, diagnostics };
 }

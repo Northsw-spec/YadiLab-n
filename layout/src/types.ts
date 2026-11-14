@@ -120,6 +120,12 @@ export interface ManualLayoutOverride {
 export interface AutoLayoutOptions {
   readonly schemaVersion?: string;
   readonly manualOverrides?: readonly ManualLayoutOverride[];
+  /**
+   * NORMAL may validate a second, compacted projection after ELK. This
+   * option defers only the raw ELK sibling-whitespace diagnostic; all
+   * structural, semantic, port, edge and geometry errors remain fatal.
+   */
+  readonly deferIntermediateWhitespace?: boolean;
 }
 
 export interface LayoutDiagnostic {
