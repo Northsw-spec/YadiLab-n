@@ -231,7 +231,13 @@ def verify_atlas(page, item: dict[str, Any], viewport: tuple[int, int], evidence
     panel = page.locator(".topology-panel")
     expect(page.get_by_role("button", name="ATLAS PAGES")).to_be_visible(timeout=180000)
     page.get_by_role("button", name="ATLAS PAGES").click()
-    expect(panel).to_have_attribute("data-atlas-active-page", timeout=30000)
+    # Playwright 1.55 (the pinned CI runner) requires an expected value for
+    # LocatorAssertions.to_have_attribute. Poll the actual DOM instead of
+    # relying on a newer optional-argument overload.
+    page.wait_for_function(
+        "() => Boolean(document.querySelector('.topology-panel')?.getAttribute('data-atlas-active-page'))",
+        timeout=30000,
+    )
     page_count = int(panel.get_attribute("data-atlas-page-count") or "0")
     require(page_count > 1, f'{item["key"]}: Atlas did not create multiple pages')
     page_options = page.locator("[data-atlas-page-option]")
@@ -485,6 +491,11 @@ def main() -> int:
     (args.evidence_dir / "atlas001-import-visualization-capacity.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(evidence, indent=2))
     if failures:
+        for failure in failures:
+            print(
+                f"::error title=ATLAS001 capacity::{failure['key']}: {failure['error']}",
+                file=sys.stderr,
+            )
         print("FAIL ATLAS-001 capacity gate", file=sys.stderr)
         return 1
     print("PASS ATLAS-001 import and visualization capacity gate")
