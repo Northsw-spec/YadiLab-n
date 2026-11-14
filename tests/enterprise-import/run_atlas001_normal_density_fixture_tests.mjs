@@ -44,6 +44,7 @@ for (const item of manifest.cases) {
   assert.equal(mapped.ok, true, `${item.key}: source mapping failed ${JSON.stringify(diagnostics)}`);
   assert.equal(mapped.source?.resources.length, item.resources, `${item.key}: resource count`);
   assert.equal(mapped.source?.connections.length, item.connections, `${item.key}: connection count`);
+  assert.deepEqual(mapped.source?.zones.map(zone => zone.id), item.zoneIds, `${item.key}: zone IDs`);
   assert.deepEqual(mapped.source?.resources.map(resource => resource.id), item.resourceIds, `${item.key}: resource IDs`);
   assert.deepEqual(mapped.source?.connections.map(connection => connection.id), item.connectionIds, `${item.key}: connection IDs`);
   assert.equal(await idsHash(item.resourceIds), item.resourceIdsSha256, `${item.key}: external resource hash`);

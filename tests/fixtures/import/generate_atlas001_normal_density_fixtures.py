@@ -133,14 +133,20 @@ def build_edges(resources: int, connections: int, topology: str) -> tuple[list[t
 
 def build_fixture(key: str, resources: int, connections: int, topology: str) -> tuple[bytes, dict[str, object]]:
     edges, ports = build_edges(resources, connections, topology)
-    zones = [("zoneId", "displayName", "kind"), (f"density_{key}_zone_01", f"Density {key}", "lan")]
+    zone_count = max(1, min(10, (resources + 9) // 10))
+    zones = [("zoneId", "displayName", "kind")]
+    zones.extend(
+        (f"density_{key}_zone_{zone_index:02d}", f"Density {key} zone {zone_index:02d}", "lan")
+        for zone_index in range(1, zone_count + 1)
+    )
     nodes = [("nodeId", "displayName", "type", "zoneId")]
     interfaces = [("nodeId", "interfaceId", "name")]
     links = [("linkId", "nodeA", "interfaceA", "nodeB", "interfaceB", "kind")]
     layout = [("nodeId", "rank")]
     for index in range(1, resources + 1):
         identifier = resource_id(key, index)
-        nodes.append((identifier, f"Density {key} device {index:04d}", "network.switch" if index == 1 else "endpoint.windows", zones[1][0]))
+        zone_id = zones[1 + ((index - 1) * zone_count) // resources][0]
+        nodes.append((identifier, f"Density {key} device {index:04d}", "network.switch" if index == 1 else "endpoint.windows", zone_id))
         for port in ports[index]:
             interfaces.append((identifier, port, port))
         layout.append((identifier, str(index)))
@@ -171,7 +177,7 @@ def build_fixture(key: str, resources: int, connections: int, topology: str) -> 
         "resourceIds": resource_ids,
         "connectionIds": connection_ids,
         "connectionsTruth": truth,
-        "zoneIds": [zones[1][0]],
+        "zoneIds": [row[0] for row in zones[1:]],
         "resourceIdsSha256": digest(resource_ids),
         "connectionIdsSha256": digest(connection_ids),
         "portsPerResource": {identifier: len(values) for identifier, values in ((resource_id(key, index), ports[index]) for index in range(1, resources + 1))},

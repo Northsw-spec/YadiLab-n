@@ -464,7 +464,11 @@
         }
       ],
       "zoneIds": [
-        "density_50-linear_zone_01"
+        "density_50-linear_zone_01",
+        "density_50-linear_zone_02",
+        "density_50-linear_zone_03",
+        "density_50-linear_zone_04",
+        "density_50-linear_zone_05"
       ],
       "resourceIdsSha256": "4d3936705bc61e9c8bc27417f003112681119572a9f1997a28256d739bab4b6e",
       "connectionIdsSha256": "f42abfb93ceb972cffb0ca4fc77c60b422423d7f58b8bfb86d25e615923855a4",
@@ -520,8 +524,8 @@
         "density_50-linear_node_0049": 2,
         "density_50-linear_node_0050": 1
       },
-      "sha256": "e84044e3f5ce7a9d0d602646afc8c237e15f9a5576f1cf0dc662a72901886820",
-      "byteSize": 7641
+      "sha256": "ff5de1c6b877d0bea03a3575a27a121803d9a42a6ab156bd1be143655bda51be",
+      "byteSize": 7755
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-50-star.xlsx",
@@ -1791,7 +1795,11 @@
         }
       ],
       "zoneIds": [
-        "density_50-star_zone_01"
+        "density_50-star_zone_01",
+        "density_50-star_zone_02",
+        "density_50-star_zone_03",
+        "density_50-star_zone_04",
+        "density_50-star_zone_05"
       ],
       "resourceIdsSha256": "35b5c9686b1fa501a53956cd30a6a3c50edb39b9db97a2c2846ee04bb5e4155c",
       "connectionIdsSha256": "0532b48806b301562a17afe399810e2b86cfbf253516696242d66370f55306e1",
@@ -1847,8 +1855,8 @@
         "density_50-star_node_0049": 3,
         "density_50-star_node_0050": 3
       },
-      "sha256": "14603e0de61cd56028cc4bc3fadf75c0119e2af0b56f67d3bbef894963b67118",
-      "byteSize": 13473
+      "sha256": "7faa5c89f4f8974ae9c7eee78ca5ea17985641a3498319722f22ddf0fc8d684f",
+      "byteSize": 13597
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-50-redundant.xlsx",
@@ -5118,7 +5126,11 @@
         }
       ],
       "zoneIds": [
-        "density_50-redundant_zone_01"
+        "density_50-redundant_zone_01",
+        "density_50-redundant_zone_02",
+        "density_50-redundant_zone_03",
+        "density_50-redundant_zone_04",
+        "density_50-redundant_zone_05"
       ],
       "resourceIdsSha256": "109f33da0f8dfd3ad19cd7f60229ed782222985d7e7bd11364a6b1348b2da333",
       "connectionIdsSha256": "eeeb9e82dc0a41da61d822e7ac60ce3d469fc19c69f4dd2653e6b98ad4dcb3b7",
@@ -5174,8 +5186,8 @@
         "density_50-redundant_node_0049": 23,
         "density_50-redundant_node_0050": 9
       },
-      "sha256": "95d9864116e83a86d57ff7f263da9a2a51bb1ec186d90a1f7c3461873a65fb14",
-      "byteSize": 27517
+      "sha256": "68b87dafe6d4b4382eb7bb1b5679eb1b73c0c46f4da54fe39847274300599fd4",
+      "byteSize": 27642
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-100-linear.xlsx",
@@ -6087,7 +6099,16 @@
         }
       ],
       "zoneIds": [
-        "density_100-linear_zone_01"
+        "density_100-linear_zone_01",
+        "density_100-linear_zone_02",
+        "density_100-linear_zone_03",
+        "density_100-linear_zone_04",
+        "density_100-linear_zone_05",
+        "density_100-linear_zone_06",
+        "density_100-linear_zone_07",
+        "density_100-linear_zone_08",
+        "density_100-linear_zone_09",
+        "density_100-linear_zone_10"
       ],
       "resourceIdsSha256": "112f8f8241db720a7cc2d6b1f77117c03a493d1365b6def3d0950404ee7232cb",
       "connectionIdsSha256": "35d8a118f3fb3334a624ed38d40c6122a34505f9eb4ff8d302c91fdab6b61a18",
@@ -6193,8 +6214,8 @@
         "density_100-linear_node_0099": 2,
         "density_100-linear_node_0100": 1
       },
-      "sha256": "df37fee3802751a33fba7997ebe27574ee83307f7b3c6ada8a2b75fd14654930",
-      "byteSize": 12056
+      "sha256": "703c7b6394bf62563ec2ccbb000c51a9335a2fe4d71c4a3a846cc01323ef10b0",
+      "byteSize": 12299
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-100-star.xlsx",
@@ -8714,7 +8735,16 @@
         }
       ],
       "zoneIds": [
-        "density_100-star_zone_01"
+        "density_100-star_zone_01",
+        "density_100-star_zone_02",
+        "density_100-star_zone_03",
+        "density_100-star_zone_04",
+        "density_100-star_zone_05",
+        "density_100-star_zone_06",
+        "density_100-star_zone_07",
+        "density_100-star_zone_08",
+        "density_100-star_zone_09",
+        "density_100-star_zone_10"
       ],
       "resourceIdsSha256": "2d60137837678cc84b0e8ea2f030efbe1c69969e04f1c6528ae99d53eff2a79e",
       "connectionIdsSha256": "2da5b39fa9750c7ee96505f1b687d330c02548a6aeee396de8e7c1e1ee36241e",
@@ -8820,8 +8850,8 @@
         "density_100-star_node_0099": 3,
         "density_100-star_node_0100": 3
       },
-      "sha256": "dd87b1a0bb0b636d48904bef40f2ff3076b0991327bbae1caa0becd5cce9b2b6",
-      "byteSize": 23501
+      "sha256": "8e26d5f3fac8db9789ca054407aee8960bb879514115e34d7d20aa35c63a1309",
+      "byteSize": 23745
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-100-redundant.xlsx",
@@ -15341,7 +15371,16 @@
         }
       ],
       "zoneIds": [
-        "density_100-redundant_zone_01"
+        "density_100-redundant_zone_01",
+        "density_100-redundant_zone_02",
+        "density_100-redundant_zone_03",
+        "density_100-redundant_zone_04",
+        "density_100-redundant_zone_05",
+        "density_100-redundant_zone_06",
+        "density_100-redundant_zone_07",
+        "density_100-redundant_zone_08",
+        "density_100-redundant_zone_09",
+        "density_100-redundant_zone_10"
       ],
       "resourceIdsSha256": "07b612b4427cddea180427c1d62c800f3f8d0748099e66e8a0b0aba3b1a42e1c",
       "connectionIdsSha256": "eeb75b018e9d3c04693cb693aa3d0f88083ae90aaf8791f7b690d19b204f3e0a",
@@ -15447,8 +15486,8 @@
         "density_100-redundant_node_0099": 24,
         "density_100-redundant_node_0100": 9
       },
-      "sha256": "277fc736b6bc6e09729bafaa32650fbe61a54f0a4401679e4bd4adb3a3533ee8",
-      "byteSize": 52118
+      "sha256": "f7f8e9bbc74f8d271bcef19b946aa692a49ed4b5c673ebd171c1efc078acbe4c",
+      "byteSize": 52385
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-200-linear.xlsx",
@@ -17260,7 +17299,16 @@
         }
       ],
       "zoneIds": [
-        "density_200-linear_zone_01"
+        "density_200-linear_zone_01",
+        "density_200-linear_zone_02",
+        "density_200-linear_zone_03",
+        "density_200-linear_zone_04",
+        "density_200-linear_zone_05",
+        "density_200-linear_zone_06",
+        "density_200-linear_zone_07",
+        "density_200-linear_zone_08",
+        "density_200-linear_zone_09",
+        "density_200-linear_zone_10"
       ],
       "resourceIdsSha256": "cbbb8126c0cbc89c9e97ea098c639f2b55efd868d0dc7c767933b16b5ebccbb1",
       "connectionIdsSha256": "8831d012b078db630257e6e676322dd72f51c7753f7d5fea2fc80268bd2303e2",
@@ -17466,8 +17514,8 @@
         "density_200-linear_node_0199": 2,
         "density_200-linear_node_0200": 1
       },
-      "sha256": "98e4e61c2f8b5e3e816933635d9835eb1b5012ce2782e1510d3930611fc06488",
-      "byteSize": 20846
+      "sha256": "526c0ea8c0cf46d7a37c19b5183246cda7e750ecedc7e5dfff97fc904c79cebf",
+      "byteSize": 21073
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-200-star.xlsx",
@@ -22487,7 +22535,16 @@
         }
       ],
       "zoneIds": [
-        "density_200-star_zone_01"
+        "density_200-star_zone_01",
+        "density_200-star_zone_02",
+        "density_200-star_zone_03",
+        "density_200-star_zone_04",
+        "density_200-star_zone_05",
+        "density_200-star_zone_06",
+        "density_200-star_zone_07",
+        "density_200-star_zone_08",
+        "density_200-star_zone_09",
+        "density_200-star_zone_10"
       ],
       "resourceIdsSha256": "e17cd9011468fb5c62efd8333f74a1da0ffa4b45e09c97048bba1e6e2c4aa6bd",
       "connectionIdsSha256": "9f43268ea1a9bff60e4b4aeab470231379f1ee900be744538c6cf9d569f12409",
@@ -22693,8 +22750,8 @@
         "density_200-star_node_0199": 3,
         "density_200-star_node_0200": 3
       },
-      "sha256": "2b64d6ed322b95d6450f5ca865a78f4f6ae1cbb4ef68a68031021eded6f4f88f",
-      "byteSize": 43600
+      "sha256": "92b682b0925834f6e8b7cd832e5465819e7046ec0d69568bb74f549eb5d77eea",
+      "byteSize": 43831
     },
     {
       "path": "tests/fixtures/import/atlas001-normal-density-200-redundant.xlsx",
@@ -35714,7 +35771,16 @@
         }
       ],
       "zoneIds": [
-        "density_200-redundant_zone_01"
+        "density_200-redundant_zone_01",
+        "density_200-redundant_zone_02",
+        "density_200-redundant_zone_03",
+        "density_200-redundant_zone_04",
+        "density_200-redundant_zone_05",
+        "density_200-redundant_zone_06",
+        "density_200-redundant_zone_07",
+        "density_200-redundant_zone_08",
+        "density_200-redundant_zone_09",
+        "density_200-redundant_zone_10"
       ],
       "resourceIdsSha256": "70c921b3c90d0b3e037961141f77980e75c960f431bfbeccd5f650f81d6a478e",
       "connectionIdsSha256": "cd15e9281ecd6016414c6aee7c752297adc9e017b0ecbd1f2247b19d81aee07f",
@@ -35920,8 +35986,8 @@
         "density_200-redundant_node_0199": 23,
         "density_200-redundant_node_0200": 9
       },
-      "sha256": "f36164028847038ac3f5b9a0785026999486df4ebba6b399893e6e8bcc3adc99",
-      "byteSize": 101764
+      "sha256": "bcdf74dd6d2499e9fdfee8d22d6a12e41cf1f8a08ee3788841c4bc81ff60e059",
+      "byteSize": 102019
     }
   ]
 }
