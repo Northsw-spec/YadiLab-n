@@ -49,6 +49,15 @@ Exactly **three** permanent workflows exist. Do not add feature-specific workflo
 
 The files themselves define the concrete commands and test scope. Do not imply that all historical tests run when only selected regressions are active. GitHub-hosted Ubuntu acceptance is the development gate; do not demand routine manual Parrot tests.
 
+## Operating-system test acceptance — owner-approved policy (2026-11-14)
+
+The project owner explicitly accepts **Debian Linux testing in place of Parrot OS testing** for YadiLab development, Chromium/Worker verification, Linux x86_64 packaging, and release acceptance. This is an enduring project requirement for Codex and other engineering agents.
+
+- **Do not require Parrot-specific testing** when equivalent YadiLab tests have been executed on Debian. Never block progress, mark a phase PARTIAL, or withhold approval **solely because the Linux test host was Debian rather than Parrot OS**. Debian 13 is acceptable.
+- Existing GitHub-hosted Ubuntu CI is also acceptable and remains mandatory where already required. Do not weaken CI, security, real Chromium, layout, release-identity, or exact-SHA checks.
+- **Always report the OS actually tested.** Debian PASS is a Debian PASS, not a claim that Parrot was directly tested. Investigate any actual OS-specific incompatibility rather than assuming it away.
+- This Linux distribution equivalence decision does **not** waive independent functional requirements, including proof of real durable Save/Open file bytes where that is required. Mock File System Access evidence alone is not a durable disk-write PASS.
+
 ## Reporting and ownership
 
 Only one YadiLab coding writer at a time; do not create an additional development automation. A report must name changed product files and before/after behavior, PR URL, exact head/merge SHA, confirmed source/security/Chromium/main-release results, and concrete blockers. If no code changed, say **INGEN KODÄNDRING** with a verifiable reason. Never report background progress between scheduled runs.
