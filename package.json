@@ -17,6 +17,7 @@
     "test:project093-contract": "node tests/browser/run_project093_contract_tests.mjs",
     "test:project094-engine": "node tests/browser/run_project094_topology_engine_tests.mjs",
     "test:atlas001-capacity-source": "rm -rf dist-enterprise-import-test && tsc -p tests/tsconfig.enterprise-import.json && node tests/enterprise-import/run_atlas001_capacity_fixture_tests.mjs && node tests/browser/run_atlas001_capacity_gate_tests.mjs",
+    "test:atlas001-normal-density-source": "rm -rf dist-enterprise-import-test && tsc -p tests/tsconfig.enterprise-import.json && node tests/enterprise-import/run_atlas001_normal_density_fixture_tests.mjs",
     "test:atlas001": "node tests/browser/run_atlas001_g1_red_tests.mjs && node tests/browser/run_atlas001_g3_acceptance_red.mjs && node tests/browser/run_atlas001_g3_scale_tests.mjs && node tests/browser/run_atlas001_g4_1_red_tests.mjs && node tests/browser/run_atlas001_g4_1_policy_tests.mjs && node tests/browser/run_atlas001_g4_2_red_tests.mjs && node tests/browser/run_atlas001_g4_2_policy_tests.mjs && npm run test:atlas001-g4",
     "test:atlas001-g4": "rm -rf dist-enterprise-import-test && ./node_modules/.bin/tsc -p tests/tsconfig.enterprise-import.json && node tests/enterprise-import/run_atlas001_g4_fixture_tests.mjs && node tests/enterprise-import/run_atlas001_g4_2_fixture_tests.mjs",
     "test:av001-nested-elk": "node tests/browser/run_av001_nested_elk_tests.mjs",
