@@ -19,15 +19,18 @@ substitute for Parrot under the repository's permanent operating-system policy.
 
    The launcher must be an ELF 64-bit x86-64 binary and the directory must
    contain `web/assets/elk-worker.js` and `web/assets/elk-worker-proxy.js`.
-2. Run the target gate as a non-root user:
+2. Run the target gate as a non-root user. On Parrot, the legacy command can
+   be used directly:
 
    ```sh
    bash scripts/run_parrot_acceptance.sh
    ```
 
-   The legacy script name is retained for compatibility. Continue only if the
-   reported OS, distribution checksum and Chromium gates are explicitly
-   `PASS`; record whether the host is Debian or Ubuntu.
+   The legacy script name is retained for compatibility with older Parrot
+   hosts. On approved Debian/Ubuntu hosts, its historical Parrot-only
+   pre-check may return `BLOCKED`; that label is not a functional failure of
+   the Debian-equivalence policy. Re-run the remaining checksum, launcher,
+   loopback, CSP and Chromium checks manually and record the actual OS.
 
 ## Durable Save/Open sequence
 
